@@ -246,7 +246,7 @@ const updateProfile = async (req, res) => {
  *         name: role
  *         schema:
  *           type: string
- *           enum: [ADMIN, USER]
+ *           enum: [ADMIN, USER, COLLABORATOR]
  *     responses:
  *       200:
  *         description: Danh sách người dùng có phân trang

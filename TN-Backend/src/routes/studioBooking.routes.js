@@ -168,7 +168,11 @@ router.patch('/:id/process', authenticate, authorize('ADMIN'), studioBookingCont
 // FE gọi PUT /:id/approve và /:id/reject (NestJS-style)
 router.put('/:id/approve', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
-    const booking = await require('../services/studioBooking.service').processBooking(req.params.id, 'confirm');
+    const { force, adminNote } = req.body || {};
+    const booking = await require('../services/studioBooking.service').processBooking(req.params.id, 'confirm', null, { force, adminNote });
+    if (booking && booking.status === 'warning') {
+      return res.status(200).json(booking);
+    }
     return res.status(200).json({ message: 'Đã phê duyệt đặt phòng!', data: booking });
   } catch (e) { return res.status(e.statusCode || 500).json({ message: e.message }); }
 });

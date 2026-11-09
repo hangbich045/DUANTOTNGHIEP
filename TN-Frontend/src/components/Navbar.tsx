@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Menu, X, LogOut, LayoutDashboard, Calendar, Camera, History, Home, User } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Calendar, Camera, History, Home, User, CheckSquare } from 'lucide-react';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -22,6 +22,9 @@ export default function Navbar() {
     { href: '/equipment', label: 'Thiết bị', icon: Camera },
     { href: '/studio', label: 'Đặt phòng Studio', icon: Calendar },
     ...(user ? [{ href: '/history', label: 'Lịch sử của tôi', icon: History }] : []),
+    ...(user && (user.role === 'COLLABORATOR' || user.role === 'ADMIN')
+      ? [{ href: '/tasks', label: 'Nhiệm vụ của tôi', icon: CheckSquare }]
+      : []),
   ];
 
   const adminLink = user?.role === 'ADMIN' ? { href: '/admin/dashboard', label: 'Quản trị', icon: LayoutDashboard } : null;

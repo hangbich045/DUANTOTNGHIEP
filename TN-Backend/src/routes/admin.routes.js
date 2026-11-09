@@ -51,7 +51,7 @@ router.use(authenticate, authorize('ADMIN'));
  *                 example: "0901234567"
  *               role:
  *                 type: string
- *                 enum: [USER, ADMIN]
+ *                 enum: [USER, ADMIN, COLLABORATOR]
  *                 default: USER
  *     responses:
  *       201:
@@ -113,16 +113,21 @@ router.get('/users', async (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         description: ID người dùng
+ *           type: string
+ *         description: ID người dùng (UUID)
  *     responses:
  *       200:
  *         description: Trạng thái tài khoản đã thay đổi
+ *       400:
+ *         description: Không thể tự thao tác trên tài khoản của chính mình
  *       404:
  *         description: Người dùng không tồn tại
  */
 router.patch('/users/:id/toggle-active', async (req, res) => {
   try {
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ message: 'Không thể tự khóa tài khoản của chính mình.' });
+    }
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'Người dùng không tồn tại.' });
     await user.update({ isActive: !user.isActive });

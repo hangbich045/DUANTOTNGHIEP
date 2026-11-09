@@ -167,8 +167,13 @@ const create = async (req, res) => {
  */
 const processBooking = async (req, res) => {
   try {
-    const { action, cancelReason } = req.body;
-    const result = await studioBookingService.processBooking(req.params.id, action, cancelReason);
+    const { action, cancelReason, force, adminNote } = req.body;
+    const result = await studioBookingService.processBooking(req.params.id, action, cancelReason, { force, adminNote });
+
+    if (result && result.status === 'warning') {
+      return res.status(200).json(result);
+    }
+
     const messages = {
       confirm: 'Đã xác nhận đặt phòng!',
       cancel: 'Đã huỷ đặt phòng.',

@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
-import { Loader2, ArrowUp, ArrowDown, Trash2, ShieldAlert, RefreshCcw, AlertTriangle, Plus, X } from 'lucide-react';
+import { Loader2, ArrowUp, ArrowDown, Trash2, ShieldAlert, RefreshCcw, AlertTriangle, Plus, X, Lock, Unlock } from 'lucide-react';
 
 interface User {
   id: string;
@@ -15,6 +15,7 @@ interface User {
   employeeCode: string;
   role: 'ADMIN' | 'USER' | 'COLLABORATOR';
   avatarUrl?: string;
+  isActive?: boolean;
   createdAt: string;
 }
 
@@ -76,6 +77,24 @@ export default function AdminUsersPage() {
       fetchUsers();
     } catch (err: any) {
       toast(err.message || 'Lỗi cập nhật quyền hạn', 'error');
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  const handleToggleActive = async (targetUserId: string, currentActive: boolean) => {
+    if (currentUser?.id === targetUserId) {
+      toast('Bạn không thể tự khóa tài khoản của chính mình', 'warning');
+      return;
+    }
+
+    setActioningId(targetUserId);
+    try {
+      await api.patch(`/admin/users/${targetUserId}/toggle-active`, {});
+      toast(`Đã ${currentActive ? 'khóa' : 'kích hoạt'} tài khoản thành công`, 'success');
+      fetchUsers();
+    } catch (err: any) {
+      toast(err.message || 'Lỗi thay đổi trạng thái tài khoản', 'error');
     } finally {
       setActioningId(null);
     }
@@ -178,6 +197,7 @@ export default function AdminUsersPage() {
                     <th className="py-4 px-6 text-left">Thành viên</th>
                     <th className="py-4 px-6 text-left">Mã nhân viên / SV</th>
                     <th className="py-4 px-6 text-center">Vai trò</th>
+                    <th className="py-4 px-6 text-center">Trạng thái</th>
                     <th className="py-4 px-6 text-center">Ngày đăng ký</th>
                     <th className="py-4 px-6 text-center">Hành động</th>
                   </tr>
@@ -230,6 +250,23 @@ export default function AdminUsersPage() {
                             {item.role === 'COLLABORATOR' ? 'CTV' : item.role}
                           </span>
                         </td>
+                        {/* Status badge */}
+                        <td className="py-4 px-6 text-center">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-wider ${
+                              item.isActive !== false
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                item.isActive !== false ? 'bg-emerald-400' : 'bg-red-400'
+                              }`}
+                            />
+                            {item.isActive !== false ? 'Hoạt động' : 'Đã khóa'}
+                          </span>
+                        </td>
                         {/* Registered date */}
                         <td className="py-4 px-6 text-center text-studio-muted">
                           {format(new Date(item.createdAt), 'dd/MM/yyyy')}
@@ -260,6 +297,30 @@ export default function AdminUsersPage() {
                                 <ArrowDown className="w-4 h-4" />
                               ) : (
                                 <ArrowUp className="w-4 h-4" />
+                              )}
+                            </button>
+
+                            {/* Lock / Unlock Toggle */}
+                            <button
+                              onClick={() => handleToggleActive(item.id, item.isActive !== false)}
+                              disabled={isSelf || actioningId !== null}
+                              className={`p-2 rounded-xl border transition-all cursor-pointer disabled:opacity-40 ${
+                                item.isActive !== false
+                                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white'
+                                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white'
+                              }`}
+                              title={
+                                isSelf
+                                  ? 'Không thể tự khóa tài khoản của chính mình'
+                                  : item.isActive !== false
+                                  ? 'Khóa tài khoản này'
+                                  : 'Mở khóa tài khoản này'
+                              }
+                            >
+                              {item.isActive !== false ? (
+                                <Lock className="w-4 h-4" />
+                              ) : (
+                                <Unlock className="w-4 h-4" />
                               )}
                             </button>
 

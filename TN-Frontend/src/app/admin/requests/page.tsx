@@ -5,7 +5,7 @@ import AdminLayout from '@/components/AdminLayout';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
-import { Loader2, Check, X, Undo, Camera, Calendar, Clock, RefreshCcw, User, Eye, AlertTriangle } from 'lucide-react';
+import { Loader2, Check, X, Undo, Camera, Calendar, Clock, RefreshCcw, User, Eye, AlertTriangle, Send, PackageCheck, Wrench, ShieldAlert } from 'lucide-react';
 
 interface EquipmentItem {
   equipmentId: string;
@@ -24,8 +24,13 @@ interface BorrowRequest {
   purpose: string;
   borrowDate: string;
   returnDate: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED';
+  actualReturnDate?: string;
+  status: 'PENDING' | 'APPROVED' | 'HANDED_OVER' | 'OVERDUE' | 'REJECTED' | 'RETURNED';
   rejectReason?: string;
+  handedOverAt?: string;
+  handoverCondition?: string;
+  returnCondition?: string;
+  adminNote?: string;
   createdAt: string;
   user: {
     fullName: string;
@@ -73,6 +78,19 @@ export default function AdminRequestsPage() {
   const [rejectTargetId, setRejectTargetId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [adminNote, setAdminNote] = useState('');
+
+  // Handover Dialog states
+  const [handoverDialogOpen, setHandoverDialogOpen] = useState(false);
+  const [selectedBorrowHandover, setSelectedBorrowHandover] = useState<BorrowRequest | null>(null);
+  const [handoverCondition, setHandoverCondition] = useState('');
+  const [handoverAdminNote, setHandoverAdminNote] = useState('');
+
+  // Return Dialog states
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [selectedBorrowReturn, setSelectedBorrowReturn] = useState<BorrowRequest | null>(null);
+  const [returnCondition, setReturnCondition] = useState('');
+  const [isDamaged, setIsDamaged] = useState(false);
+  const [returnAdminNote, setReturnAdminNote] = useState('');
 
   // Overlap Warning Dialog states (Studio Booking)
   const [warningDialogOpen, setWarningDialogOpen] = useState(false);
@@ -186,14 +204,69 @@ export default function AdminRequestsPage() {
     }
   };
 
-  const handleReturnEquipment = async (id: string) => {
-    setActioningId(id);
+  // Handover actions
+  const openHandoverModal = (borrow: BorrowRequest) => {
+    setDetailModalOpen(false);
+    setSelectedBorrowHandover(borrow);
+    setHandoverCondition('Thiết bị hoạt động bình thường, đầy đủ phụ kiện bàn giao.');
+    setHandoverAdminNote(borrow.adminNote || '');
+    setHandoverDialogOpen(true);
+  };
+
+  const submitHandover = async () => {
+    if (!selectedBorrowHandover) return;
+    setActioningId(selectedBorrowHandover.id);
     try {
-      await api.put(`/borrow-requests/${id}/return`, {});
-      toast('Đã nhận hoàn trả thiết bị thành công và cập nhật kho', 'success');
+      await api.put(`/borrow-requests/${selectedBorrowHandover.id}/handover`, {
+        handoverCondition: handoverCondition.trim() || undefined,
+        adminNote: handoverAdminNote.trim() || undefined,
+      });
+      toast('Đã bàn giao thiết bị thành công cho người mượn', 'success');
+      setHandoverDialogOpen(false);
+      setSelectedBorrowHandover(null);
+      setHandoverCondition('');
+      setHandoverAdminNote('');
       fetchRequests();
     } catch (err: any) {
-      toast(err.message || 'Thao tác thất bại', 'error');
+      toast(err.message || 'Bàn giao thiết bị thất bại', 'error');
+    } finally {
+      setActioningId(null);
+    }
+  };
+
+  // Return actions
+  const openReturnModal = (borrow: BorrowRequest) => {
+    setDetailModalOpen(false);
+    setSelectedBorrowReturn(borrow);
+    setReturnCondition('Đã kiểm tra và nhận lại thiết bị đầy đủ.');
+    setIsDamaged(false);
+    setReturnAdminNote(borrow.adminNote || '');
+    setReturnDialogOpen(true);
+  };
+
+  const submitReturn = async () => {
+    if (!selectedBorrowReturn) return;
+    setActioningId(selectedBorrowReturn.id);
+    try {
+      await api.put(`/borrow-requests/${selectedBorrowReturn.id}/return`, {
+        returnCondition: returnCondition.trim() || undefined,
+        isDamaged,
+        adminNote: returnAdminNote.trim() || undefined,
+      });
+      toast(
+        isDamaged
+          ? 'Đã nhận trả thiết bị (Ghi nhận hư hỏng -> Chuyển sang bảo trì)'
+          : 'Đã nhận hoàn trả thiết bị thành công và cập nhật lại kho khả dụng',
+        'success'
+      );
+      setReturnDialogOpen(false);
+      setSelectedBorrowReturn(null);
+      setReturnCondition('');
+      setIsDamaged(false);
+      setReturnAdminNote('');
+      fetchRequests();
+    } catch (err: any) {
+      toast(err.message || 'Thu hồi thiết bị thất bại', 'error');
     } finally {
       setActioningId(null);
     }
@@ -204,7 +277,11 @@ export default function AdminRequestsPage() {
       case 'PENDING':
         return <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-brand-accent/20 text-brand-accent border border-brand-accent/30">Chờ duyệt</span>;
       case 'APPROVED':
-        return <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-brand-success/20 text-brand-success border border-brand-success/30">Đã duyệt</span>;
+        return <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-brand-success/20 text-brand-success border border-brand-success/30">Đã duyệt (Chờ giao)</span>;
+      case 'HANDED_OVER':
+        return <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/35">Đang mượn</span>;
+      case 'OVERDUE':
+        return <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-red-600/30 text-red-400 border border-red-500/50 animate-pulse font-extrabold flex items-center justify-center space-x-1"><AlertTriangle className="w-3 h-3 shrink-0" /><span>Quá hạn</span></span>;
       case 'REJECTED':
         return <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-brand-error/20 text-brand-error border border-brand-error/30">Từ chối</span>;
       case 'RETURNED':
@@ -356,21 +433,63 @@ export default function AdminRequestsPage() {
                         <td className="py-4 px-6 text-center">{getStatusBadge(borrow.status)}</td>
                         <td className="py-4 px-6">
                           <div className="flex items-center justify-center space-x-2">
-                            {borrow.status === 'APPROVED' ? (
-                              <button
-                                onClick={() => handleReturnEquipment(borrow.id)}
-                                className="flex items-center space-x-1 py-1.5 px-3 rounded-lg border border-brand-primary/20 bg-brand-primary/10 text-brand-primary text-xs font-bold hover:bg-brand-primary hover:text-white transition-all cursor-pointer"
-                              >
-                                <Undo className="w-3.5 h-3.5" />
-                                <span>Nhận trả</span>
-                              </button>
-                            ) : (
+                            {borrow.status === 'PENDING' && (
                               <button
                                 onClick={() => openBorrowDetail(borrow)}
                                 className="flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-white text-xs font-semibold cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                                 <span>Xem xét</span>
+                              </button>
+                            )}
+
+                            {borrow.status === 'APPROVED' && (
+                              <>
+                                <button
+                                  onClick={() => openHandoverModal(borrow)}
+                                  className="flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border border-purple-500/30 bg-purple-600/20 text-purple-300 text-xs font-bold hover:bg-purple-600 hover:text-white transition-all cursor-pointer shadow-sm"
+                                  title="Lập biên bản và bàn giao thiết bị"
+                                >
+                                  <PackageCheck className="w-3.5 h-3.5" />
+                                  <span>Bàn giao</span>
+                                </button>
+                                <button
+                                  onClick={() => openBorrowDetail(borrow)}
+                                  className="p-1.5 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-studio-muted hover:text-white text-xs cursor-pointer"
+                                  title="Xem chi tiết"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+
+                            {(borrow.status === 'HANDED_OVER' || borrow.status === 'OVERDUE') && (
+                              <>
+                                <button
+                                  onClick={() => openReturnModal(borrow)}
+                                  className="flex items-center space-x-1 py-1.5 px-3 rounded-lg border border-brand-primary/20 bg-brand-primary/10 text-brand-primary text-xs font-bold hover:bg-brand-primary hover:text-white transition-all cursor-pointer"
+                                  title="Kiểm tra và nhận hoàn trả thiết bị"
+                                >
+                                  <Undo className="w-3.5 h-3.5" />
+                                  <span>Nhận trả</span>
+                                </button>
+                                <button
+                                  onClick={() => openBorrowDetail(borrow)}
+                                  className="p-1.5 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-studio-muted hover:text-white text-xs cursor-pointer"
+                                  title="Xem chi tiết"
+                                >
+                                  <Eye className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+
+                            {(borrow.status === 'RETURNED' || borrow.status === 'REJECTED') && (
+                              <button
+                                onClick={() => openBorrowDetail(borrow)}
+                                className="flex items-center space-x-1.5 py-1.5 px-3 rounded-lg border border-white/5 bg-white/5 hover:bg-white/10 text-studio-muted hover:text-white text-xs font-medium cursor-pointer"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Chi tiết</span>
                               </button>
                             )}
                           </div>
@@ -541,12 +660,73 @@ export default function AdminRequestsPage() {
                       </p>
                     </div>
 
-                    {/* Admin Note Input */}
+                    {/* Handover metadata if exists */}
+                    {(selectedBorrow.handedOverAt || selectedBorrow.handoverCondition) && (
+                      <div className="p-3.5 bg-purple-500/10 border border-purple-500/25 rounded-2xl space-y-1">
+                        <span className="text-[10px] text-purple-300 font-bold uppercase flex items-center space-x-1.5">
+                          <PackageCheck className="w-3.5 h-3.5" />
+                          <span>Biên bản bàn giao thiết bị</span>
+                        </span>
+                        {selectedBorrow.handedOverAt && (
+                          <div className="text-xs text-purple-200">
+                            Thời gian bàn giao: {format(new Date(selectedBorrow.handedOverAt), 'HH:mm dd/MM/yyyy')}
+                          </div>
+                        )}
+                        {selectedBorrow.handoverCondition && (
+                          <p className="text-xs text-white/90 whitespace-pre-wrap mt-0.5">
+                            Tình trạng lúc giao: {selectedBorrow.handoverCondition}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Return metadata if exists */}
+                    {(selectedBorrow.actualReturnDate || selectedBorrow.returnCondition) && (
+                      <div className="p-3.5 bg-brand-primary/10 border border-brand-primary/25 rounded-2xl space-y-1">
+                        <span className="text-[10px] text-brand-primary font-bold uppercase flex items-center space-x-1.5">
+                          <Undo className="w-3.5 h-3.5" />
+                          <span>Biên bản nhận hoàn trả thiết bị</span>
+                        </span>
+                        {selectedBorrow.actualReturnDate && (
+                          <div className="text-xs text-white/90">
+                            Thời gian hoàn trả: {format(new Date(selectedBorrow.actualReturnDate), 'HH:mm dd/MM/yyyy')}
+                          </div>
+                        )}
+                        {selectedBorrow.returnCondition && (
+                          <p className="text-xs text-white/90 whitespace-pre-wrap mt-0.5">
+                            Tình trạng lúc trả: {selectedBorrow.returnCondition}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Rejection reason if REJECTED */}
+                    {selectedBorrow.status === 'REJECTED' && selectedBorrow.rejectReason && (
+                      <div className="p-3.5 bg-brand-error/10 border border-brand-error/25 rounded-2xl space-y-1">
+                        <span className="text-[10px] text-brand-error font-bold uppercase flex items-center space-x-1.5">
+                          <AlertTriangle className="w-3.5 h-3.5" />
+                          <span>Lý do từ chối</span>
+                        </span>
+                        <p className="text-xs text-brand-error whitespace-pre-wrap mt-0.5">
+                          {selectedBorrow.rejectReason}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Existing Admin Note display */}
+                    {selectedBorrow.status !== 'PENDING' && selectedBorrow.adminNote && (
+                      <div className="p-3.5 bg-white/5 border border-white/10 rounded-2xl space-y-1">
+                        <span className="text-[10px] text-studio-muted font-bold uppercase block mb-0.5">Ghi chú của Quản trị viên</span>
+                        <p className="text-xs text-white/90 whitespace-pre-wrap">{selectedBorrow.adminNote}</p>
+                      </div>
+                    )}
+
+                    {/* Admin Note Input during PENDING */}
                     {selectedBorrow.status === 'PENDING' && (
                       <div className="space-y-1">
                         <label className="text-[10px] text-studio-muted font-bold uppercase block mb-1">Ghi chú / Nhận xét của Admin</label>
                         <textarea
-                          placeholder="Nhập ghi chú hoặc nhận xét (ví dụ: Chấp nhận yêu cầu, Lý do từ chối...)"
+                          placeholder="Nhập ghi chú hoặc nhận xét (ví dụ: Chấp nhận yêu cầu, Lưu ý người mượn...)"
                           value={adminNote}
                           onChange={(e) => setAdminNote(e.target.value)}
                           className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-brand-primary/50 h-16 resize-none"
@@ -568,6 +748,30 @@ export default function AdminRequestsPage() {
                           className="py-3 px-4 rounded-xl bg-brand-success hover:bg-brand-success/90 text-white font-bold transition-all cursor-pointer text-center"
                         >
                           Phê duyệt
+                        </button>
+                      </div>
+                    )}
+
+                    {selectedBorrow.status === 'APPROVED' && (
+                      <div className="pt-4 border-t border-white/5">
+                        <button
+                          onClick={() => openHandoverModal(selectedBorrow)}
+                          className="w-full py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold transition-all cursor-pointer text-center flex items-center justify-center space-x-2 shadow-lg shadow-purple-600/20"
+                        >
+                          <PackageCheck className="w-4 h-4" />
+                          <span>Lập biên bản & Bàn giao thiết bị</span>
+                        </button>
+                      </div>
+                    )}
+
+                    {(selectedBorrow.status === 'HANDED_OVER' || selectedBorrow.status === 'OVERDUE') && (
+                      <div className="pt-4 border-t border-white/5">
+                        <button
+                          onClick={() => openReturnModal(selectedBorrow)}
+                          className="w-full py-3 px-4 rounded-xl bg-brand-primary hover:bg-brand-primary/90 text-white font-bold transition-all cursor-pointer text-center flex items-center justify-center space-x-2"
+                        >
+                          <Undo className="w-4 h-4" />
+                          <span>Xác nhận Thu hồi / Nhận hoàn trả</span>
                         </button>
                       </div>
                     )}
@@ -624,6 +828,212 @@ export default function AdminRequestsPage() {
                     className="py-3 px-4 rounded-xl bg-brand-error hover:bg-brand-error/90 text-white font-bold transition-all cursor-pointer text-center disabled:opacity-40"
                   >
                     Xác nhận từ chối
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Handover Dialog */}
+        {handoverDialogOpen && selectedBorrowHandover && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setHandoverDialogOpen(false)} />
+
+            <div className="glass-panel max-w-lg w-full rounded-3xl border border-white/5 overflow-hidden shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/2">
+                <div className="flex items-center space-x-2 text-purple-400">
+                  <PackageCheck className="w-5 h-5" />
+                  <h3 className="text-lg font-bold text-white">Biên bản Bàn Giao Thiết Bị</h3>
+                </div>
+                <button onClick={() => setHandoverDialogOpen(false)} className="p-2 rounded-xl text-studio-muted hover:text-white cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 text-left max-h-[75vh] overflow-y-auto">
+                {/* Thông tin người nhận */}
+                <div className="p-3.5 bg-white/5 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-studio-muted font-bold block uppercase text-[10px]">Người nhận</span>
+                    <span className="font-semibold text-white mt-0.5 block">{selectedBorrowHandover.user.fullName}</span>
+                  </div>
+                  <div>
+                    <span className="text-studio-muted font-bold block uppercase text-[10px]">Mã SV / NV</span>
+                    <span className="font-semibold text-white mt-0.5 block">{selectedBorrowHandover.user.employeeCode}</span>
+                  </div>
+                </div>
+
+                {/* Danh sách thiết bị */}
+                <div>
+                  <span className="text-[10px] text-studio-muted font-bold uppercase block mb-1.5">Thiết bị bàn giao</span>
+                  <div className="space-y-1.5">
+                    {selectedBorrowHandover.equipments.map((eq) => (
+                      <div key={eq.equipmentId} className="flex items-center justify-between p-2 bg-white/5 rounded-xl border border-white/5 text-xs text-white">
+                        <span className="font-medium truncate">{eq.details?.name || 'Thiết bị'}</span>
+                        <span className="text-purple-300 font-bold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">SL: {eq.quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tình trạng bàn giao */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-studio-muted uppercase block">Tình trạng thiết bị lúc giao (Bắt buộc)</label>
+                  <textarea
+                    placeholder="Mô tả chi tiết tình trạng máy, số seri, phụ kiện kèm theo..."
+                    value={handoverCondition}
+                    onChange={(e) => setHandoverCondition(e.target.value)}
+                    className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-purple-500/50 h-20 resize-none"
+                    required
+                  />
+                </div>
+
+                {/* Ghi chú thêm */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-studio-muted uppercase block">Ghi chú quản trị</label>
+                  <textarea
+                    placeholder="Ghi chú thêm nếu có..."
+                    value={handoverAdminNote}
+                    onChange={(e) => setHandoverAdminNote(e.target.value)}
+                    className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-purple-500/50 h-16 resize-none"
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button
+                    onClick={() => setHandoverDialogOpen(false)}
+                    className="py-3 px-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 text-white font-semibold transition-all cursor-pointer text-center text-xs"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    onClick={submitHandover}
+                    disabled={!handoverCondition.trim() || actioningId !== null}
+                    className="py-3 px-4 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold transition-all cursor-pointer text-center text-xs disabled:opacity-40 flex items-center justify-center space-x-1.5 shadow-lg shadow-purple-600/20"
+                  >
+                    {actioningId === selectedBorrowHandover.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <PackageCheck className="w-4 h-4" />
+                        <span>Xác nhận bàn giao</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Return Dialog */}
+        {returnDialogOpen && selectedBorrowReturn && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={() => setReturnDialogOpen(false)} />
+
+            <div className="glass-panel max-w-lg w-full rounded-3xl border border-white/5 overflow-hidden shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/2">
+                <div className="flex items-center space-x-2 text-brand-primary">
+                  <Undo className="w-5 h-5" />
+                  <h3 className="text-lg font-bold text-white">Xác Nhận Thu Hồi / Nhận Trả Thiết Bị</h3>
+                </div>
+                <button onClick={() => setReturnDialogOpen(false)} className="p-2 rounded-xl text-studio-muted hover:text-white cursor-pointer">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="p-6 space-y-4 text-left max-h-[75vh] overflow-y-auto">
+                {/* Thông tin người trả */}
+                <div className="p-3.5 bg-white/5 rounded-2xl border border-white/5 grid grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <span className="text-studio-muted font-bold block uppercase text-[10px]">Người trả</span>
+                    <span className="font-semibold text-white mt-0.5 block">{selectedBorrowReturn.user.fullName}</span>
+                  </div>
+                  <div>
+                    <span className="text-studio-muted font-bold block uppercase text-[10px]">Mã SV / NV</span>
+                    <span className="font-semibold text-white mt-0.5 block">{selectedBorrowReturn.user.employeeCode}</span>
+                  </div>
+                </div>
+
+                {/* Danh sách thiết bị */}
+                <div>
+                  <span className="text-[10px] text-studio-muted font-bold uppercase block mb-1.5">Thiết bị hoàn trả</span>
+                  <div className="space-y-1.5">
+                    {selectedBorrowReturn.equipments.map((eq) => (
+                      <div key={eq.equipmentId} className="flex items-center justify-between p-2 bg-white/5 rounded-xl border border-white/5 text-xs text-white">
+                        <span className="font-medium truncate">{eq.details?.name || 'Thiết bị'}</span>
+                        <span className="text-brand-primary font-bold bg-brand-primary/10 px-2 py-0.5 rounded border border-brand-primary/20">SL: {eq.quantity}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Tình trạng khi hoàn trả */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-studio-muted uppercase block">Tình trạng thiết bị lúc nhận trả</label>
+                  <textarea
+                    placeholder="Mô tả tình trạng máy khi nhận lại..."
+                    value={returnCondition}
+                    onChange={(e) => setReturnCondition(e.target.value)}
+                    className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 h-20 resize-none"
+                  />
+                </div>
+
+                {/* Checkbox hư hỏng */}
+                <div className="p-3.5 rounded-2xl border border-amber-500/20 bg-amber-500/5 space-y-2">
+                  <label className="flex items-center space-x-2.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={isDamaged}
+                      onChange={(e) => setIsDamaged(e.target.checked)}
+                      className="w-4 h-4 rounded border-amber-500/40 text-amber-500 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-amber-300 flex items-center space-x-1.5">
+                      <Wrench className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Thiết bị hư hỏng / cần chuyển sang Bảo trì (MAINTENANCE)</span>
+                    </span>
+                  </label>
+                  {isDamaged && (
+                    <p className="text-[11px] text-amber-200/80 leading-relaxed pl-6">
+                      * Theo Quy tắc nghiệp vụ (Mục 3.9 & 3.10), thiết bị sẽ được chuyển sang trạng thái <strong>MAINTENANCE</strong> và tạm ngưng cho mượn cho đến khi hoàn tất sửa chữa.
+                    </p>
+                  )}
+                </div>
+
+                {/* Ghi chú thêm */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-studio-muted uppercase block">Ghi chú quản trị</label>
+                  <textarea
+                    placeholder="Ghi chú thêm nếu có..."
+                    value={returnAdminNote}
+                    onChange={(e) => setReturnAdminNote(e.target.value)}
+                    className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 h-16 resize-none"
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="grid grid-cols-2 gap-3 pt-2">
+                  <button
+                    onClick={() => setReturnDialogOpen(false)}
+                    className="py-3 px-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 text-white font-semibold transition-all cursor-pointer text-center text-xs"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    onClick={submitReturn}
+                    disabled={actioningId !== null}
+                    className="py-3 px-4 rounded-xl bg-brand-primary hover:bg-brand-primary/90 text-white font-bold transition-all cursor-pointer text-center text-xs disabled:opacity-40 flex items-center justify-center space-x-1.5 shadow-lg shadow-brand-primary/20"
+                  >
+                    {actioningId === selectedBorrowReturn.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <Undo className="w-4 h-4" />
+                        <span>Xác nhận thu hồi</span>
+                      </>
+                    )}
                   </button>
                 </div>
               </div>

@@ -42,6 +42,7 @@ const EquipmentCategory = require('./EquipmentCategory');
 const Equipment = require('./Equipment');
 const BorrowRequest = require('./BorrowRequest');
 const StudioBooking = require('./StudioBooking');
+const Task = require('./Task');
 
 // ============================================================
 // ĐỊNH NGHĨA ASSOCIATIONS (QUAN HỆ GIỮA CÁC BẢNG)
@@ -111,6 +112,36 @@ StudioBooking.belongsTo(User, {
   as: 'booker',
 });
 
+/**
+ * QUAN HỆ 5 & 6: Task (Quản lý công việc FR-04)
+ * - User (1) --- (N) Task: Phân công nhiệm vụ cho CTV (assignedTasks)
+ * - User (1) --- (N) Task: Người giao nhiệm vụ/tạo nhiệm vụ (createdTasks)
+ *
+ * Lưu ý MSSQL: Cả 2 khóa ngoại đều tham chiếu đến bảng Users, nên dùng onDelete: 'NO ACTION'
+ * để ngăn chặn lỗi cycle hoặc multiple cascade paths (SQL Server Error 1785).
+ */
+User.hasMany(Task, {
+  foreignKey: 'assigned_to_user_id',
+  as: 'assignedTasks',
+  onDelete: 'NO ACTION',
+});
+
+Task.belongsTo(User, {
+  foreignKey: 'assigned_to_user_id',
+  as: 'assignee',
+});
+
+User.hasMany(Task, {
+  foreignKey: 'created_by_user_id',
+  as: 'createdTasks',
+  onDelete: 'NO ACTION',
+});
+
+Task.belongsTo(User, {
+  foreignKey: 'created_by_user_id',
+  as: 'creator',
+});
+
 // ============================================================
 // ĐỒNG BỘ DATABASE (DATABASE SYNC)
 // ============================================================
@@ -146,4 +177,5 @@ module.exports = {
   Equipment,
   BorrowRequest,
   StudioBooking,
+  Task,
 };

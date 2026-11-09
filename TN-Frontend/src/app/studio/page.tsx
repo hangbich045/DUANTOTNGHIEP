@@ -151,25 +151,69 @@ export default function StudioBookingPage() {
     }] : []),
   ];
 
+  // Khoảng đệm 30 phút giữa 2 ca đặt Studio (Quy tắc nghiệp vụ Mục 4.3)
+  const BUFFER_MS = 30 * 60 * 1000;
+
+  const validateOperatingHours = (start: Date, end: Date): string | null => {
+    if (end <= start) {
+      return 'Thời gian kết thúc phải sau thời gian bắt đầu.';
+    }
+
+    const isSameDay =
+      start.getFullYear() === end.getFullYear() &&
+      start.getMonth() === end.getMonth() &&
+      start.getDate() === end.getDate();
+
+    if (!isSameDay) {
+      return 'Lịch đặt Studio phải bắt đầu và kết thúc trong cùng một ngày.';
+    }
+
+    // 0 = Chủ nhật
+    if (start.getDay() === 0) {
+      return 'Phòng Studio không hoạt động vào Chủ nhật. Vui lòng chọn lịch từ Thứ Hai đến Thứ Bảy.';
+    }
+
+    const startMinutes = start.getHours() * 60 + start.getMinutes();
+    const endMinutes = end.getHours() * 60 + end.getMinutes();
+
+    // Ca sáng: 07:30 (450p) – 11:30 (690p), Ca chiều: 13:30 (810p) – 16:30 (990p)
+    const isMorning = startMinutes >= 450 && endMinutes <= 690;
+    const isAfternoon = startMinutes >= 810 && endMinutes <= 990;
+
+    if (!isMorning && !isAfternoon) {
+      return 'Thời gian đặt phòng không nằm trong khung giờ hoạt động (Sáng: 07:30–11:30, Chiều: 13:30–16:30 từ Thứ Hai đến Thứ Bảy). Không cho phép đặt xuyên trưa hoặc ngoài giờ.';
+    }
+
+    return null;
+  };
+
+  const isOverlappingOrBufferViolation = (s: Date, e: Date) => {
+    return bookings.some((b) => {
+      if (b.status !== 'APPROVED') return false;
+      const existingStart = new Date(b.startTime);
+      const existingEnd = new Date(b.endTime);
+      const bufferedStart = new Date(existingStart.getTime() - BUFFER_MS);
+      const bufferedEnd = new Date(existingEnd.getTime() + BUFFER_MS);
+      return s < bufferedEnd && e > bufferedStart;
+    });
+  };
+
   const handleSelectSlot = (start: Date, end: Date) => {
     if (start < new Date()) {
       toast('Không thể đặt lịch ở thời gian trong quá khứ', 'warning');
       return;
     }
 
-    const isOverlappingApproved = (s: Date, e: Date) => {
-      return bookings.some((b) => {
-        if (b.status !== 'APPROVED') return false;
-        const existingStart = new Date(b.startTime);
-        const existingEnd = new Date(b.endTime);
-        return s < existingEnd && e > existingStart;
-      });
-    };
+    const errorMsg = validateOperatingHours(start, end);
+    if (errorMsg) {
+      toast(errorMsg, 'warning');
+      return;
+    }
 
     if (firstClickDate === null) {
       // First click: set start
-      if (isOverlappingApproved(start, end)) {
-        toast('Khung giờ này đã được phê duyệt cho người dùng khác.', 'error');
+      if (isOverlappingOrBufferViolation(start, end)) {
+        toast('Khung giờ này đã được phê duyệt hoặc vi phạm khoảng đệm 30 phút với lịch đã có.', 'error');
         return;
       }
       setFirstClickDate(start);
@@ -184,9 +228,17 @@ export default function StudioBookingPage() {
         finalEnd = new Date(firstClickDate.getTime() + 30 * 60 * 1000);
       }
 
-      // Check overlap for the entire range
-      if (isOverlappingApproved(finalStart, finalEnd)) {
-        toast('Dải giờ được chọn bị trùng với lịch đã được phê duyệt.', 'error');
+      const rangeError = validateOperatingHours(finalStart, finalEnd);
+      if (rangeError) {
+        toast(rangeError, 'warning');
+        setFirstClickDate(start);
+        setCurrentSelection({ start, end });
+        return;
+      }
+
+      // Check overlap and buffer for the entire range
+      if (isOverlappingOrBufferViolation(finalStart, finalEnd)) {
+        toast('Dải giờ được chọn bị trùng hoặc vi phạm khoảng đệm 30 phút với lịch đã duyệt.', 'error');
         setFirstClickDate(start);
         setCurrentSelection({ start, end });
         return;
@@ -194,11 +246,13 @@ export default function StudioBookingPage() {
 
       // Check overlap with confirmed ranges
       const overlapsConfirmed = confirmedRanges.some((r) => {
-        return finalStart < r.end && finalEnd > r.start;
+        const bufStart = new Date(r.start.getTime() - BUFFER_MS);
+        const bufEnd = new Date(r.end.getTime() + BUFFER_MS);
+        return finalStart < bufEnd && finalEnd > bufStart;
       });
 
       if (overlapsConfirmed) {
-        toast('Dải giờ được chọn bị trùng với dải giờ đã chọn khác.', 'error');
+        toast('Dải giờ được chọn bị trùng hoặc vi phạm khoảng đệm 30 phút với dải giờ đã chọn khác.', 'error');
         setFirstClickDate(start);
         setCurrentSelection({ start, end });
         return;
@@ -241,18 +295,19 @@ export default function StudioBookingPage() {
       return;
     }
 
-    // Final check for APPROVED overlaps before submitting
-    const hasOverlap = ranges.some((range) => {
-      return bookings.some((b) => {
-        if (b.status !== 'APPROVED') return false;
-        const existingStart = new Date(b.startTime);
-        const existingEnd = new Date(b.endTime);
-        return range.start < existingEnd && range.end > existingStart;
-      });
-    });
+    // Kiểm tra giờ hoạt động cho tất cả các dải giờ
+    for (const range of ranges) {
+      const err = validateOperatingHours(range.start, range.end);
+      if (err) {
+        toast(err, 'error');
+        return;
+      }
+    }
 
-    if (hasOverlap) {
-      toast('Một hoặc nhiều khung giờ đã chọn đã được phê duyệt cho người dùng khác. Vui lòng kiểm tra lại.', 'error');
+    // Final check for APPROVED overlaps & 30-min buffer before submitting
+    const hasConflict = ranges.some((range) => isOverlappingOrBufferViolation(range.start, range.end));
+    if (hasConflict) {
+      toast('Một hoặc nhiều khung giờ đã chọn đã trùng hoặc vi phạm khoảng đệm 30 phút với lịch đã được phê duyệt. Vui lòng kiểm tra lại.', 'error');
       return;
     }
 

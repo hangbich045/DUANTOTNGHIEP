@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
-import { Loader2, Calendar, Camera, Clock, CheckCircle2, XCircle, RefreshCcw, AlertTriangle } from 'lucide-react';
+import { Loader2, Calendar, Camera, Clock, CheckCircle2, XCircle, RefreshCcw, AlertTriangle, PackageCheck, Undo } from 'lucide-react';
 
 interface EquipmentItem {
   equipmentId: string;
@@ -25,8 +25,12 @@ interface BorrowRequest {
   purpose: string;
   borrowDate: string;
   returnDate: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED';
+  actualReturnDate?: string;
+  status: 'PENDING' | 'APPROVED' | 'HANDED_OVER' | 'OVERDUE' | 'REJECTED' | 'RETURNED';
   rejectReason?: string;
+  handedOverAt?: string;
+  handoverCondition?: string;
+  returnCondition?: string;
   adminNote?: string;
   createdAt: string;
   equipments: EquipmentItem[];
@@ -99,7 +103,21 @@ export default function UserHistoryPage() {
         return (
           <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-success/15 text-brand-success border border-brand-success/20">
             <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>Đã duyệt</span>
+            <span>Đã duyệt (Chờ nhận máy)</span>
+          </span>
+        );
+      case 'HANDED_OVER':
+        return (
+          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30">
+            <PackageCheck className="w-3.5 h-3.5" />
+            <span>Đang mượn</span>
+          </span>
+        );
+      case 'OVERDUE':
+        return (
+          <span className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-600/30 text-red-400 border border-red-500/50 animate-pulse">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Quá hạn</span>
           </span>
         );
       case 'REJECTED':
@@ -278,6 +296,27 @@ export default function UserHistoryPage() {
                       <span className="text-studio-muted font-normal block mb-1">Mục đích:</span>
                       {borrow.purpose}
                     </p>
+
+                    {borrow.status === 'OVERDUE' && (
+                      <div className="text-xs text-red-400 mt-2 font-medium bg-red-500/10 border border-red-500/25 py-2 px-3 rounded-2xl w-fit max-w-full flex items-start space-x-1.5 animate-pulse">
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+                        <span>Cảnh báo: Đơn mượn đã quá thời hạn trả! Vui lòng liên hệ ban quản lý Studio và hoàn trả thiết bị sớm nhất có thể.</span>
+                      </div>
+                    )}
+
+                    {borrow.handoverCondition && (
+                      <div className="text-xs text-purple-300 mt-2 font-medium bg-purple-500/10 border border-purple-500/20 py-2 px-3 rounded-2xl w-fit max-w-full flex items-start space-x-1.5">
+                        <PackageCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>Biên bản bàn giao: {borrow.handoverCondition}</span>
+                      </div>
+                    )}
+
+                    {borrow.returnCondition && (
+                      <div className="text-xs text-brand-primary mt-2 font-medium bg-brand-primary/10 border border-brand-primary/20 py-2 px-3 rounded-2xl w-fit max-w-full flex items-start space-x-1.5">
+                        <Undo className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>Biên bản nhận trả: {borrow.returnCondition}</span>
+                      </div>
+                    )}
 
                     {borrow.status === 'REJECTED' && borrow.rejectReason && (
                       <div className="text-xs text-brand-error mt-2 font-medium bg-brand-error/5 border border-brand-error/15 py-2 px-3 rounded-2xl w-fit max-w-full flex items-start space-x-1.5 break-words whitespace-pre-wrap">

@@ -303,10 +303,45 @@ router.put('/borrow-requests/:id/reject', authenticate, authorize('ADMIN'), asyn
   }
 });
 
+// PUT /borrow-requests/:id/handover  [ADMIN]
+router.put('/borrow-requests/:id/handover', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const result = await borrowRequestService.handoverEquipment(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      req.body
+    );
+    return res.status(200).json({ message: 'Bàn giao thiết bị thành công!', data: result });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+// PATCH /borrow-requests/:id/handover  [ADMIN]
+router.patch('/borrow-requests/:id/handover', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const result = await borrowRequestService.handoverEquipment(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      req.body
+    );
+    return res.status(200).json({ message: 'Bàn giao thiết bị thành công!', data: result });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
 // PUT /borrow-requests/:id/return
 router.put('/borrow-requests/:id/return', authenticate, async (req, res) => {
   try {
-    const result = await borrowRequestService.returnEquipment(req.params.id, req.user.id, req.user.role);
+    const result = await borrowRequestService.returnEquipment(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      req.body
+    );
     return res.status(200).json({ message: 'Trả thiết bị thành công!', data: result });
   } catch (error) {
     return res.status(error.statusCode || 500).json({ message: error.message });
@@ -364,7 +399,11 @@ router.post('/studio-bookings', authenticate, async (req, res) => {
 // PUT /studio-bookings/:id/approve  [ADMIN]
 router.put('/studio-bookings/:id/approve', authenticate, authorize('ADMIN'), async (req, res) => {
   try {
-    const result = await studioBookingService.processBooking(req.params.id, 'confirm');
+    const { force, adminNote } = req.body || {};
+    const result = await studioBookingService.processBooking(req.params.id, 'confirm', null, { force, adminNote });
+    if (result && result.status === 'warning') {
+      return res.status(200).json(result);
+    }
     return res.status(200).json({ message: 'Đã phê duyệt đặt phòng!', data: result });
   } catch (error) {
     return res.status(error.statusCode || 500).json({ message: error.message });

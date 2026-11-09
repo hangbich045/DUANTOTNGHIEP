@@ -39,6 +39,7 @@ const equipmentRoutes = require('./routes/equipment.routes');
 const borrowRequestRoutes = require('./routes/borrowRequest.routes');
 const studioBookingRoutes = require('./routes/studioBooking.routes');
 const categoryRoutes = require('./routes/category.routes');
+const taskRoutes = require('./routes/task.routes');
 // Routes tương thích với Frontend hiện tại (NestJS-style paths)
 const compatRoutes = require('./routes/compat.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
@@ -116,6 +117,7 @@ app.use('/api/equipments', equipmentRoutes);    // /api/equipments, /api/equipme
 app.use('/api/borrow-requests', borrowRequestRoutes);
 app.use('/api/studio-bookings', studioBookingRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/tasks', taskRoutes);
 
 // ============================================================
 // COMPATIBILITY ROUTES (khớp với Frontend hiện tại)

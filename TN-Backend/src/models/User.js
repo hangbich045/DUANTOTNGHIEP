@@ -88,16 +88,17 @@ const User = sequelize.define(
     /**
      * Phân quyền (Role-Based Access Control - RBAC)
      * ADMIN: Quản trị viên - toàn quyền
-     * USER:  Người dùng thường - hạn chế
+     * COLLABORATOR: Cộng tác viên - lịch trực, công việc, chấm công
+     * USER:  Người dùng thường - mượn thiết bị, đặt phòng
      *
-     * Dùng STRING thay vì ENUM vì MSSQL xử lý ENUM khác MySQL/Postgres
+     * Dùng STRING(20) thay vì ENUM vì MSSQL xử lý ENUM khác MySQL/Postgres
      */
     role: {
-      type: DataTypes.STRING(10),
+      type: DataTypes.STRING(20),
       defaultValue: 'USER',
       allowNull: false,
       validate: {
-        isIn: { args: [['ADMIN', 'USER']], msg: 'Role phải là ADMIN hoặc USER' },
+        isIn: { args: [['ADMIN', 'USER', 'COLLABORATOR']], msg: 'Role phải là ADMIN, USER hoặc COLLABORATOR' },
       },
     },
 

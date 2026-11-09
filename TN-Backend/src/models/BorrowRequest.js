@@ -99,14 +99,48 @@ const BorrowRequest = sequelize.define(
 
     /**
      * Trạng thái đơn mượn (Workflow) - STRING cho MSSQL
+     * PENDING -> APPROVED -> HANDED_OVER -> RETURNED
+     *                      \-> OVERDUE -> RETURNED
+     *         \-> REJECTED
      */
     status: {
       type: DataTypes.STRING(20),
       defaultValue: 'PENDING',
       allowNull: false,
       validate: {
-        isIn: { args: [['PENDING', 'APPROVED', 'REJECTED', 'RETURNED']], msg: 'Trạng thái không hợp lệ' },
+        isIn: {
+          args: [['PENDING', 'APPROVED', 'HANDED_OVER', 'OVERDUE', 'REJECTED', 'RETURNED']],
+          msg: 'Trạng thái không hợp lệ',
+        },
       },
+    },
+
+    // Ngày giờ bàn giao thiết bị thực tế
+    handedOverAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'handed_over_at',
+    },
+
+    // Biên bản / tình trạng thiết bị lúc bàn giao
+    handoverCondition: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'handover_condition',
+    },
+
+    // Tình trạng thiết bị lúc thu hồi / nhận trả
+    returnCondition: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'return_condition',
+    },
+
+    // Ghi chú của quản trị viên / nhân sự quản lý
+    adminNote: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'admin_note',
     },
 
     // Lý do từ chối (chỉ điền khi status = REJECTED)

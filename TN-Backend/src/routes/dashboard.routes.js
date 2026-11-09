@@ -295,7 +295,7 @@ router.get('/reports', async (req, res) => {
  *             properties:
  *               role:
  *                 type: string
- *                 enum: [ADMIN, USER]
+ *                 enum: [ADMIN, USER, COLLABORATOR]
  *     responses:
  *       200:
  *         description: Cập nhật role thành công
@@ -307,8 +307,8 @@ router.get('/reports', async (req, res) => {
 router.put('/users/:id/role', async (req, res) => {
   try {
     const { role } = req.body;
-    if (!['ADMIN', 'USER'].includes(role)) {
-      return res.status(400).json({ message: 'Role phải là ADMIN hoặc USER.' });
+    if (!['ADMIN', 'USER', 'COLLABORATOR'].includes(role)) {
+      return res.status(400).json({ message: 'Role phải là ADMIN, USER hoặc COLLABORATOR.' });
     }
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ message: 'Người dùng không tồn tại.' });

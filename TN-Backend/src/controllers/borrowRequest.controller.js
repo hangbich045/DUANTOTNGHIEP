@@ -184,6 +184,56 @@ const processRequest = async (req, res) => {
 };
 
 /**
+ * PUT/PATCH /api/borrow-requests/:id/handover  [ADMIN ONLY]
+ * @swagger
+ * /api/borrow-requests/{id}/handover:
+ *   put:
+ *     summary: "[ADMIN] Bàn giao thiết bị cho người mượn"
+ *     tags: [BorrowRequest]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               handoverCondition:
+ *                 type: string
+ *                 example: Thiết bị hoạt động tốt, đầy đủ phụ kiện.
+ *               adminNote:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Bàn giao thiết bị thành công
+ *       400:
+ *         description: Đơn chưa được duyệt hoặc không hợp lệ
+ */
+const handoverEquipment = async (req, res) => {
+  try {
+    const result = await borrowRequestService.handoverEquipment(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      req.body
+    );
+    return res.status(200).json({
+      success: true,
+      message: 'Bàn giao thiết bị thành công!',
+      data: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+};
+
+/**
  * PATCH /api/borrow-requests/:id/return
  * @swagger
  * /api/borrow-requests/{id}/return:
@@ -198,11 +248,25 @@ const processRequest = async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               returnCondition:
+ *                 type: string
+ *                 example: Máy hoạt động bình thường, không trầy xước.
+ *               isDamaged:
+ *                 type: boolean
+ *                 description: Đánh dấu thiết bị bị hỏng hóc cần chuyển sang bảo trì (MAINTENANCE)
+ *               adminNote:
+ *                 type: string
  *     responses:
  *       200:
  *         description: Trả thiết bị thành công
  *       400:
- *         description: Đơn chưa được duyệt
+ *         description: Đơn chưa được duyệt hoặc không đang mượn
  *       403:
  *         description: Không có quyền trả đơn này
  */
@@ -211,7 +275,8 @@ const returnEquipment = async (req, res) => {
     const result = await borrowRequestService.returnEquipment(
       req.params.id,
       req.user.id,
-      req.user.role
+      req.user.role,
+      req.body
     );
     return res.status(200).json({
       success: true,
@@ -223,4 +288,4 @@ const returnEquipment = async (req, res) => {
   }
 };
 
-module.exports = { getAll, create, processRequest, returnEquipment };
+module.exports = { getAll, create, processRequest, handoverEquipment, returnEquipment };

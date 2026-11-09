@@ -263,6 +263,7 @@ router.get('/export-excel', async (req, res) => {
       [],
       ['Tổng số người dùng', users.length],
       ['Người dùng Admin', users.filter(u => u.role === 'ADMIN').length],
+      ['Cộng tác viên (CTV)', users.filter(u => u.role === 'COLLABORATOR').length],
       ['Người dùng thường', users.filter(u => u.role === 'USER').length],
       [],
       ['Tổng thiết bị', equipments.length],

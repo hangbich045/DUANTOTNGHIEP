@@ -18,12 +18,14 @@ import {
   Loader2,
   ShieldCheck,
   LogOut,
+  CheckSquare,
 } from 'lucide-react';
 
 const sidebarLinks = [
   { href: '/admin/dashboard', label: 'Thống kê tổng quan', icon: LayoutDashboard },
   { href: '/admin/equipment', label: 'Quản lý Thiết bị', icon: Camera },
   { href: '/admin/requests', label: 'Duyệt yêu cầu', icon: ClipboardList },
+  { href: '/admin/tasks', label: 'Quản lý Công việc', icon: CheckSquare },
   { href: '/admin/users', label: 'Quản lý Thành viên', icon: Users },
 ];
 

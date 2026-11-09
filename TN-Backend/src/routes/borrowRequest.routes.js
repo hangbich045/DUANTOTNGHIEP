@@ -26,7 +26,7 @@
  *         name: status
  *         schema:
  *           type: string
- *           enum: [PENDING, APPROVED, REJECTED, RETURNED]
+ *           enum: [PENDING, APPROVED, HANDED_OVER, OVERDUE, REJECTED, RETURNED]
  *         description: Lọc theo trạng thái
  *       - in: query
  *         name: page
@@ -218,13 +218,33 @@ router.put('/:id/reject', authenticate, authorize('ADMIN'), async (req, res) => 
   } catch (e) { return res.status(e.statusCode || 500).json({ message: e.message }); }
 });
 
+// [ADMIN] Bàn giao thiết bị cho người mượn
+router.patch('/:id/handover', authenticate, authorize('ADMIN'), borrowRequestController.handoverEquipment);
+
+router.put('/:id/handover', authenticate, authorize('ADMIN'), async (req, res) => {
+  try {
+    const result = await require('../services/borrowRequest.service').handoverEquipment(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      req.body
+    );
+    return res.status(200).json({ message: 'Bàn giao thiết bị thành công!', data: result });
+  } catch (e) { return res.status(e.statusCode || 500).json({ message: e.message }); }
+});
+
 // Xác nhận trả thiết bị
 router.patch('/:id/return', authenticate, borrowRequestController.returnEquipment);
 
 // FE gọi PUT /:id/return
 router.put('/:id/return', authenticate, async (req, res) => {
   try {
-    const result = await require('../services/borrowRequest.service').returnEquipment(req.params.id, req.user.id, req.user.role);
+    const result = await require('../services/borrowRequest.service').returnEquipment(
+      req.params.id,
+      req.user.id,
+      req.user.role,
+      req.body
+    );
     return res.status(200).json({ message: 'Trả thiết bị thành công!', data: result });
   } catch (e) { return res.status(e.statusCode || 500).json({ message: e.message }); }
 });
