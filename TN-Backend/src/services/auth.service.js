@@ -108,9 +108,13 @@ const login = async (data) => {
     throw error;
   }
 
-  // Bước 3: Kiểm tra tài khoản có bị khóa không
-  if (!user.isActive) {
-    const error = new Error('Tài khoản của bạn đã bị vô hiệu hóa. Liên hệ Admin.');
+  // Bước 3: Kiểm tra tài khoản có bị khóa hoặc vô hiệu hóa không
+  if (!user.isActive || user.status === 'Disabled' || user.status === 'Locked') {
+    const errorMsg =
+      user.status === 'Disabled'
+        ? 'Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ Quản trị viên.'
+        : 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ Quản trị viên.';
+    const error = new Error(errorMsg);
     error.statusCode = 403;
     throw error;
   }
@@ -215,6 +219,11 @@ const getAllUsers = async (query) => {
   // Lọc theo role
   if (query.role) {
     where.role = query.role;
+  }
+
+  // Lọc theo status (Active, Locked, Disabled)
+  if (query.status && query.status !== 'ALL') {
+    where.status = query.status;
   }
 
   const { count, rows } = await User.findAndCountAll({

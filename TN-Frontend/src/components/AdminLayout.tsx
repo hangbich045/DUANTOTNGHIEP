@@ -20,6 +20,7 @@ import {
   LogOut,
   CheckSquare,
   Calculator,
+  Calendar,
 } from 'lucide-react';
 
 const sidebarLinks = [
@@ -27,6 +28,7 @@ const sidebarLinks = [
   { href: '/admin/equipment', label: 'Quản lý Thiết bị', icon: Camera },
   { href: '/admin/requests', label: 'Duyệt yêu cầu', icon: ClipboardList },
   { href: '/admin/tasks', label: 'Quản lý Công việc', icon: CheckSquare },
+  { href: '/admin/duty', label: 'Quản lý Ca trực', icon: Calendar },
   { href: '/admin/payroll', label: 'Chấm công & Thù lao', icon: Calculator },
   { href: '/admin/users', label: 'Quản lý Thành viên', icon: Users },
 ];

@@ -110,6 +110,24 @@ const User = sequelize.define(
       field: 'is_active',
     },
 
+    /**
+     * Trạng thái tài khoản (QUY_TAC.md Mục 9):
+     * - Active: Tài khoản đang hoạt động bình thường
+     * - Locked: Tài khoản bị khóa (tạm thời)
+     * - Disabled: Tài khoản đã bị vô hiệu hóa (giữ lịch sử, không xóa vật lý)
+     */
+    status: {
+      type: DataTypes.STRING(20),
+      defaultValue: 'Active',
+      allowNull: false,
+      validate: {
+        isIn: {
+          args: [['Active', 'Locked', 'Disabled']],
+          msg: 'Trạng thái tài khoản phải là Active, Locked hoặc Disabled',
+        },
+      },
+    },
+
     // Xác thực email (true = đã xác thực OTP)
     isVerified: {
       type: DataTypes.BOOLEAN,

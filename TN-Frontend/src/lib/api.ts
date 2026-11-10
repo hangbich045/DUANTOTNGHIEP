@@ -80,7 +80,7 @@ class ApiClient {
     }
   }
 
-  async post(endpoint: string, body: FormData | unknown, isMultipart = false) {
+  async post(endpoint: string, body: FormData | unknown = {}, isMultipart = false) {
     const response = await fetch(`${getBaseUrl()}${endpoint}`, {
       method: 'POST',
       headers: this.getHeaders(isMultipart),

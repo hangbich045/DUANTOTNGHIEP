@@ -9,7 +9,8 @@
     "seed": "node seed.js",
     "import:devices": "node import-devices.js",
     "db:sync": "node src/models/index.js",
-    "test": "node --test test/unit.test.js"
+    "test": "node --test test/unit.test.js",
+    "test:collab": "node scripts/test_collaborator_sync.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

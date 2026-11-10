@@ -29,23 +29,7 @@ import {
   Pencil,
   Tag,
 } from 'lucide-react';
-
-export const TASK_TYPES = [
-  'Viết content',
-  'Chụp & xử lý hình sự kiện',
-  'Quay highlight',
-  'Dựng clip highlight',
-  'Quay clip TikTok',
-  'Dựng clip TikTok',
-  'Viết kịch bản',
-  'MC bản tin',
-  'Thư ký trường quay',
-  'Quay phim',
-  'Dựng phim',
-  'Diễn viên',
-  'Thiết kế',
-  'Khác',
-];
+import { TASK_TYPES } from '@/lib/constants';
 
 interface TaskAssignee {
   id: string;
@@ -54,6 +38,7 @@ interface TaskAssignee {
   employeeCode?: string;
   avatarUrl?: string;
   role: string;
+  status?: 'Active' | 'Locked' | 'Disabled';
 }
 
 interface TaskItem {
@@ -94,6 +79,7 @@ export default function AdminTasksPage() {
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [stats, setStats] = useState<TaskStats | null>(null);
   const [collaborators, setCollaborators] = useState<TaskAssignee[]>([]);
+  const [activeCollaborators, setActiveCollaborators] = useState<TaskAssignee[]>([]);
   const [loading, setLoading] = useState(true);
   const [actioningId, setActioningId] = useState<string | null>(null);
 
@@ -157,10 +143,25 @@ export default function AdminTasksPage() {
 
   const fetchCollaborators = async () => {
     try {
-      const res = await api.get('/dashboard/users');
-      const allUsers: any[] = Array.isArray(res) ? res : res.data || [];
-      const ctvs = allUsers.filter((u: any) => u.role === 'COLLABORATOR' || u.role === 'ADMIN');
-      setCollaborators(ctvs);
+      // 1. Tải danh sách CTV cho bộ lọc (bao gồm cả Active, Locked, Disabled để lọc lịch sử)
+      const filterRes: any = await api.get('/admin/collaborators?purpose=filter&status=ALL');
+      let allCtvs: TaskAssignee[] = [];
+      if (filterRes && filterRes.success && Array.isArray(filterRes.data)) {
+        allCtvs = filterRes.data;
+      } else if (Array.isArray(filterRes)) {
+        allCtvs = filterRes;
+      }
+      setCollaborators(allCtvs.filter((u: any) => u.role === 'COLLABORATOR'));
+
+      // 2. Tải danh sách CTV Active cho phân công tạo/sửa nhiệm vụ mới
+      const assignRes: any = await api.get('/admin/collaborators?purpose=assign');
+      let activeCtvs: TaskAssignee[] = [];
+      if (assignRes && assignRes.success && Array.isArray(assignRes.data)) {
+        activeCtvs = assignRes.data;
+      } else if (Array.isArray(assignRes)) {
+        activeCtvs = assignRes;
+      }
+      setActiveCollaborators(activeCtvs.filter((u: any) => u.role === 'COLLABORATOR'));
     } catch (err: any) {
       console.error('Lỗi tải danh sách CTV:', err);
     }
@@ -205,7 +206,7 @@ export default function AdminTasksPage() {
   const openCreateModal = () => {
     setCreateTitle('');
     setCreateDescription('');
-    setCreateAssigneeId(collaborators[0]?.id || '');
+    setCreateAssigneeId(activeCollaborators[0]?.id || '');
     setCreateDeadline('');
     setCreateTaskType('Viết content');
     setCreateOtherTaskType('');
@@ -558,11 +559,16 @@ export default function AdminTasksPage() {
                 className="w-full bg-white/5 border border-white/5 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
               >
                 <option value="ALL" className="bg-[#18181b]">Tất cả CTV</option>
-                {collaborators.map((c) => (
-                  <option key={c.id} value={c.id} className="bg-[#18181b]">
-                    {c.fullName}
-                  </option>
-                ))}
+                {collaborators.map((c) => {
+                  let label = `${c.fullName} (${c.employeeCode || c.email})`;
+                  if (c.status === 'Disabled') label += ' - [Đã nghỉ việc]';
+                  else if (c.status === 'Locked') label += ' - [Tạm khóa]';
+                  return (
+                    <option key={c.id} value={c.id} className={`bg-[#18181b] ${c.status === 'Disabled' ? 'text-zinc-500' : 'text-white'}`}>
+                      {label}
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -823,9 +829,9 @@ export default function AdminTasksPage() {
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
                   >
                     <option value="" disabled className="bg-[#18181b]">-- Chọn CTV --</option>
-                    {collaborators.map((c) => (
+                    {activeCollaborators.map((c) => (
                       <option key={c.id} value={c.id} className="bg-[#18181b]">
-                        {c.fullName} ({c.employeeCode || c.email}) - {c.role}
+                        {c.fullName} ({c.employeeCode || c.email})
                       </option>
                     ))}
                   </select>
@@ -963,11 +969,19 @@ export default function AdminTasksPage() {
                     onChange={(e) => setEditAssigneeId(e.target.value)}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer"
                   >
-                    {collaborators.map((c) => (
+                    {activeCollaborators.map((c) => (
                       <option key={c.id} value={c.id} className="bg-[#18181b]">
                         {c.fullName} ({c.employeeCode || c.email})
                       </option>
                     ))}
+                    {editAssigneeId && !activeCollaborators.some((c) => c.id === editAssigneeId) && (() => {
+                      const oldCtv = collaborators.find((c) => c.id === editAssigneeId);
+                      return oldCtv ? (
+                        <option key={oldCtv.id} value={oldCtv.id} className="bg-[#18181b] text-zinc-500">
+                          {oldCtv.fullName} ({oldCtv.employeeCode || oldCtv.email}) - [{oldCtv.status || 'Không hoạt động'}]
+                        </option>
+                      ) : null;
+                    })()}
                   </select>
                 </div>
 

@@ -8,6 +8,7 @@
 const { Router } = require('express');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 const authService = require('../services/auth.service');
+const userService = require('../services/user.service');
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 
@@ -125,16 +126,84 @@ router.get('/users', async (req, res) => {
  */
 router.patch('/users/:id/toggle-active', async (req, res) => {
   try {
-    if (req.params.id === req.user.id) {
-      return res.status(400).json({ message: 'Không thể tự khóa tài khoản của chính mình.' });
-    }
-    const user = await User.findByPk(req.params.id);
-    if (!user) return res.status(404).json({ message: 'Người dùng không tồn tại.' });
-    await user.update({ isActive: !user.isActive });
-    const { password: _, ...result } = user.toJSON();
-    return res.status(200).json({ message: `Tài khoản đã ${user.isActive ? 'kích hoạt' : 'vô hiệu hóa'}.`, user: result });
+    const result = await userService.toggleUserActiveStatus(req.user.id, req.params.id);
+    return res.status(200).json(result);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/users/{id}:
+ *   delete:
+ *     summary: "[ADMIN] Xóa hoặc Vô hiệu hóa người dùng (bảo toàn lịch sử dữ liệu)"
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Xóa hoặc vô hiệu hóa thành công
+ *       400:
+ *         description: Không thể tự thao tác trên chính mình
+ *       404:
+ *         description: Không tìm thấy người dùng
+ */
+router.delete('/users/:id', async (req, res) => {
+  try {
+    const result = await userService.deleteOrDisableUser(req.user.id, req.params.id);
+    return res.status(200).json(result);
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ message: error.message });
+  }
+});
+
+/**
+ * @swagger
+ * /api/admin/collaborators:
+ *   get:
+ *     summary: "[ADMIN] Lấy danh sách Cộng tác viên (COLLABORATOR) chuẩn hóa cho dropdown và bộ lọc"
+ *     tags: [Admin]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: purpose
+ *         schema:
+ *           type: string
+ *           enum: [assign, filter]
+ *         description: "assign: chỉ lấy CTV Active; filter: lấy tất cả CTV (kể cả Disabled để lọc lịch sử)"
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [Active, ALL, Locked, Disabled]
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Danh sách CTV chuẩn hóa
+ */
+router.get('/collaborators', async (req, res) => {
+  try {
+    const list = await userService.getCollaborators(req.query);
+    return res.status(200).json({
+      success: true,
+      data: list,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+    });
   }
 });
 

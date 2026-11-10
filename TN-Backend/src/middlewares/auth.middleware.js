@@ -73,7 +73,7 @@ const authenticate = async (req, res, next) => {
     // Bước 5: Tìm user trong DB để xác nhận vẫn còn tồn tại và đang active
     // (Token vẫn valid nhưng user có thể bị xóa hoặc bị khóa sau đó)
     const user = await User.findByPk(decoded.id, {
-      attributes: ['id', 'email', 'fullName', 'role', 'isActive'], // Chỉ lấy các field cần thiết
+      attributes: ['id', 'email', 'fullName', 'role', 'isActive', 'status'], // Chỉ lấy các field cần thiết
     });
 
     if (!user) {
@@ -83,10 +83,14 @@ const authenticate = async (req, res, next) => {
       });
     }
 
-    if (!user.isActive) {
+    if (!user.isActive || user.status === 'Disabled' || user.status === 'Locked') {
+      const message =
+        user.status === 'Disabled'
+          ? 'Tài khoản của bạn đã bị vô hiệu hóa. Liên hệ Quản trị viên.'
+          : 'Tài khoản của bạn đã bị khóa. Liên hệ Quản trị viên.';
       return res.status(403).json({
         success: false,
-        message: 'Tài khoản của bạn đã bị vô hiệu hóa. Liên hệ Admin.',
+        message,
       });
     }
 

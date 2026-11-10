@@ -37,21 +37,31 @@ Hệ thống LHU Media Studio gồm 09 nhóm chức năng chính, phục vụ qu
 - Tự động ghi nhận công việc vào Bảng công việc tháng tại thời điểm giao.
 - CTV khai báo công việc phát sinh ngoài hệ thống.
 
-### FR-05 – Quản lý lịch trực và giờ công
-- CTV đăng ký thời gian có thể tham gia trực.
-- Nhân sự sắp xếp, điều chỉnh và xác nhận lịch trực.
-- Ghi nhận ca trực đã xác nhận vào Bảng công việc tháng.
-- Tổng hợp giờ công theo tháng.
-- Tính dữ liệu tiền công theo quy tắc của dự án.
-- Xuất Excel dữ liệu lương tháng để kiểm tra, đối soát và phê duyệt bên ngoài hệ thống.
+### FR-05 – Quản lý ca trực, chấm công và thù lao CTV
+- **Quản lý ca trực Studio theo quy trình 3 giai đoạn**:
+  * Giai đoạn 1: Nhân sự tạo đợt đăng ký ca trực tháng mới (trạng thái đợt: `OPEN`, `CLOSED`, `ARRANGING`, `CONFIRMED`), thiết lập hạn chót đăng ký, chặn tạo trùng tháng/năm, phát thông báo in-app cho toàn bộ CTV.
+  * Giai đoạn 2: CTV xem ma trận lịch tháng 1..N x 3 buổi (Sáng: 07:30–11:30, Chiều: 13:00–17:00, Tối: 17:30–21:30), đăng ký/sửa/hủy thời gian có thể trực (Availability). Rõ ràng phân biệt đăng ký rảnh chưa phải lịch chính thức và chưa tính công.
+  * Giai đoạn 3: Nhân sự xem bảng tổng hợp CTV rảnh, phân công ca trực (cảnh báo trùng ca), bấm Xác nhận lịch trực tháng (`CONFIRMED`), chốt lịch chính thức, đồng bộ ký hiệu `LV` vào Bảng chấm công và gửi thông báo in-app cho CTV.
+- **Quản lý chấm công và kiểm soát ký hiệu SV**:
+  * Hiển thị Bảng chấm công tháng ma trận 3 buổi/ngày (S, C, T) với ký hiệu chuẩn: `LV`, `SV`, `NL`.
+  * Kiểm soát chặt chẽ ký hiệu `SV`: Chỉ cho phép chọn `SV` khi CTV có công việc `COMPLETED` trong Bảng thống kê công việc của đúng ngày đó. Nếu không có, nút `SV` bị disabled và cảnh báo: *"Không hợp lệ vì không có công việc tương ứng trong Bảng thống kê công việc."* Backend API từ chối trực tiếp (HTTP 400).
+- **Tính toán thù lao và xuất Excel**:
+  * Mức cơ bản: 20.000 đ/giờ, ca Studio tiêu chuẩn 4 giờ = 80.000 đ.
+  * Hệ số 1.5 sau 16:30 các ngày T2–T7; Hệ số 2.0 cho sự kiện Chủ nhật (không nhân chồng hệ số).
+  * Ca trực tương lai (`date > today`) dù `CONFIRMED` tuyệt đối không được tính tiền công (TC-04).
+  * Xuất Excel chuẩn Bộ phận Truyền thông ĐH Lạc Hồng: `Bảng chấm công tháng` (Sheet1) và `Bảng thống kê công việc` (T10.2026).
 
 ### FR-06 – Quản lý tài khoản
-- Đăng ký tài khoản.
-- Xác minh email bằng OTP.
-- Phân quyền theo vai trò.
-- Khóa và mở khóa tài khoản.
-- Đặt lại mật khẩu.
-- Vô hiệu hóa tài khoản CTV khi kết thúc tham gia, đồng thời giữ lịch sử liên quan.
+- Đăng ký tài khoản và xác minh email bằng OTP 6 chữ số.
+- Phân quyền theo vai trò (Admin, Collaborator, User).
+- Khóa và mở khóa tài khoản (`Active` <-> `Locked`).
+- Đặt lại mật khẩu qua email xác minh.
+- Quản lý trạng thái tài khoản 3 cấp độ: `Active`, `Locked`, `Disabled`.
+- Cơ chế xóa tài khoản thông minh bảo toàn dữ liệu:
+  * Tự động kiểm tra dữ liệu liên quan (công việc, chấm công, ca trực, bảng lương, mượn trả, đặt phòng).
+  * Nếu đã có dữ liệu: chuyển trạng thái sang `Disabled`, chặn đăng nhập, giữ nguyên `user_id` và toàn bộ lịch sử hoạt động.
+  * Nếu chưa có dữ liệu: cho phép xóa vật lý (DELETE) an toàn khỏi CSDL.
+  * Chặn Admin tự xóa/vô hiệu hóa chính mình. Không dùng `CASCADE DELETE` trên dữ liệu người dùng.
 
 ### FR-07 – Thông báo
 - Gửi thông báo trên website.

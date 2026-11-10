@@ -15,7 +15,8 @@
  *  - logging: false => Tắt log SQL ra console (bật khi cần debug)
  */
 
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const { Sequelize } = require('sequelize');
 
 // Khởi tạo instance Sequelize với thông tin từ biến môi trường

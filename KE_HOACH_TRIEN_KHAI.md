@@ -225,42 +225,52 @@ Mỗi khi người dùng giao một nhiệm vụ:
     * **KẾT LUẬN GIAI ĐOẠN 2:** Đã hoàn thành 100% tất cả các mục tiêu của Phân hệ Quản lý công việc (FR-04: Task 2.1, 2.2, 2.3, 2.4), sẵn sàng bước vào Giai đoạn 3 (Lịch trực, Bảng công việc tháng & Tính thù lao CTV - FR-05).
 
 ### GIAI ĐOẠN 3 (16/11 – 18/11/2026): LỊCH TRỰC, BẢNG CÔNG VIỆC THÁNG & TÍNH THÙ LAO CTV (FR-05) - HOÀN THÀNH 100%
-- [x] **Task 3.1:** Thiết kế Database & Model Sequelize cho Chấm công, Ca trực và Thù lao CTV:
-  - Cập nhật bảng `Tasks`: Bổ sung các cột `execution_date` (`DATE`), `actual_hours` (`DECIMAL(5,2)`), `shift_session` (`NVARCHAR(10)`), `note` (`NVARCHAR(MAX)`), `is_overtime` (`BIT`), `overtime_hours` (`DECIMAL(4,2)`), `is_sunday` (`BIT`).
-  - Tạo bảng `StudioShifts` (Model `StudioShift.js`): `id` (`CHAR(36)` PK), `user_id` (`CHAR(36)` FK), `date` (`DATE`), `shift_type` (`NVARCHAR(20)`: `SANG`, `CHIEU`, `TOI`), `start_time`, `end_time`, `hours` (4.00), `status` (`REGISTERED`, `CONFIRMED`, `COMPLETED`, `CANCELLED`), `attendance_symbol` (`LV`), `note`, `confirmed_by_user_id`.
-  - Tạo bảng `AttendanceRecords` (Model `AttendanceRecord.js`): Quản lý cell chấm công ma trận theo ngày và buổi (`S`, `C`, `T`), ký hiệu `LV`, `SV`, `NL`.
-  - Tạo bảng `MonthlyPayrolls` (Model `MonthlyPayroll.js`): Lưu trữ kết quả tính thù lao tháng của CTV (tổng ca, giờ trực Studio, giờ sự vụ, giờ OT 1.5x, giờ Chủ nhật 2.0x, tổng giờ chuẩn, tổng giờ quy đổi, đơn giá 20.000 đ/h, tổng tiền).
-  - Khai báo associations đầy đủ trong `TN-Backend/src/models/index.js`.
-- [x] **Task 3.2:** Xây dựng `duty.service.js` & `duty.controller.js` & `duty.routes.js`:
-  - CTV đăng ký ca trực Studio (chọn Sáng: 07:30–11:30, Chiều: 13:00–17:00, Tối: 17:30–21:30). Chặn CTV tự đăng ký ngày quá khứ.
-  - Admin xếp lịch, điều phối và xác nhận ca trực Studio (`CONFIRMED`). Cho phép Admin xếp lịch vào bất kỳ ngày nào trong tháng để backfill đối soát.
-  - Xác nhận hoàn thành ca trực (`completeShift`): Chặn hoàn thành ca trực tương lai (TC-04). Chặn CTV thao tác trên ca trực của người khác (TC-07).
-  - Hủy ca trực (`cancelShift`): CTV được hủy khi ca ở trạng thái `REGISTERED`.
-- [x] **Task 3.3:** Xây dựng `payroll.service.js` lập trình bộ tính thù lao CTV theo 7 quy tắc bắt buộc:
-  - Đơn giá cơ bản: **20.000 đồng/giờ**.
-  - Ca trực tiêu chuẩn Studio: **4 giờ** (80.000 đ/ca).
-  - Sự kiện kỹ thuật sau 16:30 T2–T7: Hệ số **1.5** (tính cho số giờ làm sau 16:30).
-  - Sự kiện kỹ thuật Chủ nhật: Hệ số **2.0** cho toàn bộ thời gian thực hiện trong ngày Chủ nhật.
-  - Sự kiện kỹ thuật Chủ nhật sau 16:30: Chỉ tính hệ số **2.0** (TC-06: KHÔNG nhân chồng 1.5 x 2.0 = 3.0).
-  - Tính theo thời gian thực tế ghi nhận trên phiếu sự vụ đã nghiệm thu.
-  - Tự động khử trùng thời gian: Không tính trùng thời gian nhiệm vụ nằm trong ca trực phòng đã tính công (TC-05).
-  - Chỉ tính công cho ca trực đã hoàn thành (`COMPLETED`) và việc đã nghiệm thu hoàn thành (`COMPLETED`). Loại trừ hoàn toàn việc dang dở (TC-03) và ca tương lai (TC-04).
-- [x] **Task 3.4:** Xây dựng 2 hàm xuất Excel chuyên biệt bằng ExcelJS bám sát 100% file mẫu BPTT ĐH Lạc Hồng:
-  - `exportTimesheetExcel`: Xuất file `Bang_Cham_Cong_Thang_[MM]_[YYYY].xlsx` cấu trúc sheet `Sheet1` gồm ma trận 1..daysCount x 3 ca (`S`, `C`, `T`), các cột tổng hợp `AI` (LV), `AJ` (SV), `AK` (Sum LV), `AL` (Giờ LV), `AM` (Giờ SV), `AN` (Tổng), `AO` (Tiền), dòng tổng tiền toàn bộ CTV, legend ký hiệu (`LV`, `SV`, `NL`) và khối ký tên Lãnh đạo đơn vị & Người chấm công.
-  - `exportTasksSummaryExcel`: Xuất file `Bang_Thong_Ke_Cong_Viec_Thang_[MM]_[YYYY].xlsx` cấu trúc sheet `T10.2026` gồm 8 cột (STT, Họ tên, Ngày, Nội dung sự vụ, Nhiệm vụ, Thực hiện giờ, Tổng giờ, Ghi chú), nhóm theo từng CTV, cột Tổng giờ = sum(giờ) của CTV.
-- [x] **Task 3.5:** Xây dựng giao diện Frontend toàn diện cho Admin và CTV:
-  - Admin (`/admin/payroll`): 3 tab chuyển đổi linh hoạt:
-    * Tab 1: Ma trận Bảng Chấm Công tháng (3 ca S-C-T), xem chi tiết các cột AI -> AO, hỗ trợ double click chỉnh sửa nhanh ô chấm công (LV, SV, NL).
-    * Tab 2: Bảng Thống Kê Công Việc tháng (T10.2026 format) nhóm theo từng CTV.
-    * Tab 3: Quản Lý Ca Trực & Bảng Lương (Xếp ca trực mới cho CTV, duyệt ca trực, tính toán thù lao tự động và hiển thị thẻ tổng quan lương).
-    * 2 nút xuất Excel tải trực tiếp 2 file chuẩn Bộ phận Truyền thông.
-  - CTV (`/tasks`): 2 tab lớn:
-    * Tab 1: Nhiệm vụ & Sự vụ (theo dõi việc, nộp kết quả, khai báo việc ngoài có ngày/giờ/buổi/OT/CN).
-    * Tab 2: Lịch trực & Bảng chấm công (thẻ thù lao tạm tính của tháng x 20.000 VNĐ, nút Đăng ký ca trực Studio, bảng danh sách ca trực cá nhân, bảng ma trận chấm công cá nhân theo 3 buổi).
-  - Admin Tasks (`/admin/tasks`): Modal nghiệm thu khi chọn `COMPLETED` cho phép Admin ghi nhận trực tiếp ngày thực hiện, số giờ thực tế, buổi làm, ngoài giờ OT (x1.5), làm Chủ nhật (x2.0).
-- [x] **Task 3.6:** Kiểm thử chuyên sâu thuật toán tính lương đối chiếu với các trường hợp mẫu:
-  - Unit Tests: 58/58 tests PASS 100% (bổ sung Suite 10 bao quát TC-03 -> TC-07, công thức, số ngày tháng).
-  - E2E Tests: 13/13 scenarios PASS 100% qua kịch bản `scratch/test_phase3_e2e.js` (kiểm tra tính đúng 26 giờ quy đổi = 520.000 VNĐ, xuất 2 file Excel và verify cấu trúc dòng/cột/công thức).
+- [x] **Task 3.1:** Thiết kế Database & Model Sequelize cho Chấm công, Ca trực và Thù lao CTV.
+- [x] **Task 3.2:** Xây dựng `duty.service.js` & `duty.controller.js` & `duty.routes.js`.
+- [x] **Task 3.3:** Xây dựng `payroll.service.js` lập trình bộ tính thù lao CTV theo 7 quy tắc bắt buộc.
+- [x] **Task 3.4:** Xây dựng 2 hàm xuất Excel chuyên biệt bằng ExcelJS bám sát 100% file mẫu BPTT ĐH Lạc Hồng.
+- [x] **Task 3.5:** Xây dựng giao diện Frontend toàn diện cho Admin và CTV.
+- [x] **Task 3.6:** Kiểm thử chuyên sâu thuật toán tính lương đối chiếu với các trường hợp mẫu: Unit Tests 58/58 PASS 100%, E2E Tests 13/13 scenarios PASS 100%.
+
+### GIAI ĐOẠN 3 MỞ RỘNG (10/11/2026): ĐIỀU CHỈNH GIAO DIỆN CHẤM CÔNG VÀ XÂY DỰNG QUY TRÌNH ĐĂNG KÝ – SẮP XẾP CA TRỰC CTV 3 GIAI ĐOẠN - HOÀN THÀNH 100%
+- [x] **Hạng mục 1: Điều chỉnh tên các mục giao diện:**
+  - `Bảng chấm công tháng (Sheet1)` → `Bảng chấm công tháng`.
+  - `Bảng thống kê công việc (T10.2026)` → `Bảng thống kê công việc`.
+  - Giữ nguyên tên sheet chuẩn khi xuất file Excel (`Sheet1` và `T10.2026`).
+- [x] **Hạng mục 2: Kiểm soát chặt chẽ ký hiệu SV trong Bảng chấm công:**
+  - Frontend: Nút `SV` ở modal chỉnh sửa cell chấm công bị `disabled` và làm mờ nếu ngày đó CTV không có công việc `COMPLETED`. Hover/tương tác hiển thị cảnh báo: *"Không hợp lệ vì không có công việc tương ứng trong Bảng thống kê công việc."*
+  - Backend: `updateAttendanceCell` kiểm tra độc lập tại tầng Service và Controller, từ chối ghi nhận `SV` trái phép (ném lỗi HTTP 400). Chặn tuyệt đối việc dùng công việc của CTV khác làm căn cứ cho `SV`.
+  - Hồi quy dữ liệu: Tự động loại trừ các bản ghi `SV` thủ công nếu công việc bị hủy hoặc không còn hợp lệ.
+- [x] **Hạng mục 3: Sắp xếp lại giao diện và bộ lọc chấm công:**
+  - Thiết kế lại khu vực bộ lọc theo các nhóm logic: Tháng/Năm, dropdown chọn CTV, ô tìm kiếm tên/mã CTV, nút làm mới và nhóm nút xuất Excel.
+  - Bố cục responsive, table có thanh trượt ngang `overflow-x-auto`, không tràn hay vỡ chữ trên desktop và tablet.
+- [x] **Hạng mục 4 & 5: Đổi tên và xây dựng quy trình quản lý ca trực 3 giai đoạn:**
+  - Đổi tên sidebar menu và tiêu đề: `Quản lý Ca trực` (`/admin/duty`), tách riêng khỏi trang chấm công & bảng thù lao.
+  - **Giai đoạn 1 (Nhân sự tạo ca trực mới)**: Mở đợt đăng ký theo tháng/năm, cấu hình deadline và ghi chú; kiểm tra không tạo trùng đợt cùng tháng; tự động phát thông báo in-app `DUTY_PERIOD_OPEN` đến toàn bộ CTV.
+  - **Giai đoạn 2 (CTV đăng ký thời gian có thể trực - Availability)**: CTV xem ma trận lịch tháng 1..N x 3 buổi (S: 07:30–11:30, C: 13:00–17:00, T: 17:30–21:30), tick chọn nhiều ngày/buổi rảnh và lưu vào `ShiftRegistrations`; cho phép sửa/hủy khi đợt `OPEN`; khóa đăng ký khi đợt `CLOSED`. Đảm bảo phân biệt rõ ràng: Đăng ký rảnh chưa phải lịch chính thức và chưa tính công.
+  - **Giai đoạn 3 (Nhân sự sắp xếp và xác nhận lịch)**: Nhân sự xem ma trận tổng hợp rảnh của tất cả CTV, phân công ca trực (cảnh báo trùng ca), nhấn "Xác nhận lịch trực tháng" (`CONFIRMED`) chốt lịch chính thức, đồng bộ ký hiệu `LV` vào Bảng chấm công và gửi thông báo in-app `DUTY_SCHEDULE_CONFIRMED` cho CTV.
+  - Bảo vệ an toàn quỹ lương: Lịch trực tương lai (`date > today`) dù `CONFIRMED` tuyệt đối không bị tính tiền công (TC-04).
+  - CSDL & Backend: Bảng `DutyPeriods`, `ShiftRegistrations`, `Notifications` (`DATETIMEOFFSET` an toàn), cột `period_id` trong `StudioShifts`.
+  - Component Frontend: `NotificationBell.tsx` tích hợp chuông thông báo in-app trên Navbar.
+- [x] **Hạng mục 6: Kiểm thử tự động bắt buộc:**
+  - **Backend Unit Tests:** Đạt **66/66 Unit Tests PASS 100%** (bổ sung Suite 11 gồm 8 kịch bản bao quát toàn bộ quy trình).
+  - **21 Tiêu chí Kiểm thử:** Kịch bản `TN-Backend/scripts/test_21_criteria.js` kiểm tra trực tiếp trên SQL Server database thực tế đạt **21/21 tiêu chí PASS 100%**.
+  - **Frontend Type & Build Check:** 0 lỗi TypeScript, Next.js production build sẵn sàng.
+
+- [x] **Nhiệm vụ Bổ sung (10/11/2026): Khắc phục triệt để lỗi xóa tài khoản do ràng buộc khóa ngoại & Bảo toàn dữ liệu lịch sử (QUY_TAC.md Mục 9):**
+  - *Nguyên nhân lỗi gốc:* Thao tác xóa vật lý `user.destroy()` kích hoạt lỗi SQL Server `The DELETE statement conflicted with the REFERENCE constraint` do các bảng `Tasks`, `AttendanceRecords`, `StudioShifts`, `BorrowRequests`, `StudioBookings`... đang liên kết khóa ngoại với quy tắc bảo toàn dữ liệu `NO ACTION`.
+  - *Giải pháp triển khai:*
+    * Database: Thêm cột `status` (`NVARCHAR(20)`: `'Active'`, `'Locked'`, `'Disabled'`, default `'Active'`) vào bảng `Users` kèm ràng buộc CHECK.
+    * Model & Service: Bổ sung trường `status` vào `User.js`. Xây dựng `TN-Backend/src/services/user.service.js` với hàm `checkUserHasRelatedData` và `deleteOrDisableUser`:
+      + Nếu tài khoản **đã có dữ liệu liên quan** (công việc, chấm công, ca trực, bảng lương, mượn trả, đặt phòng): **Không xóa vật lý**, chuyển sang trạng thái `Disabled` (`isActive: false`), giữ nguyên `user_id` và 100% dữ liệu lịch sử.
+      + Nếu tài khoản **chưa có dữ liệu liên quan**: Thực hiện xóa vật lý (DELETE) an toàn khỏi CSDL.
+      + Chặn Admin tự xóa hoặc tự vô hiệu hóa tài khoản của chính mình.
+    * Xác thực & Phân quyền: Cập nhật `auth.service.js` và `auth.middleware.js`: Chặn đăng nhập đối với tài khoản `Disabled` (HTTP 403: *"Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ Quản trị viên."*).
+    * Giao diện Admin Users (`/admin/users`): Cập nhật hiển thị rõ 3 trạng thái (Active: xanh, Locked: vàng, Disabled: đỏ/xám), cập nhật modal xóa với cảnh báo nghiệp vụ bảo toàn dữ liệu lịch sử.
+    * Kiểm thử tự động:
+      + Đạt **71/71 Backend Unit Tests PASS 100%** (mở rộng Suite 8 kiểm tra các quy tắc xóa, vô hiệu hóa, phân biệt 3 trạng thái).
+      + Kịch bản E2E `TN-Backend/scripts/test_user_delete_fix.js` đạt **8/8 trường hợp kiểm thử PASS 100%** trên SQL Server database thực tế.
+      + Kiểm thử hồi quy 21 tiêu chí chấm công & ca trực đạt **21/21 tiêu chí PASS 100%**. Next.js production build 25/25 routes thành công.
 
 ### GIAI ĐOẠN 4 (19/11 – 22/11/2026): THÔNG BÁO, AUDIT LOG, BẢO TRÌ & THỐNG KÊ MỞ RỘNG (FR-07, FR-09, FR-01.5, FR-08)
 - [ ] **Task 4.1 (FR-07):** Tạo bảng `Notifications`, service gửi thông báo in-app và email giao dịch (thông báo duyệt mượn, duyệt phòng, giao việc, nhắc nợ quá hạn). Bổ sung Icon chuông thông báo trên Navbar.
@@ -330,6 +340,9 @@ Mỗi module khi hoàn thành bắt buộc phải pass 100% các testcase sau:
 - [x] **TC-05 (Chống tính trùng giờ):** Nếu một CTV vừa trực Studio vừa hỗ trợ kỹ thuật sự kiện trong cùng một buổi, hệ thống tự động loại trừ thời gian trùng lặp, không tính tiền hai lần.
 - [x] **TC-06 (Chống nhân chồng hệ số):** Nhiệm vụ kỹ thuật diễn ra vào Chủ nhật lúc 18:00 (vừa Chủ nhật vừa sau 16:30) chỉ tính hệ số 2.0 (không được nhân 1.5 x 2.0 = 3.0). Đã kiểm thử chính xác bằng unit test suite 10.
 - [x] **TC-07 (Bảo vệ quyền hạn Nhân sự):** CTV tuyệt đối không thể tự duyệt hoàn thành công việc của chính mình hoặc tự chốt ca trực hay chỉnh sửa bảng lương/ô chấm công. Đã thiết lập middleware `authorize('ADMIN')` cho toàn bộ các endpoints nhạy cảm.
+- [x] **TC-08 (Bảo toàn lịch sử tài khoản khi xóa):** Tài khoản đã có dữ liệu không được xóa vật lý, chuyển sang `Disabled` bảo toàn 100% lịch sử công việc, chấm công, ca trực; tài khoản chưa có dữ liệu cho phép xóa vật lý.
+- [x] **TC-09 (Đồng bộ danh sách CTV trong bộ lọc & dropdown):** Phân định 2 mục đích sử dụng (Phân công mới = chỉ CTV Active; Lọc lịch sử = TẤT CẢ CTV kể cả Disabled/Locked); ràng buộc cứng vai trò `COLLABORATOR` (không lẫn USER/ADMIN); sắp xếp A–Z; hiển thị Họ tên + Email/Mã NV; hỗ trợ tìm kiếm nhanh và tùy chọn Tất cả CTV.
+- [x] **TC-10 (Khắc phục Runtime TypeError MyTasksPage & Phòng thủ Schema):** Đồng bộ cấu trúc payload API `payroll.timesheet` cung cấp đồng thời cả `user` và `ctv`, `daysMeta` và `daysHeader`, camelCase và UPPERCASE summary. Xử lý an toàn triệt để mảng và quan hệ `Task.creator`, `Task.assignee`, không crash khi user/task bị thiếu quan hệ hoặc CTV chưa có dòng chấm công.
 
 ---
 

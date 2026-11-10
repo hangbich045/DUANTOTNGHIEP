@@ -477,3 +477,189 @@ Cập nhật hệ thống quản lý chấm công, thống kê công việc, t�
 - **Trạng thái:** `COMPLETED`
 
 ---
+
+
+## PROMPT #17: ĐIỀU CHỈNH GIAO DIỆN CHẤM CÔNG VÀ XÂY DỰNG QUY TRÌNH ĐĂNG KÝ – SẮP XẾP CA TRỰC CTV
+- **Ngày thực hiện:** 10/11/2026
+- **Mục tiêu:**
+  1. Hạng mục 1: Điều chỉnh tên 2 mục giao diện: `Bảng chấm công tháng (Sheet1)` → `Bảng chấm công tháng`; `Bảng thống kê công việc (T10.2026)` → `Bảng thống kê công việc`.
+  2. Hạng mục 2: Kiểm soát chặt chẽ ký hiệu `SV` trong Bảng chấm công (chỉ cho phép chọn khi ngày đó có công việc `COMPLETED` của đúng CTV; khi không có thì disabled và cảnh báo lỗi chuẩn; backend API kiểm tra và ném lỗi 400).
+  3. Hạng mục 3: Sắp xếp lại bộ lọc (nhóm logic) và bố cục responsive.
+  4. Hạng mục 4 & 5: Đổi tên menu thành `Quản lý ca trực` (`/admin/duty`), tách riêng khỏi bảng thù lao; xây dựng quy trình đăng ký ca trực 3 giai đoạn (Nhân sự mở đợt -> CTV đăng ký thời gian có thể trực -> Nhân sự phân công & chốt lịch CONFIRMED); bảng CSDL `DutyPeriods`, `ShiftRegistrations`, `Notifications`; chuông thông báo in-app `NotificationBell.tsx`.
+  5. Hạng mục 6: Kiểm thử bắt buộc theo 21 tiêu chí.
+- **Kết quả thực hiện:**
+  - **Database Migration (SQL Server):**
+    * Tạo bảng `DutyPeriods` (id, month, year, status: OPEN/CLOSED/ARRANGING/CONFIRMED, registration_deadline, note, created_by_user_id, confirmed_by_user_id, confirmed_at, UQ_DutyPeriods_MonthYear).
+    * Tạo bảng `ShiftRegistrations` (id, period_id, user_id, date, session: S/C/T, note, UQ_ShiftRegistrations_Slot).
+    * Tạo bảng `Notifications` (id, user_id, title, message, type, link, is_read).
+    * Bổ sung cột `period_id` vào bảng `StudioShifts` (FK liên kết `DutyPeriods.id`).
+    * Áp dụng kiểu dữ liệu `DATETIMEOFFSET` đồng bộ và an toàn múi giờ Việt Nam (+07:00).
+  - **Backend Services, Models, Controllers & Routes:**
+    * Models: `DutyPeriod.js`, `ShiftRegistration.js`, `Notification.js`, cập nhật `StudioShift.js` và `models/index.js`.
+    * `payroll.service.js`: Cập nhật `updateAttendanceCell` kiểm soát độc lập ký hiệu `SV` (chặn 400 nếu không có task `COMPLETED` trong ngày của CTV); cập nhật `getTimesheetData` loại trừ bản ghi `SV` thủ công cũ nếu công việc không còn hợp lệ.
+    * `duty.service.js`: Triển khai đầy đủ 3 giai đoạn: `createDutyPeriod` (chặn trùng tháng, gửi notif `DUTY_PERIOD_OPEN`), `registerAvailability` (CTV đăng ký rảnh nhiều slot, chặn khi `CLOSED`), `getPeriodRegistrationsSummary` (ma trận rảnh S-C-T), `assignShifts` (phân công ca, chặn trùng ca), `confirmPeriodSchedule` (chốt `CONFIRMED`, đồng bộ `StudioShift` và `AttendanceRecord` ghi `LV`, gửi notif `DUTY_SCHEDULE_CONFIRMED`).
+    * `notification.service.js`, `notification.controller.js`, `notification.routes.js`: Hỗ trợ lấy danh sách thông báo và đánh dấu đã đọc.
+    * Gắn route `/api/notifications` vào `server.js`.
+  - **Frontend UI/UX:**
+    * `TN-Frontend/src/app/admin/payroll/page.tsx`:
+      + Đổi tên tab: `Bảng chấm công tháng` và `Bảng thống kê công việc`.
+      + Bộ lọc thiết kế lại logic: Tháng/Năm, Dropdown chọn CTV, ô tìm kiếm tên/mã CTV, nút làm mới và các nút xuất Excel.
+      + Nút `SV` ở modal bị disabled khi ngày đó CTV không có task `COMPLETED`, kèm thông báo lỗi chuẩn: *"Không hợp lệ vì không có công việc tương ứng trong Bảng thống kê công việc."*
+      + Nút chuyển hướng sang `/admin/duty`.
+    * `TN-Frontend/src/app/admin/duty/page.tsx`: Trang Quản lý ca trực 3 giai đoạn cho Admin (mở đợt, xem ma trận rảnh S-C-T của tất cả CTV, phân công ca trực, chốt lịch chính thức).
+    * `TN-Frontend/src/app/tasks/page.tsx`: Ma trận đăng ký thời gian có thể trực (Availability) cho CTV theo tháng và 3 buổi S-C-T; cho phép lưu/hủy rảnh; theo dõi ca trực chính thức.
+    * `TN-Frontend/src/components/NotificationBell.tsx`: Chuông thông báo in-app có badge unread, popup danh sách thông báo và đánh dấu đã đọc.
+    * `TN-Frontend/src/components/Navbar.tsx`: Tích hợp chuông thông báo trên thanh điều hướng.
+    * `TN-Frontend/src/components/AdminLayout.tsx`: Menu sidebar thêm mục "Quản lý Ca trực" (`/admin/duty`).
+  - **Kiểm thử tự động:**
+    * **Backend Unit Tests:** Bổ sung Suite 11 -> **66/66 tests PASS 100%**.
+    * **Kiểm thử 21 Tiêu chí Bắt buộc:** Script `test_21_criteria.js` chạy thực tế trên SQL Server đạt **21/21 tiêu chí PASS 100%**.
+    * **Frontend Compilation:** TypeScript 0 lỗi, Next.js build (`next build`) thành công 25/25 routes.
+  - **Cập nhật tài liệu:** `QUY_TAC.md`, `CHUC_NANG.md`, `KE_HOACH_TRIEN_KHAI.md`.
+- **Trạng thái:** `COMPLETED`
+
+---
+
+## PROMPT #18: KHẮC PHỤC LỖI XÓA TÀI KHOẢN DO RÀNG BUỘC KHÓA NGOẠI – LHU MEDIA STUDIO
+- **Ngày thực hiện:** 10/11/2026
+- **Mục tiêu:**
+  1. Khảo sát nguyên nhân lỗi xóa tài khoản: `The DELETE statement conflicted with the REFERENCE constraint "FK__Tasks__assigned___04E4BC85"`.
+  2. Triển khai quy tắc nghiệp vụ: Tài khoản đã có dữ liệu hoạt động/lịch sử không được xóa vật lý; chuyển sang trạng thái `Disabled` (`isActive: false`), giữ nguyên `user_id` và toàn bộ công việc, ca trực, chấm công...
+  3. Phân biệt rõ 3 trạng thái tài khoản: `Active` (hoạt động), `Locked` (tạm khóa), `Disabled` (vô hiệu hóa, giữ toàn bộ lịch sử).
+  4. Nếu tài khoản chưa từng phát sinh dữ liệu: cho phép xóa vật lý (DELETE) an toàn khỏi CSDL.
+  5. Chặn đăng nhập đối với tài khoản `Disabled` (HTTP 403: *"Tài khoản của bạn đã bị vô hiệu hóa. Vui lòng liên hệ Quản trị viên."*).
+  6. Kiểm thử 8 trường hợp bắt buộc (Mục 5) và kiểm thử hồi quy 21 tiêu chí chấm công & ca trực.
+- **Kết quả thực hiện:**
+  - **Khảo sát hệ thống:**
+    * Phát hiện 8 bảng trong CSDL `TN_Database` đang tham chiếu khóa ngoại đến `Users(id)` với quy tắc `NO ACTION`: `Tasks`, `AttendanceRecords`, `StudioShifts`, `ShiftRegistrations`, `DutyPeriods`, `MonthlyPayrolls`, `BorrowRequests`, `StudioBookings`.
+    * Thao tác `await user.destroy()` trước đó thực hiện xóa vật lý trực tiếp, dẫn đến vi phạm ràng buộc toàn vẹn dữ liệu SQL Server.
+  - **Database Migration (SQL Server):**
+    * Thêm cột `status` (`NVARCHAR(20)`: `'Active'`, `'Locked'`, `'Disabled'`, mặc định `'Active'`) vào bảng `Users` kèm ràng buộc CHECK `CK_Users_Status`.
+    * Đồng bộ dữ liệu hiện có trong CSDL: các tài khoản đang hoạt động chuyển sang `status: 'Active'`.
+  - **Backend Services & Routes:**
+    * Model `User.js`: Bổ sung trường `status` với validator enum `['Active', 'Locked', 'Disabled']`.
+    * Service `user.service.js` *(Mới)*:
+      + `checkUserHasRelatedData`: Kiểm tra toàn diện trên 8 bảng tham chiếu xem user đã phát sinh dữ liệu hay chưa.
+      + `deleteOrDisableUser`: Nếu có dữ liệu -> cập nhật `status: 'Disabled'`, `isActive: false`, thông báo rõ ràng cho Admin; Nếu chưa có dữ liệu -> thực hiện `user.destroy()` an toàn; Bắt ngoại lệ FK làm fallback an toàn.
+      + `toggleUserActiveStatus`: Khóa / Mở khóa tài khoản (`Active` <-> `Locked`).
+    * Routes: Cập nhật `DELETE /api/dashboard/users/:id` và `DELETE /api/admin/users/:id`.
+    * Xác thực & Phân quyền: Cập nhật `auth.service.js` (login) và `auth.middleware.js`: Chặn đăng nhập tài khoản `Disabled` (HTTP 403) và `Locked` (HTTP 403) với thông điệp riêng biệt chuẩn xác.
+  - **Frontend UI/UX:**
+    * `TN-Frontend/src/app/admin/users/page.tsx`:
+      + Cập nhật badge hiển thị rõ 3 trạng thái: `Hoạt động` (Active, xanh lá), `Tạm khóa` (Locked, vàng cam), `Vô hiệu hóa` (Disabled, đỏ/xám).
+      + Modal xác nhận xóa được cập nhật giải thích rõ quy tắc bảo toàn dữ liệu lịch sử.
+      + Hiển thị thông báo toast chi tiết dựa trên phản hồi của backend.
+    * `TN-Frontend/src/lib/constants.ts` *(Mới)*: Tách `TASK_TYPES` thành hằng số dùng chung, loại bỏ named export khỏi `page.tsx` giúp Next.js App Router biên dịch chuẩn 100%.
+  - **Kiểm thử tự động:**
+    * **Backend Unit Tests:** Đạt **71/71 Tests PASS 100%** (mở rộng Suite 8 thêm 5 test cases kiểm thử các quy tắc xóa, vô hiệu hóa, phân biệt 3 trạng thái).
+    * **Kiểm thử 8 trường hợp bắt buộc (Mục 5):** Script `test_user_delete_fix.js` đạt **8/8 Cases PASS 100%** trên SQL Server database thực tế.
+    * **Kiểm thử hồi quy 21 Tiêu chí ca trực & chấm công:** Đạt **21/21 Tiêu chí PASS 100%**.
+    * **Frontend Compilation:** TypeScript 0 lỗi, Next.js build webpack biên dịch thành công 25/25 routes.
+  - **Cập nhật tài liệu:** `QUY_TAC.md` (Mục 9), `CHUC_NANG.md` (FR-06), `KE_HOACH_TRIEN_KHAI.md`.
+- **Trạng thái:** `COMPLETED`
+
+---
+
+## PROMPT #19: ĐỒNG BỘ DANH SÁCH CTV TRONG CÁC BỘ LỌC VÀ DROPDOWN – LHU MEDIA STUDIO
+- **Ngày thực hiện:** 10/11/2026
+- **Mục tiêu:**
+  1. Rà soát và chuẩn hóa toàn bộ các dropdown, bộ lọc, modal và ô chọn CTV tại các phân hệ:
+     - **Quản lý ca trực (`/admin/duty`)**: Bảng tổng hợp ca trực, ma trận đăng ký rảnh, dropdown phân công ca trực, popup phân công nhanh.
+     - **Chấm công – Thù lao (`/admin/payroll`)**: Bộ lọc CTV tại Bảng chấm công tháng, Bảng thống kê công việc, modal chỉnh sửa ô chấm công.
+     - **Quản lý công việc (`/admin/tasks`)**: Bộ lọc CTV công việc, modal tạo và chỉnh sửa nhiệm vụ phân công CTV.
+  2. Triển khai chặt chẽ **Quy tắc phân định 2 mục đích sử dụng danh sách CTV**:
+     - **Mục đích phân công mới / tạo mới (`purpose='assign'` / `status='Active'`)**: CHỈ hiển thị và cho phép chọn CTV đang có trạng thái `Active`. Tuyệt đối không phân công tài khoản `Locked` hoặc `Disabled`. Backend từ chối mọi yêu cầu phân công cho tài khoản không hoạt động.
+     - **Mục đích tìm kiếm, lọc dữ liệu lịch sử hoặc xem báo cáo (`purpose='filter'` / `status='ALL'`)**: Cho phép tìm kiếm và xem dữ liệu của TẤT CẢ CTV đã từng phát sinh dữ liệu (kể cả `Disabled` hoặc `Locked`) để không bao giờ bị mất lịch sử công việc, chấm công hay thù lao của CTV cũ/nghỉ việc.
+  3. **Ràng buộc vai trò (Role)**: Chỉ chứa tài khoản có vai trò `COLLABORATOR`, tuyệt đối không lẫn lộn `USER` hoặc `ADMIN`.
+  4. **Tiêu chuẩn hiển thị & UX**:
+     - Hiển thị đầy đủ: Họ và tên, kèm Email hoặc Mã nhân viên (phân biệt trùng tên).
+     - Đối với bộ lọc lịch sử: Hiển thị thêm nhãn `[Đã nghỉ việc]` đối với tài khoản `Disabled`.
+     - Sắp xếp A–Z theo Họ tên tiếng Việt.
+     - Có tùy chọn 'Tất cả CTV' tại các bộ lọc lịch sử/báo cáo.
+     - Hỗ trợ tìm kiếm nhanh theo Họ tên, Email, Mã nhân viên.
+     - Giữ nguyên giá trị CTV đã chọn khi chuyển đổi tháng/năm hoặc chuyển tab.
+  5. Đạt 100% 14 tiêu chí kiểm thử bắt buộc tại Mục 7 và kiểm thử hồi quy toàn bộ hệ thống.
+- **Kết quả thực hiện:**
+  - **Backend Services & API Endpoints:**
+    * `TN-Backend/src/services/user.service.js`: Bổ sung hàm `getCollaborators(query)` chuẩn hóa:
+      + Phân định mục đích `purpose='assign'` (chỉ CTV `Active`) và `purpose='filter'` (tất cả CTV kể cả `Disabled`/`Locked`).
+      + Ràng buộc cứng `role: 'COLLABORATOR'`, loại bỏ hoàn toàn `USER` và `ADMIN`.
+      + Tìm kiếm LIKE theo `fullName`, `email`, `employeeCode`.
+      + Sắp xếp A-Z theo `order: [['fullName', 'ASC']]`.
+    * `TN-Backend/src/routes/admin.routes.js`: Bổ sung endpoint RESTful `GET /api/admin/collaborators` phục vụ phân hệ Admin.
+    * `TN-Backend/src/services/duty.service.js`: Thêm bước kiểm tra nghiệp vụ trong `assignShifts`: Chặn phân công ca trực nếu người nhận không phải `COLLABORATOR` hoặc có trạng thái không hoạt động (`Locked`/`Disabled`).
+    * `TN-Backend/src/services/task.service.js`: Chuẩn hóa gán nhiệm vụ chỉ dành cho CTV `Active`.
+    * `TN-Backend/src/services/auth.service.js`: Hỗ trợ lọc theo `status` trong `getAllUsers`.
+  - **Frontend Components & UI/UX:**
+    * `TN-Frontend/src/components/common/CollaboratorSelect.tsx` *(Component Mới)*: Dropdown CTV chuẩn hóa dùng chung, hỗ trợ 2 chế độ `purpose="assign"` và `purpose="filter"`, tự động tải từ API, có loading indicator và xử lý nhãn trạng thái `[Đã nghỉ việc]`.
+    * `TN-Frontend/src/app/admin/duty/page.tsx`:
+      + Sửa hàm `fetchCollaborators` gọi `/admin/collaborators?purpose=assign` lấy đúng danh sách CTV Active.
+      + Thêm thanh Toolbar bộ lọc CTV (Dropdown Lọc CTV, Input tìm kiếm, nút Đặt lại bộ lọc).
+      + Ma trận ca trực tương tác thông minh: highlight nổi bật các ca của CTV được chọn, làm mờ các ô không liên quan để Admin dễ quan sát.
+      + Dropdown "+ Phân công CTV..." ở từng slot hiển thị đầy đủ Họ tên, Mã nhân viên/Email, sắp xếp A-Z.
+      + Thêm Modal "Phân công nhanh ca trực" tích hợp `CollaboratorSelect purpose="assign"`.
+    * `TN-Frontend/src/app/admin/payroll/page.tsx`:
+      + Sửa hàm `fetchCollaborators` gọi `/admin/collaborators?purpose=filter&status=ALL` nạp đầy đủ danh sách CTV (kể cả Disabled để lọc lịch sử).
+      + Dropdown Lọc CTV hiển thị: `{c.fullName} ({c.employeeCode || c.email})` kèm `[Đã nghỉ việc]` nếu status là `Disabled`.
+      + Modal Sửa ô chấm công: hiển thị chi tiết tên CTV, email, mã NV và badge trạng thái hoạt động.
+      + Bộ lọc CTV giữ nguyên giá trị khi chuyển đổi qua lại giữa 2 tab hoặc đổi tháng/năm.
+    * `TN-Frontend/src/app/admin/tasks/page.tsx`:
+      + Tách riêng `collaborators` (cho bộ lọc lịch sử) và `activeCollaborators` (cho modal tạo/sửa nhiệm vụ).
+      + Loại bỏ vai trò ADMIN khỏi danh sách người nhận việc, chỉ cho phép phân công CTV Active.
+      + Dropdown lọc nhiệm vụ hiển thị đầy đủ tên, email/mã NV và nhãn `[Đã nghỉ việc]` đối với CTV cũ.
+  - **Kiểm thử tự động & Xác minh toàn diện:**
+    * **Backend Unit Tests:** Bổ sung Suite 12 -> **77/77 tests PASS 100%**.
+    * **Kiểm thử 14 Tiêu chí Bắt buộc (Mục 7):** Script `test_collaborator_sync.js` chạy trên CSDL SQL Server đạt **19/19 checks PASS 100%**.
+    * **Kiểm thử hồi quy 21 Tiêu chí ca trực & chấm công:** Script `test_21_criteria.js` đạt **21/21 tiêu chí PASS 100%**.
+    * **Kiểm thử hồi quy 8 Trường hợp xóa an toàn tài khoản:** Script `test_user_delete_fix.js` đạt **8/8 cases PASS 100%**.
+    * **Frontend & Backend Servers:** Cả 2 server đang chạy live: Backend (port 5000, PID 2710) và Frontend (port 3000, PID 2720) phản hồi HTTP 200.
+  - **Cập nhật tài liệu:** `QUY_TAC.md` (Mục 13), `KE_HOACH_TRIEN_KHAI.md` (TC-09), `PROMPT_HISTORY.md`.
+- **Trạng thái:** `COMPLETED`
+
+---
+
+
+## PROMPT #20: KHẮC PHỤC RUNTIME TYPEERROR TẠI TRANG MYTASKSPAGE – LHU MEDIA STUDIO
+- **Ngày thực hiện:** 10/11/2026
+- **Mục tiêu:**
+  1. Khảo sát nguyên nhân lỗi: `Runtime TypeError: Cannot read properties of undefined (reading 'id') at Array.find at MyTasksPage`.
+  2. Xác định chính xác nguyên nhân gốc:
+     * Dòng 575 `TN-Frontend/src/app/tasks/page.tsx`: `const myTimesheetRow = timesheet?.rows.find((r) => r.user.id === user?.id);`.
+     * API `GET /api/payroll/timesheet` do `payroll.service.js` trước đó trả về mỗi phần tử hàng có thuộc tính `ctv` (`rows.push({ stt, ctv: { id, fullName... }, sessions, summary })`), hoàn toàn không có `r.user`.
+     * Khi duyệt mảng `timesheet.rows`, `r.user` là `undefined` -> dẫn tới `r.user.id` ném `TypeError`.
+     * Ngoài ra, backend trả về `daysHeader` thay vì `daysMeta`, và summary dùng uppercase (`sumLV`, `gioLV`, `gioSV`) trong khi `page.tsx` đọc camelCase (`sumLv`, `gioLv`, `gioSv`, `gioOt`, `gioSunday`).
+  3. Xử lý triệt để nguyên nhân gốc ở cả 2 đầu Backend và Frontend:
+     * **Backend (`payroll.service.js`):** Cung cấp song song cả `ctv` và `user` trong `timesheet.rows`; cung cấp đồng thời cả `daysMeta` và `daysHeader`; cung cấp cả 2 chuẩn camelCase và UPPERCASE trong `summary`.
+     * **Frontend (`tasks/page.tsx`):**
+       + Cập nhật interface `TimesheetRowItem` và `TimesheetData`.
+       + `myTimesheetRow` chuyển sang `useMemo` an toàn hỗ trợ `r?.user?.id || r?.ctv?.id`.
+       + `activePeriod` và `openPeriod` bọc kiểm tra an toàn `Array.isArray` và `p && p.id`.
+       + Ma trận chấm công và summary hỗ trợ linh hoạt cả 2 định dạng, bảo vệ chống crash khi dữ liệu null/rỗng.
+  4. Xác minh chuyên sâu 9 trường hợp biên bắt buộc:
+     * CTV có nhiều nhiệm vụ.
+     * CTV chưa có nhiệm vụ nào.
+     * Nhiệm vụ đầy đủ thông tin `creator` và `assignee`.
+     * Nhiệm vụ thiếu `creator` hoặc `assignee` (fallback an toàn sang "Admin" / "Chưa phân công").
+     * Nhiệm vụ có `creator` / `assignee` bị `Locked` hoặc `Disabled`.
+     * API `timesheet` trả về `null` hoặc `undefined`.
+     * `timesheet.rows` là mảng rỗng `[]`.
+     * `timesheet.rows` có phần tử `null` / `undefined` hoặc chỉ có `ctv`.
+     * CTV chưa có dòng chấm công trong tháng (`myTimesheetRow` trả về `null` an toàn).
+  5. Chạy kiểm thử hồi quy toàn bộ hệ thống (77 Backend unit tests, 19 Collaborator sync tests, Next.js dev server HTTP 200).
+- **Kết quả thực hiện:**
+  - **Backend (`TN-Backend/src/services/payroll.service.js`):**
+    * Cập nhật `rows.push(...)`: Trả về cả `ctv: { id, fullName, email, employeeCode, status }` VÀ `user: { id, fullName, email, employeeCode, status }`.
+    * Cung cấp cả `daysHeader` VÀ `daysMeta` trong đối tượng trả về của `getTimesheetData`.
+    * Chuẩn hóa `summary` chứa cả `sumLv` / `sumLV`, `gioLv` / `gioLV`, `gioSv` / `gioSV`, `gioOt`, `gioSunday`, `tongGio`, `tien`.
+  - **Frontend (`TN-Frontend/src/app/tasks/page.tsx`):**
+    * Sửa dòng 575 với `useMemo` an toàn, tìm theo `r.user?.id || r.ctv?.id`.
+    * Bọc an toàn `activePeriod` với `useMemo` và kiểm tra `Array.isArray(dutyPeriods)`.
+    * Sửa `openPeriod` kiểm tra `p && p.status === 'OPEN'`.
+    * Phần thống kê và ma trận chấm công sử dụng fallback toán tử `??` đa tầng và kiểm tra mảng ngày `timesheet.daysMeta || timesheet.daysHeader || []`.
+  - **Kiểm thử tự động & Xác minh:**
+    * Script `verify_my_tasks_fix.js`: **9/9 Trường hợp biên PASS 100%**.
+    * Next.js dev server (port 3000): Compile thành công trong 164ms, các yêu cầu `GET /tasks` trả về HTTP 200 OK liên tục, console sạch sẽ 100% không còn runtime TypeError.
+    * Suite unit test backend: **77/77 tests PASS 100%**.
+    * Suite collaborator sync: **19/19 checks PASS 100%**.
+  - **Cập nhật tài liệu:** `QUY_TAC.md` (Mục 14), `KE_HOACH_TRIEN_KHAI.md` (TC-10), `PROMPT_HISTORY.md`.
+- **Trạng thái:** `COMPLETED`

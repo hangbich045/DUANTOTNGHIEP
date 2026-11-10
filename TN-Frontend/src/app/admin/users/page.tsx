@@ -15,6 +15,7 @@ interface User {
   employeeCode: string;
   role: 'ADMIN' | 'USER' | 'COLLABORATOR';
   avatarUrl?: string;
+  status?: 'Active' | 'Locked' | 'Disabled';
   isActive?: boolean;
   createdAt: string;
 }
@@ -82,7 +83,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleToggleActive = async (targetUserId: string, currentActive: boolean) => {
+  const handleToggleActive = async (targetUserId: string) => {
     if (currentUser?.id === targetUserId) {
       toast('Bạn không thể tự khóa tài khoản của chính mình', 'warning');
       return;
@@ -90,8 +91,8 @@ export default function AdminUsersPage() {
 
     setActioningId(targetUserId);
     try {
-      await api.patch(`/admin/users/${targetUserId}/toggle-active`, {});
-      toast(`Đã ${currentActive ? 'khóa' : 'kích hoạt'} tài khoản thành công`, 'success');
+      const res: any = await api.patch(`/admin/users/${targetUserId}/toggle-active`, {});
+      toast(res?.message || 'Cập nhật trạng thái tài khoản thành công', 'success');
       fetchUsers();
     } catch (err: any) {
       toast(err.message || 'Lỗi thay đổi trạng thái tài khoản', 'error');
@@ -142,13 +143,13 @@ export default function AdminUsersPage() {
     if (!deletingId) return;
 
     try {
-      await api.delete(`/dashboard/users/${deletingId}`);
-      toast('Xóa tài khoản thành công', 'success');
+      const res: any = await api.delete(`/dashboard/users/${deletingId}`);
+      toast(res?.message || 'Xử lý tài khoản thành công', 'success');
       setDeleteConfirmOpen(false);
       setDeletingId(null);
       fetchUsers();
     } catch (err: any) {
-      toast(err.message || 'Lỗi xóa tài khoản. Người dùng có thể đang có phiếu mượn chưa trả.', 'error');
+      toast(err.message || 'Lỗi xử lý tài khoản.', 'error');
     }
   };
 
@@ -252,20 +253,22 @@ export default function AdminUsersPage() {
                         </td>
                         {/* Status badge */}
                         <td className="py-4 px-6 text-center">
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-wider ${
-                              item.isActive !== false
-                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                            }`}
-                          >
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full ${
-                                item.isActive !== false ? 'bg-emerald-400' : 'bg-red-400'
-                              }`}
-                            />
-                            {item.isActive !== false ? 'Hoạt động' : 'Đã khóa'}
-                          </span>
+                          {item.status === 'Disabled' ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-rose-500/10 text-rose-400 border border-rose-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
+                              Vô hiệu hóa
+                            </span>
+                          ) : item.status === 'Locked' || item.isActive === false ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                              Tạm khóa
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded text-[10px] font-bold tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                              Hoạt động
+                            </span>
+                          )}
                         </td>
                         {/* Registered date */}
                         <td className="py-4 px-6 text-center text-studio-muted">
@@ -302,34 +305,34 @@ export default function AdminUsersPage() {
 
                             {/* Lock / Unlock Toggle */}
                             <button
-                              onClick={() => handleToggleActive(item.id, item.isActive !== false)}
+                              onClick={() => handleToggleActive(item.id)}
                               disabled={isSelf || actioningId !== null}
                               className={`p-2 rounded-xl border transition-all cursor-pointer disabled:opacity-40 ${
-                                item.isActive !== false
+                                item.isActive !== false && item.status !== 'Locked' && item.status !== 'Disabled'
                                   ? 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white'
                                   : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500 hover:text-white'
                               }`}
                               title={
                                 isSelf
                                   ? 'Không thể tự khóa tài khoản của chính mình'
-                                  : item.isActive !== false
-                                  ? 'Khóa tài khoản này'
-                                  : 'Mở khóa tài khoản này'
+                                  : item.isActive !== false && item.status !== 'Locked' && item.status !== 'Disabled'
+                                  ? 'Tạm khóa tài khoản này'
+                                  : 'Mở khóa / Kích hoạt tài khoản này'
                               }
                             >
-                              {item.isActive !== false ? (
+                              {item.isActive !== false && item.status !== 'Locked' && item.status !== 'Disabled' ? (
                                 <Lock className="w-4 h-4" />
                               ) : (
                                 <Unlock className="w-4 h-4" />
                               )}
                             </button>
 
-                            {/* Delete */}
+                            {/* Delete / Disable */}
                             <button
                               onClick={() => handleOpenDeleteConfirm(item.id)}
                               disabled={isSelf || actioningId !== null}
                               className="p-2 rounded-xl bg-brand-error/10 border border-brand-error/20 text-brand-error hover:bg-brand-error hover:text-white transition-all cursor-pointer disabled:opacity-40"
-                              title="Xóa tài khoản"
+                              title="Xóa hoặc Vô hiệu hóa tài khoản"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -354,9 +357,9 @@ export default function AdminUsersPage() {
                 <ShieldAlert className="w-7 h-7" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-white">Xóa tài khoản thành viên?</h3>
-                <p className="text-sm text-studio-muted leading-relaxed">
-                  Hành động này sẽ xóa vĩnh viễn tài khoản người dùng khỏi hệ thống. Chỉ có thể thực hiện nếu người dùng này không có lịch mượn thiết bị đang hoạt động.
+                <h3 className="text-xl font-bold text-white">Xóa hoặc Vô hiệu hóa tài khoản?</h3>
+                <p className="text-xs text-studio-muted leading-relaxed">
+                  Theo quy tắc bảo vệ dữ liệu: Nếu tài khoản đã có dữ liệu hoạt động (công việc, chấm công, ca trực...), hệ thống sẽ chuyển sang trạng thái <strong>Vô hiệu hóa (Disabled)</strong> để bảo toàn 100% dữ liệu lịch sử. Nếu tài khoản chưa từng phát sinh dữ liệu, hệ thống sẽ xóa hoàn toàn khỏi cơ sở dữ liệu.
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -368,9 +371,9 @@ export default function AdminUsersPage() {
                 </button>
                 <button
                   onClick={handleDelete}
-                  className="py-3 px-4 rounded-xl bg-brand-error hover:bg-brand-error/90 text-white font-semibold transition-all cursor-pointer"
+                  className="py-3 px-4 rounded-xl bg-brand-error hover:bg-brand-error/90 text-white font-semibold transition-all cursor-pointer shadow-lg shadow-brand-error/20"
                 >
-                  Xác nhận xóa
+                  Xác nhận thực hiện
                 </button>
               </div>
             </div>

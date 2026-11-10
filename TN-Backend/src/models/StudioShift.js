@@ -25,6 +25,17 @@ const StudioShift = sequelize.define(
       comment: 'Khóa chính UUID',
     },
 
+    periodId: {
+      type: DataTypes.CHAR(36),
+      allowNull: true,
+      field: 'period_id',
+      references: {
+        model: 'DutyPeriods',
+        key: 'id',
+      },
+      comment: 'ID của đợt đăng ký ca trực tháng',
+    },
+
     userId: {
       type: DataTypes.UUID,
       allowNull: false,

@@ -8,6 +8,7 @@
 const { Router } = require('express');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 const { User, Equipment, BorrowRequest, StudioBooking, EquipmentCategory } = require('../models');
+const userService = require('../services/user.service');
 const { Op, fn, col, literal } = require('sequelize');
 const { sequelize } = require('../config/database');
 
@@ -324,7 +325,7 @@ router.put('/users/:id/role', async (req, res) => {
  * @swagger
  * /api/dashboard/users/{id}:
  *   delete:
- *     summary: "[ADMIN] Xóa người dùng"
+ *     summary: "[ADMIN] Xóa hoặc Vô hiệu hóa người dùng (bảo toàn lịch sử dữ liệu)"
  *     tags: [Dashboard]
  *     security:
  *       - BearerAuth: []
@@ -333,26 +334,21 @@ router.put('/users/:id/role', async (req, res) => {
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
  *     responses:
  *       200:
- *         description: Xóa thành công
+ *         description: Xóa hoặc vô hiệu hóa thành công
  *       400:
- *         description: Không thể xóa chính mình
+ *         description: Không thể tự thao tác trên chính mình
  *       404:
  *         description: Không tìm thấy người dùng
  */
 router.delete('/users/:id', async (req, res) => {
   try {
-    if (req.params.id === req.user.id) {
-      return res.status(400).json({ message: 'Không thể xóa chính mình.' });
-    }
-    const user = await User.findByPk(req.params.id);
-    if (!user) return res.status(404).json({ message: 'Người dùng không tồn tại.' });
-    await user.destroy();
-    return res.status(200).json({ message: 'Xóa người dùng thành công.' });
+    const result = await userService.deleteOrDisableUser(req.user.id, req.params.id);
+    return res.status(200).json(result);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(error.statusCode || 500).json({ message: error.message });
   }
 });
 

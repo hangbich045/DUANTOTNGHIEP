@@ -283,7 +283,18 @@ const getTimesheetData = async (month, year) => {
     for (const rec of manualRecords) {
       const dayNum = parseInt(rec.date.split('-')[2], 10);
       if (rec.session && sessionData[rec.session]) {
-        sessionData[rec.session].days[dayNum] = rec.symbol;
+        // Hạng mục 2: Nếu là SV, kiểm tra xem ngày đó CTV có công việc COMPLETED hợp lệ hay không
+        if (rec.symbol === 'SV') {
+          const hasTask = monthTasks.some((t) => {
+            const taskDate = t.executionDate || (t.completedAt ? t.completedAt.toISOString().slice(0, 10) : t.createdAt.toISOString().slice(0, 10));
+            return taskDate === rec.date;
+          });
+          if (hasTask) {
+            sessionData[rec.session].days[dayNum] = 'SV';
+          }
+        } else {
+          sessionData[rec.session].days[dayNum] = rec.symbol;
+        }
       }
     }
 
@@ -310,23 +321,32 @@ const getTimesheetData = async (month, year) => {
     const tien = Math.round(tongGio * 20000); // Col AO
     grandTotalAmount += tien;
 
+    const ctvInfo = {
+      id: ctv.id,
+      fullName: ctv.fullName,
+      email: ctv.email,
+      employeeCode: ctv.employeeCode,
+      status: ctv.status,
+    };
+
     rows.push({
       stt: idx + 1,
-      ctv: {
-        id: ctv.id,
-        fullName: ctv.fullName,
-        email: ctv.email,
-        employeeCode: ctv.employeeCode,
-      },
+      ctv: ctvInfo,
+      user: ctvInfo, // Đồng bộ alias 'user' tương thích hoàn hảo với MyTasksPage
       sessions: [
         {
           session: 'S',
           days: sessionData.S.days,
           lv: sessionData.S.lvCount,
           sv: sessionData.S.svCount,
+          lvCount: sessionData.S.lvCount,
+          svCount: sessionData.S.svCount,
           sumLV,
+          sumLv: sumLV,
           gioLV,
+          gioLv: gioLV,
           gioSV,
+          gioSv: gioSV,
           tongGio,
           tien,
         },
@@ -335,9 +355,14 @@ const getTimesheetData = async (month, year) => {
           days: sessionData.C.days,
           lv: sessionData.C.lvCount,
           sv: sessionData.C.svCount,
+          lvCount: sessionData.C.lvCount,
+          svCount: sessionData.C.svCount,
           sumLV,
+          sumLv: sumLV,
           gioLV,
+          gioLv: gioLV,
           gioSV,
+          gioSv: gioSV,
           tongGio,
           tien,
         },
@@ -346,28 +371,46 @@ const getTimesheetData = async (month, year) => {
           days: sessionData.T.days,
           lv: sessionData.T.lvCount,
           sv: sessionData.T.svCount,
+          lvCount: sessionData.T.lvCount,
+          svCount: sessionData.T.svCount,
           sumLV,
+          sumLv: sumLV,
           gioLV,
+          gioLv: gioLV,
           gioSV,
+          gioSv: gioSV,
           tongGio,
           tien,
         },
       ],
       summary: {
         sumLV,
+        sumLv: sumLV,
         gioLV,
+        gioLv: gioLV,
         gioSV,
+        gioSv: gioSV,
+        gioOt: 0,
+        gioSunday: 0,
         tongGio,
         tien,
       },
     });
   }
 
+  const daysMeta = daysHeader.map((dh) => ({
+    day: dh.day,
+    dayOfWeek: dh.dow,
+    isSunday: Boolean(dh.isSunday || dh.dow === 'CN'),
+    dateStr: dh.dateStr,
+  }));
+
   return {
     month: m,
     year: y,
     daysCount,
     daysHeader,
+    daysMeta, // Đồng bộ alias 'daysMeta' cho MyTasksPage
     rows,
     grandTotalAmount,
   };
@@ -890,6 +933,30 @@ const updateAttendanceCell = async (data) => {
     const error = new Error('Thiếu thông tin cập nhật chấm công');
     error.statusCode = 400;
     throw error;
+  }
+
+  // Hạng mục 2: Kiểm soát chặt chẽ ký hiệu SV ở Backend
+  if (symbol === 'SV') {
+    // Chỉ cho phép chọn SV khi CTV có công việc tương ứng được ghi nhận trong Bảng thống kê công việc của đúng ngày đó
+    const tasks = await Task.findAll({
+      where: {
+        assignedToUserId: userId,
+        status: 'COMPLETED',
+      },
+    });
+
+    const hasMatchingTask = tasks.some((t) => {
+      const taskDateStr = t.executionDate
+        ? String(t.executionDate).slice(0, 10)
+        : (t.completedAt ? t.completedAt.toISOString().slice(0, 10) : t.createdAt.toISOString().slice(0, 10));
+      return taskDateStr === date;
+    });
+
+    if (!hasMatchingTask) {
+      const error = new Error('Không hợp lệ vì không có công việc tương ứng trong Bảng thống kê công việc.');
+      error.statusCode = 400;
+      throw error;
+    }
   }
 
   const d = new Date(date);

@@ -42,6 +42,7 @@ const categoryRoutes = require('./routes/category.routes');
 const taskRoutes = require('./routes/task.routes');
 const dutyRoutes = require('./routes/duty.routes');
 const payrollRoutes = require('./routes/payroll.routes');
+const notificationRoutes = require('./routes/notification.routes');
 // Routes tương thích với Frontend hiện tại (NestJS-style paths)
 const compatRoutes = require('./routes/compat.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
@@ -122,6 +123,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/duty', dutyRoutes);
 app.use('/api/payroll', payrollRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // ============================================================
 // COMPATIBILITY ROUTES (khớp với Frontend hiện tại)

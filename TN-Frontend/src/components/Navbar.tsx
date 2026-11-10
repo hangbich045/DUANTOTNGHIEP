@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { Menu, X, LogOut, LayoutDashboard, Calendar, Camera, History, Home, User, CheckSquare } from 'lucide-react';
+import NotificationBell from '@/components/NotificationBell';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -79,7 +80,8 @@ export default function Navbar() {
       {/* Desktop auth buttons / user panel */}
       <div className="hidden md:flex items-center space-x-4">
         {user ? (
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-3">
+            <NotificationBell />
             <Link
               href="/profile"
               className="flex items-center space-x-3 bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl border border-white/5 transition-all group cursor-pointer"

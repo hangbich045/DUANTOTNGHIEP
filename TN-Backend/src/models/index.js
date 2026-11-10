@@ -46,6 +46,9 @@ const Task = require('./Task');
 const StudioShift = require('./StudioShift');
 const AttendanceRecord = require('./AttendanceRecord');
 const MonthlyPayroll = require('./MonthlyPayroll');
+const DutyPeriod = require('./DutyPeriod')(sequelize);
+const ShiftRegistration = require('./ShiftRegistration')(sequelize);
+const Notification = require('./Notification')(sequelize);
 
 // ============================================================
 // ĐỊNH NGHĨA ASSOCIATIONS (QUAN HỆ GIỮA CÁC BẢNG)
@@ -198,6 +201,78 @@ MonthlyPayroll.belongsTo(User, {
   as: 'user',
 });
 
+/**
+ * QUAN HỆ 11, 12, 13: Quy trình Quản lý Ca trực 3 giai đoạn (DutyPeriods, ShiftRegistrations, StudioShifts)
+ */
+User.hasMany(DutyPeriod, {
+  foreignKey: 'created_by_user_id',
+  as: 'createdDutyPeriods',
+  onDelete: 'NO ACTION',
+});
+
+DutyPeriod.belongsTo(User, {
+  foreignKey: 'created_by_user_id',
+  as: 'creator',
+});
+
+User.hasMany(DutyPeriod, {
+  foreignKey: 'confirmed_by_user_id',
+  as: 'confirmedDutyPeriods',
+  onDelete: 'NO ACTION',
+});
+
+DutyPeriod.belongsTo(User, {
+  foreignKey: 'confirmed_by_user_id',
+  as: 'confirmer',
+});
+
+DutyPeriod.hasMany(ShiftRegistration, {
+  foreignKey: 'period_id',
+  as: 'registrations',
+  onDelete: 'CASCADE',
+});
+
+ShiftRegistration.belongsTo(DutyPeriod, {
+  foreignKey: 'period_id',
+  as: 'period',
+});
+
+User.hasMany(ShiftRegistration, {
+  foreignKey: 'user_id',
+  as: 'shiftRegistrations',
+  onDelete: 'NO ACTION',
+});
+
+ShiftRegistration.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'collaborator',
+});
+
+DutyPeriod.hasMany(StudioShift, {
+  foreignKey: 'period_id',
+  as: 'assignedShifts',
+  onDelete: 'NO ACTION',
+});
+
+StudioShift.belongsTo(DutyPeriod, {
+  foreignKey: 'period_id',
+  as: 'period',
+});
+
+/**
+ * QUAN HỆ 14: Notification (Thông báo hệ thống in-app)
+ */
+User.hasMany(Notification, {
+  foreignKey: 'user_id',
+  as: 'notifications',
+  onDelete: 'CASCADE',
+});
+
+Notification.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
 // ============================================================
 // ĐỒNG BỘ DATABASE (DATABASE SYNC)
 // ============================================================
@@ -237,4 +312,7 @@ module.exports = {
   StudioShift,
   AttendanceRecord,
   MonthlyPayroll,
+  DutyPeriod,
+  ShiftRegistration,
+  Notification,
 };
