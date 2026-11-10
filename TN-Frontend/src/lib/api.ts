@@ -89,7 +89,7 @@ class ApiClient {
     return this.handleResponse(response);
   }
 
-  async put(endpoint: string, body: unknown) {
+  async put(endpoint: string, body: unknown = {}) {
     const response = await fetch(`${getBaseUrl()}${endpoint}`, {
       method: 'PUT',
       headers: this.getHeaders(),
@@ -98,7 +98,7 @@ class ApiClient {
     return this.handleResponse(response);
   }
 
-  async patch(endpoint: string, body: unknown) {
+  async patch(endpoint: string, body: unknown = {}) {
     const response = await fetch(`${getBaseUrl()}${endpoint}`, {
       method: 'PATCH',
       headers: this.getHeaders(),

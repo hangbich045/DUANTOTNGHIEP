@@ -43,6 +43,9 @@ const Equipment = require('./Equipment');
 const BorrowRequest = require('./BorrowRequest');
 const StudioBooking = require('./StudioBooking');
 const Task = require('./Task');
+const StudioShift = require('./StudioShift');
+const AttendanceRecord = require('./AttendanceRecord');
+const MonthlyPayroll = require('./MonthlyPayroll');
 
 // ============================================================
 // ĐỊNH NGHĨA ASSOCIATIONS (QUAN HỆ GIỮA CÁC BẢNG)
@@ -142,6 +145,59 @@ Task.belongsTo(User, {
   as: 'creator',
 });
 
+/**
+ * QUAN HỆ 7 & 8: StudioShift (Lịch trực Studio CTV FR-05)
+ */
+User.hasMany(StudioShift, {
+  foreignKey: 'user_id',
+  as: 'shifts',
+  onDelete: 'NO ACTION',
+});
+
+StudioShift.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'collaborator',
+});
+
+User.hasMany(StudioShift, {
+  foreignKey: 'confirmed_by_user_id',
+  as: 'confirmedShifts',
+  onDelete: 'NO ACTION',
+});
+
+StudioShift.belongsTo(User, {
+  foreignKey: 'confirmed_by_user_id',
+  as: 'confirmer',
+});
+
+/**
+ * QUAN HỆ 9: AttendanceRecord (Chấm công ma trận ngày x buổi)
+ */
+User.hasMany(AttendanceRecord, {
+  foreignKey: 'user_id',
+  as: 'attendanceRecords',
+  onDelete: 'NO ACTION',
+});
+
+AttendanceRecord.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
+/**
+ * QUAN HỆ 10: MonthlyPayroll (Bảng lương / thù lao tháng)
+ */
+User.hasMany(MonthlyPayroll, {
+  foreignKey: 'user_id',
+  as: 'payrolls',
+  onDelete: 'NO ACTION',
+});
+
+MonthlyPayroll.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
 // ============================================================
 // ĐỒNG BỘ DATABASE (DATABASE SYNC)
 // ============================================================
@@ -178,4 +234,7 @@ module.exports = {
   BorrowRequest,
   StudioBooking,
   Task,
+  StudioShift,
+  AttendanceRecord,
+  MonthlyPayroll,
 };

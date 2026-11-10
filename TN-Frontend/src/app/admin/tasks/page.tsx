@@ -130,6 +130,12 @@ export default function AdminTasksPage() {
   const [selectedTaskForReview, setSelectedTaskForReview] = useState<TaskItem | null>(null);
   const [reviewDecision, setReviewDecision] = useState<'COMPLETED' | 'REVISION_REQUESTED'>('COMPLETED');
   const [reviewFeedback, setReviewFeedback] = useState('');
+  const [reviewExecutionDate, setReviewExecutionDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [reviewActualHours, setReviewActualHours] = useState<number>(2);
+  const [reviewShiftSession, setReviewShiftSession] = useState<'S' | 'C' | 'T'>('S');
+  const [reviewIsOvertime, setReviewIsOvertime] = useState<boolean>(false);
+  const [reviewOvertimeHours, setReviewOvertimeHours] = useState<number>(0);
+  const [reviewIsSunday, setReviewIsSunday] = useState<boolean>(false);
   const [submittingReview, setSubmittingReview] = useState(false);
 
   // Detail Modal states
@@ -306,6 +312,12 @@ export default function AdminTasksPage() {
     setSelectedTaskForReview(task);
     setReviewDecision('COMPLETED');
     setReviewFeedback(task.feedback || '');
+    setReviewExecutionDate((task as any).executionDate || new Date().toISOString().slice(0, 10));
+    setReviewActualHours((task as any).actualHours || 2);
+    setReviewShiftSession(((task as any).shiftSession as 'S' | 'C' | 'T') || 'S');
+    setReviewIsOvertime((task as any).isOvertime || false);
+    setReviewOvertimeHours((task as any).overtimeHours || 0);
+    setReviewIsSunday((task as any).isSunday || false);
     setReviewModalOpen(true);
   };
 
@@ -322,6 +334,12 @@ export default function AdminTasksPage() {
       await api.put(`/tasks/${selectedTaskForReview.id}/review`, {
         decision: reviewDecision,
         feedback: reviewFeedback.trim() || undefined,
+        executionDate: reviewDecision === 'COMPLETED' ? reviewExecutionDate : undefined,
+        actualHours: reviewDecision === 'COMPLETED' ? Number(reviewActualHours) || 0 : undefined,
+        shiftSession: reviewDecision === 'COMPLETED' ? reviewShiftSession : undefined,
+        isOvertime: reviewDecision === 'COMPLETED' ? reviewIsOvertime : false,
+        overtimeHours: reviewDecision === 'COMPLETED' && reviewIsOvertime ? Number(reviewOvertimeHours) || 0 : 0,
+        isSunday: reviewDecision === 'COMPLETED' ? reviewIsSunday : false,
       });
 
       toast(
@@ -1093,7 +1111,7 @@ export default function AdminTasksPage() {
                   {reviewDecision === 'REVISION_REQUESTED' ? 'Nội dung cần chỉnh sửa (Bắt buộc) *' : 'Ghi chú / Đánh giá nhận xét'}
                 </label>
                 <textarea
-                  rows={3}
+                  rows={2}
                   placeholder={
                     reviewDecision === 'REVISION_REQUESTED'
                       ? 'Chỉ rõ các điểm chưa đạt và hướng dẫn CTV sửa đổi...'
@@ -1101,9 +1119,91 @@ export default function AdminTasksPage() {
                   }
                   value={reviewFeedback}
                   onChange={(e) => setReviewFeedback(e.target.value)}
-                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 resize-none"
+                  className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-brand-primary/50 resize-none"
                 />
               </div>
+
+              {/* Thông tin tính công khi nghiệm thu ĐẠT */}
+              {reviewDecision === 'COMPLETED' && (
+                <div className="p-3 bg-white/5 rounded-2xl border border-white/10 space-y-3">
+                  <span className="text-[10px] font-bold uppercase text-brand-success block">
+                    Ghi nhận công việc vào Bảng thống kê & Chấm công tháng
+                  </span>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-studio-muted mb-0.5 font-medium">Ngày thực hiện</label>
+                      <input
+                        type="date"
+                        value={reviewExecutionDate}
+                        onChange={(e) => setReviewExecutionDate(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-studio-muted mb-0.5 font-medium">Buổi làm</label>
+                      <select
+                        value={reviewShiftSession}
+                        onChange={(e) => setReviewShiftSession(e.target.value as 'S' | 'C' | 'T')}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white cursor-pointer"
+                      >
+                        <option value="S" className="bg-[#121216]">Sáng</option>
+                        <option value="C" className="bg-[#121216]">Chiều</option>
+                        <option value="T" className="bg-[#121216]">Tối</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-studio-muted mb-0.5 font-medium">Số giờ thực tế</label>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="24"
+                        value={reviewActualHours}
+                        onChange={(e) => setReviewActualHours(Number(e.target.value))}
+                        className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-4 pt-1">
+                    <label className="flex items-center space-x-1.5 text-xs text-white cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={reviewIsOvertime}
+                        onChange={(e) => setReviewIsOvertime(e.target.checked)}
+                        className="rounded border-white/20 text-brand-primary"
+                      />
+                      <span>Ngoài giờ sau 16:30 (x1.5)</span>
+                    </label>
+
+                    <label className="flex items-center space-x-1.5 text-xs text-white cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={reviewIsSunday}
+                        onChange={(e) => setReviewIsSunday(e.target.checked)}
+                        className="rounded border-white/20 text-brand-primary"
+                      />
+                      <span>Chủ nhật (x2.0)</span>
+                    </label>
+                  </div>
+
+                  {reviewIsOvertime && (
+                    <div className="flex items-center space-x-2 pt-1">
+                      <span className="text-[11px] text-studio-muted">Số giờ sau 16:30:</span>
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max={reviewActualHours}
+                        value={reviewOvertimeHours}
+                        onChange={(e) => setReviewOvertimeHours(Number(e.target.value))}
+                        className="w-24 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-xs text-white"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div className="grid grid-cols-2 gap-3 pt-2">

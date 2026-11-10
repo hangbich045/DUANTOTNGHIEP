@@ -407,72 +407,73 @@ triển khai tast 2.3
 
 ---
 
-### PROMPT #15
-- **Thời gian tiếp nhận:** 09/11/2026 - 17:15
+### PROMPT #16
+- **Thời gian tiếp nhận:** 10/11/2026 - 08:30
 - **Nội dung câu lệnh:**
 ```markdown
-# NHIỆM VỤ: BỔ SUNG PHÂN LOẠI CÔNG VIỆC TRONG MODULE QUẢN LÝ CTV
+# NHIỆM VỤ: CẬP NHẬT CHỨC NĂNG CHẤM CÔNG, THỐNG KÊ CÔNG VIỆC VÀ TÍNH LƯƠNG CTV – LHU MEDIA STUDIO
 
-Tôi cần nâng cấp chức năng Giao việc – Nhận việc – Theo dõi – Lọc nhiệm vụ của CTV bằng cách bổ sung trường Loại công việc.
-1. Danh sách loại công việc: 14 loại (Viết content, Chụp & xử lý hình sự kiện, Quay highlight, Dựng clip highlight, Quay clip TikTok, Dựng clip TikTok, Viết kịch bản, MC bản tin, Thư ký trường quay, Quay phim, Dựng phim, Diễn viên, Thiết kế, Khác). Khi chọn "Khác", hiển thị thêm ô nhập tùy chỉnh, lưu database và hiển thị chính xác, không bị mất khi cập nhật.
-2. Cập nhật phía Nhân sự (Admin): Giao việc theo loại việc, xem loại việc trong danh sách & chi tiết, bộ lọc theo loại việc, cho phép chỉnh sửa loại việc.
-3. Cập nhật phía CTV: Hiển thị loại việc trong danh sách và trang chi tiết, bộ lọc theo loại việc, giữ nguyên loại việc khi CTV cập nhật tiến độ / nộp bài, hỗ trợ chọn loại việc khi khai báo việc ngoài hệ thống.
-4. Đảm bảo dữ liệu cũ không có loại việc vẫn hoạt động bình thường.
-5. Kiểm thử bắt buộc 9 trường hợp: Giao từng loại, chọn Khác, persistence sau lưu, CTV xem đúng loại, lọc từng loại, lọc Khác, chỉnh sửa nhiệm vụ không mất dữ liệu, nhiệm vụ cũ hoạt động bình thường, phân quyền chặt chẽ.
+Cập nhật hệ thống quản lý chấm công, thống kê công việc, tổng hợp tiền công và xuất Excel cho CTV theo biểu mẫu thực tế của Bộ phận Truyền thông – Trường Đại học Lạc Hồng dựa trên file Excel mẫu 1. BPTT_BẢNG THỐNG KÊ CÔNG VIỆC 2025-2026(1).xlsx.
+- 2 sheet chuẩn: T10.2026 (Bảng thống kê công việc CTV) và Sheet1 (Bảng chấm công CTV).
+- Phân biệt rõ 3 nghiệp vụ: Bảng thống kê công việc, Bảng chấm công, Dữ liệu tính tiền công.
+- Áp dụng 7 quy tắc tính thù lao CTV bắt buộc: Đơn giá 20.000 đ/h; Ca trực tiêu chuẩn 4 giờ (80.000 đ/ca); Sự vụ sau 16:30 T2-T7: hệ số 1.5; Sự vụ Chủ nhật: hệ số 2.0; Chủ nhật sau 16:30: chỉ tính hệ số 2.0 (không nhân chồng 1.5 x 2.0 = 3.0); Thời gian thực tế; Khử trùng thời gian trực Studio và sự vụ; Không tính việc chưa COMPLETED (TC-03); Không tính ca trực tương lai (TC-04); Chặn CTV tự duyệt ca trực hoặc sửa lương (TC-07).
+- Cập nhật quy tắc mới vào QUY_TAC.md.
 ```
-- **Mục tiêu:** Nâng cấp phân hệ Quản lý công việc (FR-04) bổ sung trường `Loại công việc` (`taskType` & `otherTaskType`), hỗ trợ 14 loại chuẩn và tùy chỉnh khi chọn "Khác", tích hợp vào toàn bộ luồng giao việc, khai báo, theo dõi, chỉnh sửa và bộ lọc trên cả Admin và CTV; đồng thời thực hiện hoàn thiện Task 2.4 (Kiểm thử luồng công việc E2E).
+- **Mục tiêu:** Hoàn thành toàn diện Giai đoạn 3 (Tasks 3.1 -> 3.6 và các quy tắc TC-03 -> TC-07): Lịch trực Studio (FR-05), Bảng thống kê công việc tháng, Bảng chấm công ma trận 3 ca (S-C-T), thuật toán tính thù lao CTV và xuất 2 file Excel riêng biệt bám sát 100% biểu mẫu thực tế của BPTT ĐH Lạc Hồng.
 - **Hành động & Kết quả thực hiện:**
+  - **Phân tích Biểu mẫu Excel:**
+    * Sao chép và phân tích chi tiết file Excel mẫu `1. BPTT_BẢNG THỐNG KÊ CÔNG VIỆC 2025-2026(1).xlsx`:
+      + Sheet `T10.2026`: 8 cột (STT, Họ tên, Ngày, Nội dung sự vụ, Nhiệm vụ, Thực hiện giờ, Tổng giờ, Ghi chú), nhóm theo từng CTV, cột Tổng giờ = sum(giờ) của CTV.
+      + Sheet `Sheet1`: Ma trận 1..daysCount x 3 ca (`S`, `C`, `T`) cho từng CTV. Ký hiệu chuẩn: `LV` (Trực Studio), `SV` (Làm sự vụ), `NL` (Nghỉ lễ). Các cột tổng hợp chuẩn: AI (`LV`), AJ (`SV`), AK (`Sum LV`), AL (`Giờ LV` = Sum LV * 4), AM (`Giờ SV`), AN (`Tổng`), AO (`Tiền` = Tổng quy đổi * 20.000 đ), dòng tổng tiền toàn bộ CTV ở cuối bảng, legend ký hiệu và khối ký tên (Lãnh đạo đơn vị, Người chấm công).
   - **Database Migration SQL Server (`TN_Database`):**
-    * Chạy câu lệnh SQL an toàn bổ sung 2 cột mới vào bảng `Tasks`:
-      + `task_type` (`NVARCHAR(100)` NULL)
-      + `other_task_type` (`NVARCHAR(255)` NULL)
-      + Thêm index `tasks_task_type` tăng tốc độ truy vấn và lọc dữ liệu.
-    * Đảm bảo tính tương thích ngược 100%: Dữ liệu nhiệm vụ cũ chưa có loại công việc giữ nguyên `NULL` và hoạt động hoàn toàn bình thường.
-  - **Model Sequelize (`TN-Backend/src/models/Task.js`):**
-    * Bổ sung thuộc tính `taskType` (cột `task_type`, STRING 100) và `otherTaskType` (cột `other_task_type`, STRING 255).
-    * Khai báo index `task_type` trong mảng `indexes` của model.
-  - **Backend Service (`TN-Backend/src/services/task.service.js`):**
-    * `createTask`: Tiếp nhận `taskType`, `otherTaskType`. Kiểm tra validation: Nếu chọn `Khác` bắt buộc phải có nội dung trong `otherTaskType`.
-    * `createExternalTask`: Tiếp nhận `taskType`, `otherTaskType` khi CTV khai báo công việc phát sinh.
-    * `updateTask`: Admin chỉnh sửa tiêu đề, mô tả, `taskType`, `otherTaskType`, `assignedToUserId`, `deadline`; tự động dọn dẹp `otherTaskType` về `null` nếu chuyển sang loại công việc chuẩn; chặn sửa khi task đã `COMPLETED`.
-    * `findAll`: Bổ sung tham số bộ lọc `query.taskType` (lọc theo từng loại chuẩn hoặc mục 'Khác').
-    * `updateProgress`: CTV nhận việc, nộp bài nghiệm thu bảo toàn nguyên vẹn `taskType` và `otherTaskType`.
-  - **Backend Controller & Routes:**
-    * `TN-Backend/src/controllers/task.controller.js`: Bổ sung phương thức `update` gọi `taskService.updateTask`.
-    * `TN-Backend/src/routes/task.routes.js`: Định nghĩa route `PUT /api/tasks/:id` và `PATCH /api/tasks/:id` với middleware bảo vệ `authenticate`, `authorize('ADMIN')`.
-  - **Frontend Quản lý công việc Admin (`TN-Frontend/src/app/admin/tasks/page.tsx`):**
-    * Export danh sách hằng số 14 loại công việc `TASK_TYPES`.
-    * Bổ sung dropdown chọn Loại công việc và ô nhập động khi chọn "Khác" trong modal "Giao nhiệm vụ mới".
-    * Bổ sung dropdown bộ lọc theo Loại công việc `taskTypeFilter` bên cạnh các bộ lọc Trạng thái và CTV phụ trách.
-    * Hiển thị badge Loại công việc (màu tím thương hiệu) trên bảng danh sách và trong modal "Chi tiết nhiệm vụ".
-    * Bổ sung Modal "Chỉnh sửa nhiệm vụ" (`editModalOpen`) cho phép Admin chỉnh sửa thông tin giao việc, deadline và loại công việc.
-  - **Frontend Nhiệm vụ của tôi cho CTV (`TN-Frontend/src/app/tasks/page.tsx`):**
-    * Bổ sung dropdown bộ lọc Loại công việc `taskTypeFilter` đồng bộ với tab trạng thái.
-    * Hiển thị badge Loại công việc trên mỗi thẻ nhiệm vụ của CTV (hiển thị `Khác: [Nội dung]` nếu là loại Khác).
-    * Bổ sung nút "Chi tiết" và Modal xem chi tiết nhiệm vụ dành riêng cho CTV.
-    * Bổ sung dropdown chọn Loại công việc và ô nhập động khi chọn "Khác" trong modal "Khai báo việc ngoài hệ thống".
-  - **Kiểm tra chất lượng & Biên dịch:**
-    * TypeScript compiler check (`tsc --noEmit`): **0 lỗi**.
-    * Next.js production build (`next build`): Biên dịch thành công 100% tất cả 23 routes tĩnh và động.
-    * Khởi động lại Frontend port 3000 và Backend port 5000: Cả 2 dịch vụ đều hoạt động ổn định.
-  - **Kiểm thử chuyên sâu (Unit Test & E2E Test):**
-    * **Unit Tests Backend:** 49/49 tests PASS 100% (bổ sung test 9.8, 9.9, 9.10 trong Suite 9).
-    * **E2E Integration Tests (12/12 kịch bản PASS 100%):**
-      1. Khởi tạo Tokens Admin & CTV hợp lệ.
-      2. Admin tạo nhiệm vụ với loại chuẩn ("Quay phim") -> Thành công.
-      3. Admin tạo nhiệm vụ với loại "Khác" và `otherTaskType` -> Thành công.
-      4. Validation chặn chọn "Khác" nhưng để trống `otherTaskType` (HTTP 400) -> Chặn chính xác.
-      5. CTV truy vấn danh sách thấy đúng 100% `taskType` và `otherTaskType`.
-      6. Lọc nhiệm vụ theo loại chuẩn ("Quay phim") -> Kết quả chính xác.
-      7. Lọc nhiệm vụ theo loại "Khác" -> Kết quả chính xác.
-      8. Admin chỉnh sửa nhiệm vụ đổi loại từ "Quay phim" sang "Dựng phim" -> Thành công.
-      9. CTV cập nhật tiến độ và nộp bài duyệt -> `taskType` và `otherTaskType` được bảo toàn nguyên vẹn.
-      10. Phân quyền RBAC: Chặn CTV gọi `PUT /api/tasks/:id` (HTTP 403 Forbidden) -> Bảo mật tuyệt đối.
-      11. CTV khai báo việc ngoài hệ thống với loại "Khác" và `otherTaskType` -> Thành công.
-      12. Kiểm tra tương thích ngược: Các nhiệm vụ cũ không có `taskType` tiếp tục hiển thị và hoạt động bình thường.
-  - **Cập nhật Kế hoạch triển khai:**
-    * Hoàn thành toàn diện Task 2.4 `[x]` trong `KE_HOACH_TRIEN_KHAI.md`.
-    * **KẾT LUẬN GIAI ĐOẠN 2:** Đã hoàn thành 100% tất cả các mục tiêu của Phân hệ Quản lý công việc (FR-04: Task 2.1, 2.2, 2.3, 2.4), sẵn sàng bước vào Giai đoạn 3 (Lịch trực, Bảng công việc tháng & Tính thù lao CTV - FR-05).
+    * Bổ sung cột vào bảng `Tasks`: `execution_date` (`DATE`), `actual_hours` (`DECIMAL(5,2)`), `shift_session` (`NVARCHAR(10)`), `note` (`NVARCHAR(MAX)`), `is_overtime` (`BIT`), `overtime_hours` (`DECIMAL(4,2)`), `is_sunday` (`BIT`).
+    * Tạo mới bảng `StudioShifts`: `id` (`CHAR(36)` PK), `user_id` (`CHAR(36)` FK), `date` (`DATE`), `shift_type` (`NVARCHAR(20)`: `SANG`, `CHIEU`, `TOI`), `start_time`, `end_time`, `hours` (4.00), `status` (`REGISTERED`, `CONFIRMED`, `COMPLETED`, `CANCELLED`), `attendance_symbol` (`LV`), `note`, `confirmed_by_user_id`.
+    * Tạo mới bảng `AttendanceRecords`: `id`, `user_id`, `date`, `session` (`S`,`C`,`T`), `symbol` (`LV`,`SV`,`NL`), `hours`, `source_type`, `source_id`, `month`, `year`, `note`.
+    * Tạo mới bảng `MonthlyPayrolls`: `id`, `user_id`, `month`, `year`, `total_shift_count`, `shift_hours`, `task_hours`, `overtime_hours`, `sunday_hours`, `total_standard_hours`, `total_calculated_hours`, `hourly_rate` (20000), `total_amount`, `status`, `note`, `calculated_at`.
+  - **Backend Models & Associations:**
+    * `Task.js`: Thêm 7 trường phục vụ chấm công & thống kê.
+    * `StudioShift.js`: Quản lý ca trực Studio.
+    * `AttendanceRecord.js`: Quản lý ô ma trận chấm công.
+    * `MonthlyPayroll.js`: Lưu trữ bảng lương tháng CTV.
+    * `TN-Backend/src/models/index.js`: Khai báo associations liên kết với bảng `Users`.
+  - **Backend Services & Logic Nghiệp Vụ:**
+    * `duty.service.js`: Đăng ký ca trực Studio, Admin xếp ca trực cho CTV vào bất kỳ ngày nào trong tháng, duyệt xác nhận (`CONFIRMED`), xác nhận hoàn thành (`COMPLETED` - chặn ca tương lai TC-04), hủy ca trực (`CANCELLED`).
+    * `payroll.service.js`:
+      + `getTimesheetData`: Tổng hợp ma trận chấm công 3 ca S-C-T của tháng, tính đúng các cột AI đến AO, hỗ trợ cập nhật cell thủ công (`updateAttendanceCell`).
+      + `getTasksSummaryData`: Tổng hợp danh sách đầu việc chi tiết của tháng (các task COMPLETED) nhóm theo từng CTV.
+      + `calculateMonthlyPayroll`: Thuật toán tính thù lao CTV áp dụng nghiêm ngặt 7 quy tắc bắt buộc: đơn giá 20.000 đ/h, ca 4h (80.000 đ), OT sau 16:30 T2-T7 x1.5, Chủ nhật x2.0, Chủ nhật sau 16:30 chỉ tính x2.0 (TC-06), khử trùng giờ trực và sự vụ (TC-05), loại trừ việc dang dở (TC-03) và ca tương lai (TC-04).
+      + `exportTimesheetExcel`: Xuất file Excel Bảng chấm công bám sát 100% sheet `Sheet1`.
+      + `exportTasksSummaryExcel`: Xuất file Excel Bảng thống kê công việc bám sát 100% sheet `T10.2026`.
+    * `task.service.js`: Hỗ trợ lưu trữ `executionDate`, `actualHours`, `shiftSession`, `note`, `isOvertime`, `overtimeHours`, `isSunday` trong `createTask`, `createExternalTask`, `reviewTask`.
+  - **Backend Controllers & Routes:**
+    * `duty.controller.js` & `duty.routes.js`: Cung cấp `/api/duty/register`, `/api/duty/shifts`, `/api/duty/shifts/:id/confirm`, `/api/duty/shifts/:id/complete`, `/api/duty/shifts/:id`.
+    * `payroll.controller.js` & `payroll.routes.js`: Cung cấp `/api/payroll/timesheet`, `/api/payroll/tasks-summary`, `/api/payroll/calculate`, `/api/payroll/timesheet/cell`, `/api/payroll/export-timesheet`, `/api/payroll/export-tasks-summary`.
+  - **Frontend UI/UX:**
+    * `TN-Frontend/src/app/admin/payroll/page.tsx`: Giao diện Admin quản trị chấm công & thù lao toàn diện gồm 3 tab:
+      + Tab 1: Ma trận Bảng Chấm Công (3 ca S-C-T), xem chi tiết các cột AI -> AO, hỗ trợ click sửa nhanh ô chấm công.
+      + Tab 2: Bảng Thống Kê Công Việc tháng (chuẩn `T10.2026`) nhóm theo từng CTV.
+      + Tab 3: Quản Lý Ca Trực & Bảng Lương (Xếp ca trực mới cho CTV, duyệt ca trực, tính thù lao tự động).
+      + 2 nút xuất 2 file Excel chuyên biệt.
+    * `TN-Frontend/src/app/tasks/page.tsx`: Nâng cấp giao diện CTV với 2 tab:
+      + Tab 1: Nhiệm vụ & Sự vụ (theo dõi việc, nộp kết quả, khai báo việc ngoài có ngày/giờ/buổi/OT/CN).
+      + Tab 2: Lịch trực & Bảng chấm công (thẻ thù lao tạm tính của tháng x 20.000 VNĐ, nút Đăng ký ca trực Studio, danh sách ca trực cá nhân, bảng ma trận chấm công cá nhân theo 3 buổi).
+    * `TN-Frontend/src/app/admin/tasks/page.tsx`: Modal nghiệm thu khi chọn `COMPLETED` cho phép Admin ghi nhận trực tiếp ngày thực hiện, số giờ thực tế, buổi làm, ngoài giờ OT (x1.5), làm Chủ nhật (x2.0).
+    * `TN-Frontend/src/components/AdminLayout.tsx`: Thêm mục "Chấm công & Thù lao" (`/admin/payroll`).
+  - **Kiểm thử chuyên sâu (Unit Test & E2E Integration):**
+    * **Backend Unit Tests:** Mở rộng Suite 10 -> **58/58 Unit Tests PASS 100%** (bao quát TC-03 -> TC-07, công thức tính toán, số ngày trong tháng).
+    * **E2E Integration Tests:** 13/13 kịch bản PASS 100% qua `scratch/test_phase3_e2e.js`:
+      + Tạo ca trực hoàn thành (4h = 4h quy đổi).
+      + Tạo sự vụ ngày thường (2h).
+      + Tạo sự vụ ngoài giờ sau 16:30 (2h thực tế + 2h OT x1.5 = 3h quy đổi).
+      + Tạo sự vụ Chủ nhật (4h x2.0 = 8h quy đổi).
+      + Tạo sự vụ Chủ nhật sau 16:30 (3h thực tế + 3h OT -> chỉ tính x2.0 = 6h quy đổi, không nhân chồng).
+      + Tạo ca trực tương lai và task chưa xong -> Kiểm tra bị loại trừ hoàn toàn (TC-03 & TC-04).
+      + Tổng cộng tính chuẩn xác 26 giờ quy đổi = 520.000 VNĐ.
+      + Xuất 2 file Excel thực tế và verify 100% cấu trúc dòng, cột, công thức so với file mẫu.
+    * **Frontend Compilation:** TypeScript 0 lỗi, Next.js build (`next build`) thành công 24/24 routes.
+  - **Tài liệu & Kế hoạch:**
+    * Cập nhật `QUY_TAC.md` bổ sung chi tiết Mục 6, 7, 8 (ký hiệu `LV`, `SV`, `NL`, ma trận 3 buổi S-C-T, các cột AI->AO, cấu trúc 2 biểu mẫu Excel BPTT).
+    * Cập nhật `KE_HOACH_TRIEN_KHAI.md` đánh dấu hoàn thành 100% Giai đoạn 3 (Tasks 3.1 -> 3.6 và TC-03 -> TC-07).
 - **Trạng thái:** `COMPLETED`
 
 ---

@@ -49,32 +49,57 @@
 9. CTV có thể khai báo công việc phát sinh ngoài hệ thống, kèm tên công việc, thời gian thực hiện và minh chứng.
 10. Công việc ngoài hệ thống phải được Nhân sự xác minh trước khi tính lương.
 
-## 6. Quy tắc lịch trực và Bảng công việc tháng
-1. CTV đăng ký thời gian có thể tham gia trực.
-2. Nhân sự sắp xếp/điều chỉnh và xác nhận lịch trực chính thức.
-3. Chỉ lịch trực đã được Nhân sự xác nhận mới được ghi vào Bảng công việc tháng.
-4. Lịch trực tương lai đã xác nhận chưa được tính vào dữ liệu lương.
-5. Chỉ ca trực thực tế đã hoàn thành và được xác nhận mới được tính công.
-6. Không sử dụng thiết bị chấm công vào/ra.
-7. Bảng công việc tháng và Bảng lương tháng là hai dữ liệu riêng biệt.
+## 6. Quy tắc lịch trực, chấm công và Bảng công việc tháng
+1. CTV đăng ký thời gian có thể tham gia trực Studio qua hệ thống (chọn ca Sáng: 07:30–11:30, Chiều: 13:00–17:00, Tối: 17:30–21:30).
+2. Nhân sự sắp xếp/điều chỉnh và xác nhận lịch trực chính thức cho CTV.
+3. Chỉ lịch trực đã được Nhân sự xác nhận mới được ghi nhận vào Bảng công việc và Bảng chấm công tháng.
+4. Lịch trực tương lai dù đã xác nhận chưa được tính vào dữ liệu thù lao (Quy tắc TC-04).
+5. Chỉ ca trực thực tế đã hoàn thành và được xác nhận mới được tính công (Quy tắc TC-04).
+6. Không sử dụng thiết bị chấm công vào/ra phần cứng; quản lý chấm công qua ma trận 3 ca (S - Sáng, C - Chiều, T - Tối) trên hệ thống.
+7. Bảng thống kê công việc tháng, Bảng chấm công tháng và Dữ liệu tính thù lao là ba phân hệ dữ liệu riêng biệt được đồng bộ tự động, không gộp thành một bảng dữ liệu phẳng duy nhất.
+8. Ký hiệu chấm công thống nhất:
+   - **LV**: Trực – làm việc tại Studio (ca tiêu chuẩn 4 giờ).
+   - **SV**: Làm sự vụ (ghi nhận theo giờ thực tế của các công việc/nhiệm vụ COMPLETED).
+   - **NL**: Nghỉ lễ (theo quy định của Nhà trường).
+9. CTV không được tự ý duyệt hoàn thành ca trực hoặc tự ý sửa mức lương/giờ công ngoài quyền hạn (Quy tắc TC-07).
 
-## 7. Quy tắc tính tiền công
+## 7. Quy tắc tính tiền công và thù lao CTV
 1. Mức tiền công cơ bản: **20.000 đồng/giờ**.
-2. Một ca trực Studio tiêu chuẩn: **4 giờ**.
-3. Công việc kỹ thuật chụp ảnh/quay phim sự kiện sau 16:30 từ Thứ Hai đến Thứ Bảy: áp dụng hệ số **1,5**.
-4. Công việc kỹ thuật sự kiện vào Chủ nhật: áp dụng hệ số **2**.
-5. Nếu công việc Chủ nhật đồng thời diễn ra sau 16:30, chỉ áp dụng hệ số 2, không nhân chồng hệ số.
-6. Thời lượng công việc kỹ thuật sự kiện được tính theo thời gian thực tế.
-7. Không tính trùng thời gian đã được tính trong ca trực phòng.
-8. Chỉ công việc hoàn thành được Nhân sự xác nhận và ca trực thực tế hoàn thành/được xác nhận mới được đưa vào dữ liệu lương.
+2. Một ca trực Studio tiêu chuẩn: **4 giờ** (tương đương 80.000 đồng/ca).
+3. Công việc kỹ thuật chụp ảnh/quay phim sự vụ sau 16:30 từ Thứ Hai đến Thứ Bảy: áp dụng hệ số **1,5** (tính cho số giờ làm sau 16:30).
+4. Công việc kỹ thuật sự kiện vào Chủ nhật: áp dụng hệ số **2,0** cho toàn bộ thời gian thực hiện trong ngày Chủ nhật.
+5. Nếu công việc vào Chủ nhật đồng thời diễn ra sau 16:30, **chỉ áp dụng hệ số 2,0**, không nhân chồng hệ số (1.5 x 2.0 = 3.0 là vi phạm).
+6. Thời lượng công việc kỹ thuật sự kiện được tính theo thời gian thực tế ghi nhận trên phiếu nhiệm vụ đã nghiệm thu.
+7. Không tính trùng thời gian đã được tính trong ca trực Studio (nếu một buổi vừa trực Studio vừa làm sự vụ, chỉ tính giờ trực Studio hoặc tính giờ sự vụ không trùng lặp).
+8. Chỉ công việc hoàn thành được Nhân sự xác nhận (COMPLETED) mới được đưa vào dữ liệu lương (Quy tắc TC-03).
+9. Công việc chưa hoàn thành, đang thực hiện, chờ duyệt hoặc cần chỉnh sửa tuyệt đối không được đưa vào dữ liệu thù lao (Quy tắc TC-03).
 
-## 8. Quy tắc Bảng lương tháng
-1. Bảng lương tháng được tổng hợp từ dữ liệu công đủ điều kiện.
-2. Công việc đang thực hiện, chờ duyệt hoặc cần chỉnh sửa không được tính.
-3. Ca trực tương lai không được tính dù đã xác nhận lịch.
-4. Hệ thống thực hiện tổng hợp, tính toán và xuất Excel.
-5. Việc chỉnh sửa, chốt và phê duyệt bảng lương thực hiện bên ngoài hệ thống.
-6. Không xây dựng quy trình phê duyệt bảng lương bên trong hệ thống nếu chưa có yêu cầu mới.
+## 8. Quy tắc Biểu mẫu Excel xuất báo cáo (Chuẩn BPTT ĐH Lạc Hồng)
+1. **Bảng thống kê công việc tháng (Sheet chuẩn `T10.2026`)**:
+   - Cột A: STT
+   - Cột B: Họ và tên CTV
+   - Cột C: Ngày thực hiện
+   - Cột D: Nội dung sự vụ
+   - Cột E: Nhiệm vụ (Loại công việc)
+   - Cột F: Thực hiện (giờ) - Số giờ thực tế của từng đầu việc
+   - Cột G: Tổng (giờ) - Tổng số giờ thực hiện của CTV trong tháng (sử dụng công thức `=SUM(...)`)
+   - Cột H: Ghi chú
+   - Dữ liệu được nhóm và phân loại rõ ràng theo từng CTV.
+2. **Bảng chấm công tháng (Sheet chuẩn `Sheet1`)**:
+   - Tiêu đề: TRƯỜNG ĐẠI HỌC LẠC HỒNG - BỘ PHẬN TRUYỀN THÔNG & BẢNG CHẤM CÔNG THÁNG [MM/YYYY].
+   - Ma trận ngày: Bố trí từ ngày 1 đến ngày cuối tháng theo đúng lịch thực tế (thứ Hai đến Chủ nhật).
+   - Mỗi CTV gồm 3 dòng tương ứng với 3 buổi: S (Sáng), C (Chiều), T (Tối).
+   - Ô chấm công hiển thị ký hiệu chuẩn: `LV`, `SV`, `NL`.
+   - Các cột tổng hợp cuối bảng:
+     * Cột AI: **LV** (Tổng số ca trực theo từng buổi)
+     * Cột AJ: **SV** (Tổng số ca sự vụ theo từng buổi)
+     * Cột AK: **Sum LV** (Tổng cộng số ca trực trong tháng của cả 3 buổi S, C, T)
+     * Cột AL: **Giờ LV** (Tổng giờ trực Studio = Sum LV * 4)
+     * Cột AM: **Giờ SV** (Tổng giờ làm sự vụ thực tế từ các công việc COMPLETED)
+     * Cột AN: **Tổng** (Tổng giờ quy đổi = Giờ LV + Giờ SV + Giờ OT*0.5 + Giờ CN*1.0)
+     * Cột AO: **Tiền** (Thù lao nhận được = Tổng giờ quy đổi * 20.000 VNĐ)
+   - Dòng tổng cộng tiền toàn bộ CTV ở cuối bảng tại cột AO.
+   - Phần ghi chú giải thích ký hiệu (`LV`, `SV`, `NL`) và khối ký tên (LÃNH ĐẠO ĐƠN VỊ, NGƯỜI CHẤM CÔNG).
 
 ## 9. Quy tắc tài khoản
 1. Đăng ký tài khoản bằng email và mã nhân viên theo quy trình của hệ thống.

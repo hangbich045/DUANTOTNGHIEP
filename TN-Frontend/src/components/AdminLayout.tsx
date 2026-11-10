@@ -19,6 +19,7 @@ import {
   ShieldCheck,
   LogOut,
   CheckSquare,
+  Calculator,
 } from 'lucide-react';
 
 const sidebarLinks = [
@@ -26,6 +27,7 @@ const sidebarLinks = [
   { href: '/admin/equipment', label: 'Quản lý Thiết bị', icon: Camera },
   { href: '/admin/requests', label: 'Duyệt yêu cầu', icon: ClipboardList },
   { href: '/admin/tasks', label: 'Quản lý Công việc', icon: CheckSquare },
+  { href: '/admin/payroll', label: 'Chấm công & Thù lao', icon: Calculator },
   { href: '/admin/users', label: 'Quản lý Thành viên', icon: Users },
 ];
 

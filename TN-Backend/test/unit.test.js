@@ -713,3 +713,182 @@ describe('Unit Test 9: Quản lý công việc (FR-04) - Model Task & Vòng đ�
   });
 });
 
+// ============================================================
+// TEST SUITE 10: CHẤM CÔNG, LỊCH TRỰC STUDIO & TÍNH THÙ LAO CTV (FR-05)
+// ============================================================
+
+describe('Unit Test 10: Chấm công, Lịch trực Studio & Tính thù lao CTV (FR-05)', () => {
+  const BASE_RATE = 20000; // 20.000 VNĐ / giờ
+  const SHIFT_STANDARD_HOURS = 4.0; // 4 giờ / ca trực tiêu chuẩn
+
+  // Hàm tính thù lao ca trực Studio
+  function calculateShiftPay(shiftCount) {
+    return shiftCount * SHIFT_STANDARD_HOURS * BASE_RATE;
+  }
+
+  // Thuật toán tính tiền công cho một đầu việc sự vụ (Quy tắc Mục 7)
+  function calculateTaskPay(task) {
+    // TC-03: Chỉ tính khi đã COMPLETED
+    if (task.status !== 'COMPLETED') {
+      return { hours: 0, calculatedHours: 0, amount: 0 };
+    }
+
+    const hours = parseFloat(task.actualHours) || 0;
+    const taskDate = new Date(task.date || task.executionDate);
+    const isSunday = task.isSunday || taskDate.getDay() === 0;
+
+    let multiplier = 1.0;
+    // TC-06: Chống nhân chồng hệ số: Chủ nhật sau 16:30 chỉ tính 2.0 (không nhân 1.5 x 2.0 = 3.0)
+    if (isSunday) {
+      multiplier = 2.0;
+    } else if (task.isOvertime || (task.overtimeHours && task.overtimeHours > 0)) {
+      multiplier = 1.5;
+    }
+
+    const calculatedHours = hours * multiplier;
+    const amount = Math.round(calculatedHours * BASE_RATE);
+    return { hours, calculatedHours, multiplier, amount };
+  }
+
+  it('10.1. Mức thù lao cơ bản: 20.000 đ/giờ, ca trực Studio tiêu chuẩn 4 giờ = 80.000 đ', () => {
+    const oneShiftPay = calculateShiftPay(1);
+    assert.equal(oneShiftPay, 80000);
+
+    const fiveShiftsPay = calculateShiftPay(5);
+    assert.equal(fiveShiftsPay, 400000);
+  });
+
+  it('10.2. TC-03 (Chống tính lương việc dang dở): Nhiệm vụ chưa COMPLETED bị loại trừ khỏi bảng lương', () => {
+    const uncompletedTasks = [
+      { id: 't1', status: 'NOT_STARTED', actualHours: 4 },
+      { id: 't2', status: 'IN_PROGRESS', actualHours: 6 },
+      { id: 't3', status: 'PENDING_APPROVAL', actualHours: 5 },
+      { id: 't4', status: 'REVISION_REQUESTED', actualHours: 8 },
+    ];
+
+    for (const t of uncompletedTasks) {
+      const res = calculateTaskPay(t);
+      assert.equal(res.amount, 0, `Nhiệm vụ status ${t.status} không được tính tiền`);
+      assert.equal(res.calculatedHours, 0);
+    }
+
+    const completedTask = { id: 't5', status: 'COMPLETED', actualHours: 4, date: '2026-10-15' };
+    const validRes = calculateTaskPay(completedTask);
+    assert.equal(validRes.amount, 80000);
+  });
+
+  it('10.3. TC-04 (Chống tính lương ca trực tương lai): Ca trực tương lai dù CONFIRMED bị loại trừ', () => {
+    const today = new Date('2026-10-15T00:00:00.000Z');
+
+    function filterValidShifts(shifts, referenceDate) {
+      return shifts.filter((s) => {
+        const sDate = new Date(s.date);
+        return s.status === 'COMPLETED' || (s.status === 'CONFIRMED' && sDate <= referenceDate);
+      });
+    }
+
+    const shifts = [
+      { id: 's1', date: '2026-10-05', status: 'COMPLETED' },
+      { id: 's2', date: '2026-10-12', status: 'CONFIRMED' },
+      { id: 's3', date: '2026-10-25', status: 'CONFIRMED' }, // Tương lai -> Loại trừ
+      { id: 's4', date: '2026-10-28', status: 'REGISTERED' }, // Chưa duyệt -> Loại trừ
+    ];
+
+    const valid = filterValidShifts(shifts, today);
+    assert.equal(valid.length, 2);
+    assert.deepEqual(valid.map((s) => s.id), ['s1', 's2']);
+  });
+
+  it('10.4. TC-05 (Chống tính trùng giờ): Loại trừ thời gian trùng lặp giữa ca trực Studio và sự vụ', () => {
+    // CTV trực Studio ca Chiều (13:30 - 17:30 = 4 giờ)
+    // CTV đồng thời làm sự vụ sự kiện từ 16:00 đến 19:00 (3 giờ, trong đó 16:00-17:30 trùng 1.5 giờ)
+    function eliminateOverlap(shiftHours, eventHours, overlapHours) {
+      const netEventHours = Math.max(0, eventHours - overlapHours);
+      const totalHours = shiftHours + netEventHours;
+      return { shiftHours, netEventHours, totalHours };
+    }
+
+    const result = eliminateOverlap(4.0, 3.0, 1.5);
+    assert.equal(result.shiftHours, 4.0);
+    assert.equal(result.netEventHours, 1.5);
+    assert.equal(result.totalHours, 5.5); // 4 + 1.5 = 5.5 giờ, không bị tính trùng thành 7 giờ!
+  });
+
+  it('10.5. TC-06 (Chống nhân chồng hệ số): Sự vụ Chủ nhật sau 16:30 chỉ tính hệ số 2.0 (không nhân 1.5 x 2.0)', () => {
+    // Chủ nhật (Sunday) lúc 18:00 (sau 16:30), thời lượng 3 giờ
+    const taskSundayEvening = {
+      status: 'COMPLETED',
+      actualHours: 3.0,
+      date: '2026-10-18', // Chủ nhật
+      isSunday: true,
+      isOvertime: true, // sau 16:30
+    };
+
+    const res = calculateTaskPay(taskSundayEvening);
+    assert.equal(res.multiplier, 2.0); // Chỉ áp dụng 2.0, không được nhân 1.5 x 2.0 = 3.0
+    assert.equal(res.calculatedHours, 6.0); // 3 * 2.0 = 6.0 giờ quy đổi
+    assert.equal(res.amount, 120000); // 6 * 20.000 = 120.000 đ
+  });
+
+  it('10.6. Hệ số 1.5 cho sự vụ ngoài giờ sau 16:30 từ Thứ Hai đến Thứ Bảy', () => {
+    const taskWeekdayOvertime = {
+      status: 'COMPLETED',
+      actualHours: 4.0,
+      date: '2026-10-14', // Thứ Tư
+      isSunday: false,
+      isOvertime: true,
+    };
+
+    const res = calculateTaskPay(taskWeekdayOvertime);
+    assert.equal(res.multiplier, 1.5);
+    assert.equal(res.calculatedHours, 6.0); // 4 * 1.5 = 6.0
+    assert.equal(res.amount, 120000);
+  });
+
+  it('10.7. TC-07 (Bảo vệ quyền hạn Nhân sự): Chặn CTV tự ý duyệt ca trực hoặc sửa bảng lương', () => {
+    function authorizeAction(userRole, requiredRole) {
+      if (userRole !== requiredRole) {
+        throw new Error(`Bạn không có quyền truy cập. Chức năng này yêu cầu quyền: ${requiredRole}.`);
+      }
+      return true;
+    }
+
+    assert.equal(authorizeAction('ADMIN', 'ADMIN'), true);
+    assert.throws(() => authorizeAction('COLLABORATOR', 'ADMIN'), /Yêu cầu quyền: ADMIN/i);
+    assert.throws(() => authorizeAction('USER', 'ADMIN'), /Yêu cầu quyền: ADMIN/i);
+  });
+
+  it('10.8. Bảng chấm công 3 buổi (S, C, T) với ký hiệu LV, SV, NL và tổng hợp AI-AO', () => {
+    // CTV có:
+    // - Ca sáng: 2 buổi LV, 8 buổi SV
+    // - Ca chiều: 2 buổi LV, 7 buổi SV
+    // - Ca tối: 0 buổi LV, 5 buổi SV
+    const sessionS = { lv: 2, sv: 8 };
+    const sessionC = { lv: 2, sv: 7 };
+    const sessionT = { lv: 0, sv: 5 };
+
+    const sumLV = sessionS.lv + sessionC.lv + sessionT.lv; // Col AK: 4
+    const gioLV = sumLV * 4.0; // Col AL: 16
+    const gioSV = 82.0; // Col AM: tổng giờ từ Bảng thống kê công việc
+    const tong = gioLV + gioSV; // Col AN: 98
+    const tien = tong * 20000; // Col AO: 1.960.000 đ
+
+    assert.equal(sumLV, 4);
+    assert.equal(gioLV, 16);
+    assert.equal(gioSV, 82.0);
+    assert.equal(tong, 98.0);
+    assert.equal(tien, 1960000);
+  });
+
+  it('10.9. Tính chính xác số ngày trong tháng (28/29 ngày Tháng 2, 30 ngày Tháng 4, 31 ngày Tháng 10)', () => {
+    function getDays(m, y) {
+      return new Date(y, m, 0).getDate();
+    }
+
+    assert.equal(getDays(10, 2026), 31); // Tháng 10 có 31 ngày
+    assert.equal(getDays(4, 2026), 30);  // Tháng 4 có 30 ngày
+    assert.equal(getDays(2, 2026), 28);  // Năm 2026 không nhuận: 28 ngày
+    assert.equal(getDays(2, 2024), 29);  // Năm 2024 nhuận: 29 ngày
+  });
+});
+

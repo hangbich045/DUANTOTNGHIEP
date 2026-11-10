@@ -26,7 +26,21 @@ const USER_ATTRIBUTES = ['id', 'fullName', 'email', 'employeeCode', 'avatarUrl',
  * @returns {Promise<Task>}
  */
 const createTask = async (data, currentUser) => {
-  const { title, description, assignedToUserId, deadline, taskType, otherTaskType } = data;
+  const {
+    title,
+    description,
+    assignedToUserId,
+    deadline,
+    taskType,
+    otherTaskType,
+    executionDate,
+    actualHours,
+    shiftSession,
+    note,
+    isOvertime,
+    overtimeHours,
+    isSunday,
+  } = data;
 
   if (!title || !title.trim()) {
     throw new Error('Tiêu đề công việc không được để trống');
@@ -74,6 +88,13 @@ const createTask = async (data, currentUser) => {
     isExternal: false,
     taskType: taskType ? taskType.trim() : null,
     otherTaskType: finalOtherTaskType,
+    executionDate: executionDate || null,
+    actualHours: actualHours ? parseFloat(actualHours) : 0,
+    shiftSession: shiftSession || null,
+    note: note ? note.trim() : null,
+    isOvertime: isOvertime === true || isOvertime === 'true',
+    overtimeHours: overtimeHours ? parseFloat(overtimeHours) : 0,
+    isSunday: isSunday === true || isSunday === 'true',
   });
 
   return findById(task.id, currentUser);
@@ -87,7 +108,22 @@ const createTask = async (data, currentUser) => {
  * @returns {Promise<Task>}
  */
 const createExternalTask = async (data, currentUser) => {
-  const { title, description, resultLink, proofFile, deadline, taskType, otherTaskType } = data;
+  const {
+    title,
+    description,
+    resultLink,
+    proofFile,
+    deadline,
+    taskType,
+    otherTaskType,
+    executionDate,
+    actualHours,
+    shiftSession,
+    note,
+    isOvertime,
+    overtimeHours,
+    isSunday,
+  } = data;
 
   if (!title || !title.trim()) {
     throw new Error('Tiêu đề công việc phát sinh không được để trống');
@@ -124,6 +160,13 @@ const createExternalTask = async (data, currentUser) => {
     isExternal: true,
     taskType: taskType ? taskType.trim() : null,
     otherTaskType: finalOtherTaskType,
+    executionDate: executionDate || new Date().toISOString().slice(0, 10),
+    actualHours: actualHours ? parseFloat(actualHours) : 0,
+    shiftSession: shiftSession || 'S',
+    note: note ? note.trim() : null,
+    isOvertime: isOvertime === true || isOvertime === 'true',
+    overtimeHours: overtimeHours ? parseFloat(overtimeHours) : 0,
+    isSunday: isSunday === true || isSunday === 'true',
   });
 
   return findById(task.id, currentUser);
@@ -346,6 +389,29 @@ const reviewTask = async (id, data, currentUser) => {
     if (feedback) {
       task.feedback = feedback.trim();
     }
+    if (data.actualHours !== undefined) {
+      task.actualHours = parseFloat(data.actualHours) || 0;
+    }
+    if (data.executionDate) {
+      task.executionDate = data.executionDate;
+    } else if (!task.executionDate) {
+      task.executionDate = task.completedAt.toISOString().slice(0, 10);
+    }
+    if (data.shiftSession) {
+      task.shiftSession = data.shiftSession;
+    }
+    if (data.note) {
+      task.note = data.note.trim();
+    }
+    if (data.isOvertime !== undefined) {
+      task.isOvertime = data.isOvertime === true || data.isOvertime === 'true';
+    }
+    if (data.overtimeHours !== undefined) {
+      task.overtimeHours = parseFloat(data.overtimeHours) || 0;
+    }
+    if (data.isSunday !== undefined) {
+      task.isSunday = data.isSunday === true || data.isSunday === 'true';
+    }
   } else if (decision === 'REVISION_REQUESTED') {
     if (!feedback || !feedback.trim()) {
       throw new Error('Vui lòng nhập nội dung phản hồi / yêu cầu cần chỉnh sửa cho CTV');
@@ -428,6 +494,28 @@ const updateTask = async (id, data, currentUser) => {
     }
   } else if (otherTaskType !== undefined && task.taskType === 'Khác') {
     task.otherTaskType = otherTaskType ? otherTaskType.trim() : null;
+  }
+
+  if (data.executionDate !== undefined) {
+    task.executionDate = data.executionDate || null;
+  }
+  if (data.actualHours !== undefined) {
+    task.actualHours = parseFloat(data.actualHours) || 0;
+  }
+  if (data.shiftSession !== undefined) {
+    task.shiftSession = data.shiftSession || null;
+  }
+  if (data.note !== undefined) {
+    task.note = data.note ? data.note.trim() : null;
+  }
+  if (data.isOvertime !== undefined) {
+    task.isOvertime = data.isOvertime === true || data.isOvertime === 'true';
+  }
+  if (data.overtimeHours !== undefined) {
+    task.overtimeHours = parseFloat(data.overtimeHours) || 0;
+  }
+  if (data.isSunday !== undefined) {
+    task.isSunday = data.isSunday === true || data.isSunday === 'true';
   }
 
   await task.save();

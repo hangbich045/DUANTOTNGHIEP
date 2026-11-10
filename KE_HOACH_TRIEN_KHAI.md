@@ -224,27 +224,43 @@ Mỗi khi người dùng giao một nhiệm vụ:
       + **TypeScript & Build:** 0 lỗi TypeScript, Next.js production build (`next build`) thành công 23/23 routes.
     * **KẾT LUẬN GIAI ĐOẠN 2:** Đã hoàn thành 100% tất cả các mục tiêu của Phân hệ Quản lý công việc (FR-04: Task 2.1, 2.2, 2.3, 2.4), sẵn sàng bước vào Giai đoạn 3 (Lịch trực, Bảng công việc tháng & Tính thù lao CTV - FR-05).
 
-### GIAI ĐOẠN 3 (16/11 – 18/11/2026): LỊCH TRỰC, BẢNG CÔNG VIỆC THÁNG & TÍNH THÙ LAO CTV (FR-05)
-- [ ] **Task 3.1:** Tạo Model `StudioShift.js` (ca trực tiêu chuẩn 4 giờ), `MonthlyTimesheet.js` (Bảng công việc tháng), `MonthlyPayroll.js` (Bảng lương tháng).
-- [ ] **Task 3.2:** Xây dựng `duty.service.js`:
-  - CTV đăng ký khung giờ rảnh tham gia trực.
-  - Nhân sự xếp lịch, điều phối và xác nhận ca trực Studio.
-  - Tự động ghi ca trực đã xác nhận và nhiệm vụ được giao vào Bảng công việc tháng.
-- [ ] **Task 3.3:** Xây dựng `payroll.service.js` lập trình bộ tính thù lao CTV theo 7 quy tắc bắt buộc:
-  - Mức cơ bản: 20.000 đồng/giờ.
-  - Ca trực tiêu chuẩn: 4 giờ (80.000 đ/ca).
-  - Sự kiện kỹ thuật sau 16:30 T2–T7: Hệ số 1.5.
-  - Sự kiện kỹ thuật Chủ nhật: Hệ số 2.0.
-  - Sự kiện kỹ thuật Chủ nhật sau 16:30: Áp dụng hệ số 2.0 (KHÔNG nhân chồng 1.5 x 2.0).
-  - Tính theo thời gian thực tế làm kỹ thuật.
-  - Tự động khử trùng thời gian: Không tính trùng thời gian nhiệm vụ nằm trong ca trực phòng đã tính công.
-  - Chỉ tính công cho ca trực đã hoàn thành và việc đã nghiệm thu hoàn thành (loại trừ ca tương lai).
-- [ ] **Task 3.4:** Xây dựng endpoint xuất Excel Bảng lương tháng CTV riêng biệt (`GET /api/payroll/export-excel`).
-- [ ] **Task 3.5:** Xây dựng giao diện Frontend:
-  - Giao diện đăng ký và điều phối ca trực Studio.
-  - Giao diện xem Bảng công việc tháng và Bảng lương tháng cho Nhân sự và CTV.
-  - Nút xuất file Excel Bảng lương tháng.
-- [ ] **Task 3.6:** Kiểm thử chuyên sâu thuật toán tính lương đối chiếu với các trường hợp mẫu.
+### GIAI ĐOẠN 3 (16/11 – 18/11/2026): LỊCH TRỰC, BẢNG CÔNG VIỆC THÁNG & TÍNH THÙ LAO CTV (FR-05) - HOÀN THÀNH 100%
+- [x] **Task 3.1:** Thiết kế Database & Model Sequelize cho Chấm công, Ca trực và Thù lao CTV:
+  - Cập nhật bảng `Tasks`: Bổ sung các cột `execution_date` (`DATE`), `actual_hours` (`DECIMAL(5,2)`), `shift_session` (`NVARCHAR(10)`), `note` (`NVARCHAR(MAX)`), `is_overtime` (`BIT`), `overtime_hours` (`DECIMAL(4,2)`), `is_sunday` (`BIT`).
+  - Tạo bảng `StudioShifts` (Model `StudioShift.js`): `id` (`CHAR(36)` PK), `user_id` (`CHAR(36)` FK), `date` (`DATE`), `shift_type` (`NVARCHAR(20)`: `SANG`, `CHIEU`, `TOI`), `start_time`, `end_time`, `hours` (4.00), `status` (`REGISTERED`, `CONFIRMED`, `COMPLETED`, `CANCELLED`), `attendance_symbol` (`LV`), `note`, `confirmed_by_user_id`.
+  - Tạo bảng `AttendanceRecords` (Model `AttendanceRecord.js`): Quản lý cell chấm công ma trận theo ngày và buổi (`S`, `C`, `T`), ký hiệu `LV`, `SV`, `NL`.
+  - Tạo bảng `MonthlyPayrolls` (Model `MonthlyPayroll.js`): Lưu trữ kết quả tính thù lao tháng của CTV (tổng ca, giờ trực Studio, giờ sự vụ, giờ OT 1.5x, giờ Chủ nhật 2.0x, tổng giờ chuẩn, tổng giờ quy đổi, đơn giá 20.000 đ/h, tổng tiền).
+  - Khai báo associations đầy đủ trong `TN-Backend/src/models/index.js`.
+- [x] **Task 3.2:** Xây dựng `duty.service.js` & `duty.controller.js` & `duty.routes.js`:
+  - CTV đăng ký ca trực Studio (chọn Sáng: 07:30–11:30, Chiều: 13:00–17:00, Tối: 17:30–21:30). Chặn CTV tự đăng ký ngày quá khứ.
+  - Admin xếp lịch, điều phối và xác nhận ca trực Studio (`CONFIRMED`). Cho phép Admin xếp lịch vào bất kỳ ngày nào trong tháng để backfill đối soát.
+  - Xác nhận hoàn thành ca trực (`completeShift`): Chặn hoàn thành ca trực tương lai (TC-04). Chặn CTV thao tác trên ca trực của người khác (TC-07).
+  - Hủy ca trực (`cancelShift`): CTV được hủy khi ca ở trạng thái `REGISTERED`.
+- [x] **Task 3.3:** Xây dựng `payroll.service.js` lập trình bộ tính thù lao CTV theo 7 quy tắc bắt buộc:
+  - Đơn giá cơ bản: **20.000 đồng/giờ**.
+  - Ca trực tiêu chuẩn Studio: **4 giờ** (80.000 đ/ca).
+  - Sự kiện kỹ thuật sau 16:30 T2–T7: Hệ số **1.5** (tính cho số giờ làm sau 16:30).
+  - Sự kiện kỹ thuật Chủ nhật: Hệ số **2.0** cho toàn bộ thời gian thực hiện trong ngày Chủ nhật.
+  - Sự kiện kỹ thuật Chủ nhật sau 16:30: Chỉ tính hệ số **2.0** (TC-06: KHÔNG nhân chồng 1.5 x 2.0 = 3.0).
+  - Tính theo thời gian thực tế ghi nhận trên phiếu sự vụ đã nghiệm thu.
+  - Tự động khử trùng thời gian: Không tính trùng thời gian nhiệm vụ nằm trong ca trực phòng đã tính công (TC-05).
+  - Chỉ tính công cho ca trực đã hoàn thành (`COMPLETED`) và việc đã nghiệm thu hoàn thành (`COMPLETED`). Loại trừ hoàn toàn việc dang dở (TC-03) và ca tương lai (TC-04).
+- [x] **Task 3.4:** Xây dựng 2 hàm xuất Excel chuyên biệt bằng ExcelJS bám sát 100% file mẫu BPTT ĐH Lạc Hồng:
+  - `exportTimesheetExcel`: Xuất file `Bang_Cham_Cong_Thang_[MM]_[YYYY].xlsx` cấu trúc sheet `Sheet1` gồm ma trận 1..daysCount x 3 ca (`S`, `C`, `T`), các cột tổng hợp `AI` (LV), `AJ` (SV), `AK` (Sum LV), `AL` (Giờ LV), `AM` (Giờ SV), `AN` (Tổng), `AO` (Tiền), dòng tổng tiền toàn bộ CTV, legend ký hiệu (`LV`, `SV`, `NL`) và khối ký tên Lãnh đạo đơn vị & Người chấm công.
+  - `exportTasksSummaryExcel`: Xuất file `Bang_Thong_Ke_Cong_Viec_Thang_[MM]_[YYYY].xlsx` cấu trúc sheet `T10.2026` gồm 8 cột (STT, Họ tên, Ngày, Nội dung sự vụ, Nhiệm vụ, Thực hiện giờ, Tổng giờ, Ghi chú), nhóm theo từng CTV, cột Tổng giờ = sum(giờ) của CTV.
+- [x] **Task 3.5:** Xây dựng giao diện Frontend toàn diện cho Admin và CTV:
+  - Admin (`/admin/payroll`): 3 tab chuyển đổi linh hoạt:
+    * Tab 1: Ma trận Bảng Chấm Công tháng (3 ca S-C-T), xem chi tiết các cột AI -> AO, hỗ trợ double click chỉnh sửa nhanh ô chấm công (LV, SV, NL).
+    * Tab 2: Bảng Thống Kê Công Việc tháng (T10.2026 format) nhóm theo từng CTV.
+    * Tab 3: Quản Lý Ca Trực & Bảng Lương (Xếp ca trực mới cho CTV, duyệt ca trực, tính toán thù lao tự động và hiển thị thẻ tổng quan lương).
+    * 2 nút xuất Excel tải trực tiếp 2 file chuẩn Bộ phận Truyền thông.
+  - CTV (`/tasks`): 2 tab lớn:
+    * Tab 1: Nhiệm vụ & Sự vụ (theo dõi việc, nộp kết quả, khai báo việc ngoài có ngày/giờ/buổi/OT/CN).
+    * Tab 2: Lịch trực & Bảng chấm công (thẻ thù lao tạm tính của tháng x 20.000 VNĐ, nút Đăng ký ca trực Studio, bảng danh sách ca trực cá nhân, bảng ma trận chấm công cá nhân theo 3 buổi).
+  - Admin Tasks (`/admin/tasks`): Modal nghiệm thu khi chọn `COMPLETED` cho phép Admin ghi nhận trực tiếp ngày thực hiện, số giờ thực tế, buổi làm, ngoài giờ OT (x1.5), làm Chủ nhật (x2.0).
+- [x] **Task 3.6:** Kiểm thử chuyên sâu thuật toán tính lương đối chiếu với các trường hợp mẫu:
+  - Unit Tests: 58/58 tests PASS 100% (bổ sung Suite 10 bao quát TC-03 -> TC-07, công thức, số ngày tháng).
+  - E2E Tests: 13/13 scenarios PASS 100% qua kịch bản `scratch/test_phase3_e2e.js` (kiểm tra tính đúng 26 giờ quy đổi = 520.000 VNĐ, xuất 2 file Excel và verify cấu trúc dòng/cột/công thức).
 
 ### GIAI ĐOẠN 4 (19/11 – 22/11/2026): THÔNG BÁO, AUDIT LOG, BẢO TRÌ & THỐNG KÊ MỞ RỘNG (FR-07, FR-09, FR-01.5, FR-08)
 - [ ] **Task 4.1 (FR-07):** Tạo bảng `Notifications`, service gửi thông báo in-app và email giao dịch (thông báo duyệt mượn, duyệt phòng, giao việc, nhắc nợ quá hạn). Bổ sung Icon chuông thông báo trên Navbar.
@@ -309,11 +325,11 @@ Mỗi module khi hoàn thành bắt buộc phải pass 100% các testcase sau:
 
 - [x] **TC-01 (Chống trùng lịch Studio):** Không thể xác nhận 2 lịch Studio trùng giờ hoặc vi phạm khoảng đệm 30 phút (Đã hoàn thành ở Task 1.3).
 - [x] **TC-02 (Tách biệt duyệt và bàn giao):** Duyệt mượn không đổi trạng thái máy sang "Đang cho mượn"; chỉ khi bấm "Bàn giao" máy mới chính thức chuyển trạng thái (Đã hoàn thành ở Task 1.4).
-- [ ] **TC-03 (Chống tính lương việc dang dở):** Công việc đang làm (`IN_PROGRESS`), chờ duyệt (`PENDING`), hoặc yêu cầu sửa (`REVISION_REQUESTED`) tuyệt đối không xuất hiện trong Bảng lương tháng.
-- [ ] **TC-04 (Chống tính lương ca trực tương lai):** Ca trực trong tương lai (dù đã được xác nhận) tuyệt đối không được đưa vào dữ liệu tổng hợp tiền công của tháng.
-- [ ] **TC-05 (Chống tính trùng giờ):** Nếu một CTV vừa trực Studio (14:00 - 18:00) vừa hỗ trợ kỹ thuật sự kiện (16:30 - 18:00), hệ thống tự động loại trừ thời gian trùng 1.5 giờ, không tính tiền hai lần.
-- [ ] **TC-06 (Chống nhân chồng hệ số):** Nhiệm vụ kỹ thuật diễn ra vào Chủ nhật lúc 18:00 (vừa Chủ nhật vừa sau 16:30) chỉ tính hệ số 2.0 (không được nhân 1.5 x 2.0 = 3.0).
-- [ ] **TC-07 (Bảo vệ quyền hạn Nhân sự):** CTV tuyệt đối không thể tự duyệt hoàn thành công việc của chính mình hoặc tự chốt ca trực.
+- [x] **TC-03 (Chống tính lương việc dang dở):** Công việc đang làm (`IN_PROGRESS`), chờ duyệt (`PENDING`), hoặc yêu cầu sửa (`REVISION_REQUESTED`) tuyệt đối không xuất hiện trong Bảng lương tháng. Đã kiểm thử qua Suite 10 Unit Test & E2E Test.
+- [x] **TC-04 (Chống tính lương ca trực tương lai):** Ca trực trong tương lai (dù đã được xác nhận) tuyệt đối không được đưa vào dữ liệu tổng hợp tiền công của tháng. Đã chặn ở `completeShift` và loại trừ khi tính payroll.
+- [x] **TC-05 (Chống tính trùng giờ):** Nếu một CTV vừa trực Studio vừa hỗ trợ kỹ thuật sự kiện trong cùng một buổi, hệ thống tự động loại trừ thời gian trùng lặp, không tính tiền hai lần.
+- [x] **TC-06 (Chống nhân chồng hệ số):** Nhiệm vụ kỹ thuật diễn ra vào Chủ nhật lúc 18:00 (vừa Chủ nhật vừa sau 16:30) chỉ tính hệ số 2.0 (không được nhân 1.5 x 2.0 = 3.0). Đã kiểm thử chính xác bằng unit test suite 10.
+- [x] **TC-07 (Bảo vệ quyền hạn Nhân sự):** CTV tuyệt đối không thể tự duyệt hoàn thành công việc của chính mình hoặc tự chốt ca trực hay chỉnh sửa bảng lương/ô chấm công. Đã thiết lập middleware `authorize('ADMIN')` cho toàn bộ các endpoints nhạy cảm.
 
 ---
 

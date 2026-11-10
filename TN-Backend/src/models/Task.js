@@ -159,6 +159,62 @@ const Task = sequelize.define(
       field: 'other_task_type',
       comment: 'Nội dung loại công việc tự nhập khi chọn Khác',
     },
+
+    // Ngày thực hiện công việc sự vụ (Bảng thống kê công việc tháng)
+    executionDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+      field: 'execution_date',
+      comment: 'Ngày thực hiện công việc sự vụ (YYYY-MM-DD)',
+    },
+
+    // Số giờ thực hiện thực tế (Cột Thực hiện (giờ) trên Bảng thống kê công việc)
+    actualHours: {
+      type: DataTypes.DECIMAL(5, 2),
+      allowNull: false,
+      defaultValue: 0,
+      field: 'actual_hours',
+      comment: 'Số giờ thực hiện thực tế phục vụ tính thù lao',
+    },
+
+    // Buổi làm việc: 'S' (Sáng), 'C' (Chiều), 'T' (Tối)
+    shiftSession: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+      field: 'shift_session',
+      comment: 'Buổi thực hiện công việc sự vụ: S, C, T',
+    },
+
+    // Ghi chú công việc sự vụ (Cột Ghi chú trên Bảng thống kê công việc)
+    note: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Ghi chú thời gian làm việc, sự kiện, địa điểm',
+    },
+
+    // Làm ngoài giờ sau 16:30 T2-T7 (hệ số 1.5)
+    isOvertime: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_overtime',
+    },
+
+    // Số giờ làm ngoài giờ sau 16:30 T2-T7
+    overtimeHours: {
+      type: DataTypes.DECIMAL(4, 2),
+      allowNull: false,
+      defaultValue: 0,
+      field: 'overtime_hours',
+    },
+
+    // Công việc diễn ra vào Chủ nhật (hệ số 2.0, không nhân chồng)
+    isSunday: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_sunday',
+    },
   },
   {
     tableName: 'Tasks',
@@ -171,6 +227,7 @@ const Task = sequelize.define(
       { fields: ['deadline'] },
       { fields: ['is_external'] },
       { fields: ['task_type'] },
+      { fields: ['execution_date'] },
     ],
   }
 );
