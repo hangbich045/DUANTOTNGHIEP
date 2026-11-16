@@ -46,9 +46,19 @@ export default function LoginPage() {
         router.push('/');
       }
     } catch (error: any) {
-      if (error.requiresActivation) {
-        toast(error.message || 'Tài khoản của bạn cần được xác thực hoặc kích hoạt lại.', 'warning');
-        router.push(`/auth/verify?email=${encodeURIComponent(email)}`);
+      const isOtpRequired =
+        Boolean(error?.requireVerification) ||
+        Boolean(error?.requiresActivation) ||
+        Boolean(error?.needsVerification) ||
+        (error?.statusCode === 403 &&
+          (error?.message?.includes('xác thực') ||
+            error?.message?.includes('OTP') ||
+            error?.message?.includes('chưa được xác thực')));
+
+      if (isOtpRequired) {
+        const targetEmail = error?.email || email;
+        toast(error?.message || 'Tài khoản chưa được xác thực. Mã OTP đã được gửi tới email của bạn.', 'warning');
+        router.push(`/auth/verify?email=${encodeURIComponent(targetEmail)}`);
       } else {
         toast(error.message || 'Đăng nhập thất bại. Kiểm tra lại thông tin.', 'error');
       }

@@ -22,6 +22,7 @@
 
 const { Op } = require('sequelize');
 const { sequelize, BorrowRequest, Equipment, User, EquipmentCategory } = require('../models');
+const notificationService = require('./notification.service');
 
 /**
  * Lấy danh sách đơn mượn có Tìm kiếm, Lọc, Phân trang
@@ -133,6 +134,23 @@ const create = async (data, userId) => {
     status: 'PENDING',
   });
 
+  // Thông báo in-app cho Admin biết có đơn mượn thiết bị mới (FR-07)
+  notificationService
+    .notifyAdmins({
+      title: '📦 Yêu cầu mượn thiết bị mới',
+      message: `Có yêu cầu mượn ${data.quantity} thiết bị "${equipment.name}" (${equipment.code}). Vui lòng xem xét duyệt đơn.`,
+      type: 'BORROW_REQUEST_CREATED',
+      link: '/admin/requests',
+      sendEmail: false,
+      detailRows: [
+        { label: 'Thiết bị', value: `${equipment.name} (${equipment.code})` },
+        { label: 'Số lượng', value: `${data.quantity} cái` },
+        { label: 'Mục đích mượn', value: data.purpose || 'Không ghi chú' },
+        { label: 'Hạn mượn', value: `Từ ${new Date(data.borrowDate).toLocaleDateString('vi-VN')} đến ${new Date(data.returnDate).toLocaleDateString('vi-VN')}` },
+      ],
+    })
+    .catch(() => {});
+
   return BorrowRequest.findByPk(borrowRequest.id, {
     include: [
       { model: Equipment, as: 'equipment', attributes: ['id', 'code', 'name'] },
@@ -205,6 +223,42 @@ const processRequest = async (requestId, action, rejectionReason = null) => {
     return request; // Transaction tự COMMIT nếu không có lỗi
   });
 
+  // Gửi thông báo in-app và email kết quả duyệt đơn mượn cho người dùng (FR-07)
+  if (action === 'approve') {
+    notificationService
+      .createNotification({
+        userId: result.userId,
+        title: '✅ Đơn mượn thiết bị đã được phê duyệt',
+        message: `Đơn mượn thiết bị "${result.equipment?.name || 'thiết bị'}" (${result.quantity} cái) của bạn đã được phê duyệt. Vui lòng đến Studio để nhận bàn giao.`,
+        type: 'BORROW_REQUEST_APPROVED',
+        link: '/profile',
+        sendEmail: true,
+        detailRows: [
+          { label: 'Thiết bị', value: `${result.equipment?.name || ''} (${result.equipment?.code || ''})` },
+          { label: 'Số lượng duyệt', value: `${result.quantity} cái` },
+          { label: 'Thời gian mượn', value: `Từ ${new Date(result.borrowDate).toLocaleDateString('vi-VN')} đến ${new Date(result.returnDate).toLocaleDateString('vi-VN')}` },
+          { label: 'Trạng thái', value: 'ĐÃ DUYỆT (Chờ nhận thiết bị)' },
+        ],
+      })
+      .catch(() => {});
+  } else if (action === 'reject') {
+    notificationService
+      .createNotification({
+        userId: result.userId,
+        title: '❌ Đơn mượn thiết bị không được duyệt',
+        message: `Đơn mượn thiết bị "${result.equipment?.name || 'thiết bị'}" của bạn đã bị từ chối.${rejectionReason ? ` Lý do: ${rejectionReason}` : ''}`,
+        type: 'BORROW_REQUEST_REJECTED',
+        link: '/profile',
+        sendEmail: true,
+        detailRows: [
+          { label: 'Thiết bị', value: `${result.equipment?.name || ''} (${result.equipment?.code || ''})` },
+          { label: 'Lý do từ chối', value: rejectionReason || 'Không có lý do chi tiết' },
+          { label: 'Trạng thái', value: 'BỊ TỪ CHỐI' },
+        ],
+      })
+      .catch(() => {});
+  }
+
   return result;
 };
 
@@ -266,6 +320,26 @@ const handoverEquipment = async (requestId, currentUserId, currentUserRole, hand
 
     return request;
   });
+
+  // Gửi thông báo in-app và email bàn giao thiết bị cho người mượn (FR-07)
+  notificationService
+    .createNotification({
+      userId: result.userId,
+      title: '🤝 Thiết bị đã được bàn giao thành công',
+      message: `Bạn đã nhận bàn giao ${result.quantity} thiết bị "${result.equipment?.name || 'thiết bị'}". Vui lòng bảo quản cẩn thận và hoàn trả trước hạn: ${new Date(result.returnDate).toLocaleDateString('vi-VN')}.`,
+      type: 'EQUIPMENT_HANDED_OVER',
+      link: '/profile',
+      sendEmail: true,
+      detailRows: [
+        { label: 'Thiết bị', value: `${result.equipment?.name || ''} (${result.equipment?.code || ''})` },
+        { label: 'Số lượng nhận', value: `${result.quantity} cái` },
+        { label: 'Tình trạng bàn giao', value: result.handoverCondition || 'Bình thường' },
+        { label: 'Hạn hoàn trả', value: new Date(result.returnDate).toLocaleDateString('vi-VN') },
+      ],
+    })
+    .catch(() => {});
+
+  return result;
 };
 
 /**
@@ -334,6 +408,24 @@ const returnEquipment = async (requestId, currentUserId, currentUserRole, return
 
     return request;
   });
+
+  // Gửi thông báo in-app và email xác nhận trả máy cho người mượn (FR-07)
+  notificationService
+    .createNotification({
+      userId: result.userId,
+      title: '📦 Xác nhận hoàn trả thiết bị thành công',
+      message: `Đơn mượn thiết bị "${result.equipment?.name || 'thiết bị'}" của bạn đã hoàn tất thủ tục trả máy và kiểm tra thiết bị.`,
+      type: 'EQUIPMENT_RETURNED',
+      link: '/profile',
+      sendEmail: true,
+      detailRows: [
+        { label: 'Thiết bị', value: `${result.equipment?.name || ''} (${result.equipment?.code || ''})` },
+        { label: 'Tình trạng khi trả', value: result.returnCondition || 'Đã kiểm tra đầy đủ' },
+        { label: 'Ngày hoàn trả', value: new Date().toLocaleDateString('vi-VN') },
+        { label: 'Trạng thái', value: 'ĐÃ HOÀN TRẢ (RETURNED)' },
+      ],
+    })
+    .catch(() => {});
 
   return result;
 };

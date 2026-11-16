@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AdminLayout from '@/components/AdminLayout';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -28,8 +28,9 @@ import {
   MessageSquare,
   Pencil,
   Tag,
+  MapPin,
 } from 'lucide-react';
-import { TASK_TYPES } from '@/lib/constants';
+import { TASK_TYPES, CAMPUSES, requiresLocation } from '@/lib/constants';
 
 interface TaskAssignee {
   id: string;
@@ -47,6 +48,7 @@ interface TaskItem {
   description?: string;
   assignedToUserId: string;
   createdByUserId: string;
+  startTime?: string;
   deadline?: string;
   status: 'NOT_STARTED' | 'IN_PROGRESS' | 'PENDING_APPROVAL' | 'REVISION_REQUESTED' | 'COMPLETED';
   resultLink?: string;
@@ -58,6 +60,9 @@ interface TaskItem {
   updatedAt: string;
   taskType?: string;
   otherTaskType?: string;
+  campus?: string;
+  room?: string;
+  location?: string;
   assignee?: TaskAssignee;
   creator?: TaskAssignee;
 }
@@ -71,6 +76,9 @@ interface TaskStats {
   completed: number;
   externalTasks: number;
 }
+
+const HOURS_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES_OPTIONS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
 export default function AdminTasksPage() {
   const { user: currentUser } = useAuth();
@@ -95,9 +103,14 @@ export default function AdminTasksPage() {
   const [createTitle, setCreateTitle] = useState('');
   const [createDescription, setCreateDescription] = useState('');
   const [createAssigneeId, setCreateAssigneeId] = useState('');
-  const [createDeadline, setCreateDeadline] = useState('');
+  const [createDeadlineDate, setCreateDeadlineDate] = useState('');
+  const [createDeadlineHour, setCreateDeadlineHour] = useState('17');
+  const [createDeadlineMinute, setCreateDeadlineMinute] = useState('00');
+  const createDatePickerRef = useRef<HTMLInputElement>(null);
   const [createTaskType, setCreateTaskType] = useState('Viết content');
   const [createOtherTaskType, setCreateOtherTaskType] = useState('');
+  const [createCampus, setCreateCampus] = useState('');
+  const [createRoom, setCreateRoom] = useState('');
   const [creatingTask, setCreatingTask] = useState(false);
 
   // Edit Task Modal states
@@ -106,9 +119,14 @@ export default function AdminTasksPage() {
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editAssigneeId, setEditAssigneeId] = useState('');
-  const [editDeadline, setEditDeadline] = useState('');
+  const [editDeadlineDate, setEditDeadlineDate] = useState('');
+  const [editDeadlineHour, setEditDeadlineHour] = useState('17');
+  const [editDeadlineMinute, setEditDeadlineMinute] = useState('00');
+  const editDatePickerRef = useRef<HTMLInputElement>(null);
   const [editTaskType, setEditTaskType] = useState('Viết content');
   const [editOtherTaskType, setEditOtherTaskType] = useState('');
+  const [editCampus, setEditCampus] = useState('');
+  const [editRoom, setEditRoom] = useState('');
   const [updatingTask, setUpdatingTask] = useState(false);
 
   // Review Task Modal states
@@ -198,6 +216,32 @@ export default function AdminTasksPage() {
     }
   };
 
+  // Lắng nghe sự kiện đồng bộ từ Lịch trực Studio & broadcast channel
+  useEffect(() => {
+    const handleSync = () => {
+      fetchTasksAndStats();
+    };
+
+    window.addEventListener('task_updated', handleSync);
+    window.addEventListener('duty_schedule_updated', handleSync);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('lhu_media_duty_sync');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'SCHEDULE_UPDATED' || event.data?.type === 'TASK_UPDATED') {
+          handleSync();
+        }
+      };
+    } catch (e) {}
+
+    return () => {
+      window.removeEventListener('task_updated', handleSync);
+      window.removeEventListener('duty_schedule_updated', handleSync);
+      if (bc) bc.close();
+    };
+  }, []);
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchTasksAndStats();
@@ -207,9 +251,13 @@ export default function AdminTasksPage() {
     setCreateTitle('');
     setCreateDescription('');
     setCreateAssigneeId(activeCollaborators[0]?.id || '');
-    setCreateDeadline('');
+    setCreateDeadlineDate('');
+    setCreateDeadlineHour('17');
+    setCreateDeadlineMinute('00');
     setCreateTaskType('Viết content');
     setCreateOtherTaskType('');
+    setCreateCampus('');
+    setCreateRoom('');
     setCreateModalOpen(true);
   };
 
@@ -227,6 +275,27 @@ export default function AdminTasksPage() {
       toast('Vui lòng nhập tên loại công việc tùy chỉnh khi chọn Khác', 'warning');
       return;
     }
+    const isLocReq = requiresLocation(createTaskType);
+    if (!createDeadlineDate || !createDeadlineDate.trim()) {
+      toast(isLocReq ? 'Vui lòng chọn ngày bắt đầu thực hiện' : 'Vui lòng chọn ngày hạn chót hoàn thành (Deadline)', 'warning');
+      return;
+    }
+    if (!createDeadlineHour || !createDeadlineMinute) {
+      toast(isLocReq ? 'Vui lòng chọn đầy đủ giờ và phút bắt đầu thực hiện' : 'Vui lòng chọn đầy đủ giờ và phút hạn chót hoàn thành', 'warning');
+      return;
+    }
+    const targetIso = `${createDeadlineDate}T${createDeadlineHour.padStart(2, '0')}:${createDeadlineMinute.padStart(2, '0')}:00`;
+    const targetDateObj = new Date(targetIso);
+    if (isNaN(targetDateObj.getTime())) {
+      toast(isLocReq ? 'Thời gian bắt đầu không hợp lệ. Vui lòng kiểm tra lại' : 'Thời gian hạn chót hoàn thành không hợp lệ. Vui lòng kiểm tra lại', 'warning');
+      return;
+    }
+
+    const finalCampus = isLocReq && createCampus ? createCampus.trim() : null;
+    const finalRoom = isLocReq && createRoom ? createRoom.trim() : null;
+    const finalLocation = isLocReq
+      ? [finalCampus, finalRoom].filter(Boolean).join(' - ') || null
+      : null;
 
     setCreatingTask(true);
     try {
@@ -236,12 +305,26 @@ export default function AdminTasksPage() {
         assignedToUserId: createAssigneeId,
         taskType: createTaskType,
         otherTaskType: createTaskType === 'Khác' ? createOtherTaskType.trim() : undefined,
-        deadline: createDeadline ? new Date(createDeadline).toISOString() : undefined,
+        campus: finalCampus,
+        room: finalRoom,
+        location: finalLocation,
+        startTime: isLocReq ? targetDateObj.toISOString() : undefined,
+        deadline: !isLocReq ? targetDateObj.toISOString() : undefined,
       });
 
       toast('Giao nhiệm vụ cho CTV thành công', 'success');
       setCreateModalOpen(false);
       fetchTasksAndStats();
+
+      // Đồng bộ thời gian thực cho Lịch trực Studio
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('duty_schedule_updated'));
+        try {
+          const bc = new BroadcastChannel('lhu_media_duty_sync');
+          bc.postMessage({ type: 'SCHEDULE_UPDATED' });
+          bc.close();
+        } catch (e) {}
+      }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi giao việc', 'error');
     } finally {
@@ -256,16 +339,39 @@ export default function AdminTasksPage() {
     setEditAssigneeId(task.assignedToUserId || '');
     setEditTaskType(task.taskType || 'Viết content');
     setEditOtherTaskType(task.otherTaskType || '');
-    if (task.deadline) {
+
+    // Phân tích và gán địa điểm thực hiện
+    let c = task.campus || '';
+    let r = task.room || '';
+    if (!c && !r && task.location) {
+      for (const campus of CAMPUSES) {
+        if (task.location.startsWith(campus)) {
+          c = campus;
+          r = task.location.replace(campus, '').replace(/^[\s\-–:]+/, '').trim();
+          break;
+        }
+      }
+      if (!c) r = task.location;
+    }
+    setEditCampus(c);
+    setEditRoom(r);
+
+    const rawTime = task.startTime || task.deadline;
+    if (rawTime) {
       try {
-        const d = new Date(task.deadline);
-        const iso = format(d, "yyyy-MM-dd'T'HH:mm");
-        setEditDeadline(iso);
+        const d = new Date(rawTime);
+        setEditDeadlineDate(format(d, 'yyyy-MM-dd'));
+        setEditDeadlineHour(format(d, 'HH'));
+        setEditDeadlineMinute(format(d, 'mm'));
       } catch {
-        setEditDeadline('');
+        setEditDeadlineDate('');
+        setEditDeadlineHour('17');
+        setEditDeadlineMinute('00');
       }
     } else {
-      setEditDeadline('');
+      setEditDeadlineDate('');
+      setEditDeadlineHour('17');
+      setEditDeadlineMinute('00');
     }
     setEditModalOpen(true);
   };
@@ -286,6 +392,27 @@ export default function AdminTasksPage() {
       toast('Vui lòng nhập tên loại công việc tùy chỉnh khi chọn Khác', 'warning');
       return;
     }
+    const isLocReq = requiresLocation(editTaskType);
+    if (!editDeadlineDate || !editDeadlineDate.trim()) {
+      toast(isLocReq ? 'Vui lòng chọn ngày bắt đầu thực hiện' : 'Vui lòng chọn ngày hạn chót hoàn thành (Deadline)', 'warning');
+      return;
+    }
+    if (!editDeadlineHour || !editDeadlineMinute) {
+      toast(isLocReq ? 'Vui lòng chọn đầy đủ giờ và phút bắt đầu thực hiện' : 'Vui lòng chọn đầy đủ giờ và phút hạn chót hoàn thành', 'warning');
+      return;
+    }
+    const targetIso = `${editDeadlineDate}T${editDeadlineHour.padStart(2, '0')}:${editDeadlineMinute.padStart(2, '0')}:00`;
+    const targetDateObj = new Date(targetIso);
+    if (isNaN(targetDateObj.getTime())) {
+      toast(isLocReq ? 'Thời gian bắt đầu không hợp lệ. Vui lòng kiểm tra lại' : 'Thời gian hạn chót hoàn thành không hợp lệ. Vui lòng kiểm tra lại', 'warning');
+      return;
+    }
+
+    const finalCampus = isLocReq && editCampus ? editCampus.trim() : null;
+    const finalRoom = isLocReq && editRoom ? editRoom.trim() : null;
+    const finalLocation = isLocReq
+      ? [finalCampus, finalRoom].filter(Boolean).join(' - ') || null
+      : null;
 
     setUpdatingTask(true);
     try {
@@ -295,13 +422,27 @@ export default function AdminTasksPage() {
         assignedToUserId: editAssigneeId,
         taskType: editTaskType,
         otherTaskType: editTaskType === 'Khác' ? editOtherTaskType.trim() : undefined,
-        deadline: editDeadline ? new Date(editDeadline).toISOString() : null,
+        campus: finalCampus,
+        room: finalRoom,
+        location: finalLocation,
+        startTime: isLocReq ? targetDateObj.toISOString() : undefined,
+        deadline: !isLocReq ? targetDateObj.toISOString() : undefined,
       });
 
       toast('Cập nhật nhiệm vụ thành công!', 'success');
       setEditModalOpen(false);
       setEditingTaskId(null);
       fetchTasksAndStats();
+
+      // Đồng bộ thời gian thực cho Lịch trực Studio
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('duty_schedule_updated'));
+        try {
+          const bc = new BroadcastChannel('lhu_media_duty_sync');
+          bc.postMessage({ type: 'SCHEDULE_UPDATED' });
+          bc.close();
+        } catch (e) {}
+      }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi cập nhật nhiệm vụ', 'error');
     } finally {
@@ -352,6 +493,16 @@ export default function AdminTasksPage() {
       setReviewModalOpen(false);
       setSelectedTaskForReview(null);
       fetchTasksAndStats();
+
+      // Đồng bộ thời gian thực cho Lịch trực Studio
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('duty_schedule_updated'));
+        try {
+          const bc = new BroadcastChannel('lhu_media_duty_sync');
+          bc.postMessage({ type: 'SCHEDULE_UPDATED' });
+          bc.close();
+        } catch (e) {}
+      }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi đánh giá công việc', 'error');
     } finally {
@@ -378,6 +529,16 @@ export default function AdminTasksPage() {
       setDeleteModalOpen(false);
       setTaskToDelete(null);
       fetchTasksAndStats();
+
+      // Đồng bộ thời gian thực cho Lịch trực Studio
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('duty_schedule_updated'));
+        try {
+          const bc = new BroadcastChannel('lhu_media_duty_sync');
+          bc.postMessage({ type: 'SCHEDULE_UPDATED' });
+          bc.close();
+        } catch (e) {}
+      }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi xóa công việc', 'error');
     } finally {
@@ -605,7 +766,7 @@ export default function AdminTasksPage() {
                   <tr className="border-b border-white/5 text-studio-muted font-semibold bg-white/2 text-left">
                     <th className="py-4 px-6">Nhiệm vụ & Loại công việc</th>
                     <th className="py-4 px-6">CTV Phụ trách</th>
-                    <th className="py-4 px-6">Hạn hoàn thành</th>
+                    <th className="py-4 px-6">Thời gian / Hạn chót</th>
                     <th className="py-4 px-6">Trạng thái</th>
                     <th className="py-4 px-6 text-center">Hành động</th>
                   </tr>
@@ -630,6 +791,12 @@ export default function AdminTasksPage() {
                             )}
                           </div>
                           <div className="font-bold text-white text-sm line-clamp-1">{task.title}</div>
+                          {task.location && (
+                            <div className="inline-flex items-center space-x-1 text-[11px] text-amber-300 font-medium mt-1 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                              <MapPin className="w-3 h-3 text-amber-400 shrink-0" />
+                              <span className="truncate">{task.location}</span>
+                            </div>
+                          )}
                           {task.description && (
                             <p className="text-xs text-studio-muted mt-1 line-clamp-2 leading-relaxed">{task.description}</p>
                           )}
@@ -653,9 +820,19 @@ export default function AdminTasksPage() {
                           </div>
                         </td>
 
-                        {/* Deadline */}
+                        {/* Thời gian thực hiện / Deadline */}
                         <td className="py-4 px-6">
-                          {task.deadline ? (
+                          {task.startTime ? (
+                            <div>
+                              <span className="text-xs font-semibold block text-blue-300">
+                                {format(new Date(task.startTime), 'dd/MM/yyyy HH:mm')}
+                              </span>
+                              <span className="text-[10px] text-blue-400 font-medium flex items-center space-x-1 mt-0.5">
+                                <Clock className="w-3 h-3" />
+                                <span>Thời gian bắt đầu</span>
+                              </span>
+                            </div>
+                          ) : task.deadline ? (
                             <div>
                               <span className={`text-xs font-semibold block ${isOverdue ? 'text-rose-400 font-bold' : 'text-white'}`}>
                                 {format(new Date(task.deadline), 'dd/MM/yyyy HH:mm')}
@@ -668,7 +845,7 @@ export default function AdminTasksPage() {
                               )}
                             </div>
                           ) : (
-                            <span className="text-xs text-studio-muted italic">Không đặt hạn</span>
+                            <span className="text-xs text-studio-muted italic">Chưa xác định</span>
                           )}
                         </td>
 
@@ -754,7 +931,7 @@ export default function AdminTasksPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleCreateTask} className="space-y-4">
+              <form onSubmit={handleCreateTask} noValidate className="space-y-4">
                 {/* Task Type (Loại công việc) */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-studio-muted uppercase block flex items-center space-x-1">
@@ -763,7 +940,14 @@ export default function AdminTasksPage() {
                   </label>
                   <select
                     value={createTaskType}
-                    onChange={(e) => setCreateTaskType(e.target.value)}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setCreateTaskType(newType);
+                      if (!requiresLocation(newType)) {
+                        setCreateCampus('');
+                        setCreateRoom('');
+                      }
+                    }}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
                   >
                     {TASK_TYPES.map((t) => (
@@ -782,7 +966,6 @@ export default function AdminTasksPage() {
                     </label>
                     <input
                       type="text"
-                      required
                       placeholder="VD: Biên kịch phóng sự tài liệu, Lồng tiếng video..."
                       value={createOtherTaskType}
                       onChange={(e) => setCreateOtherTaskType(e.target.value)}
@@ -794,12 +977,66 @@ export default function AdminTasksPage() {
                   </div>
                 )}
 
+                {/* Trường Địa điểm thực hiện (Chỉ hiển thị khi thuộc các nhóm: Chụp ảnh, Quay phim/video, Diễn viên, Khác) */}
+                {requiresLocation(createTaskType) && (
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-amber-400 uppercase flex items-center space-x-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Địa điểm thực hiện</span>
+                      </label>
+                      <span className="text-[10px] text-amber-300/70 font-normal">
+                        (Cơ sở &amp; Phòng)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                      {/* Chọn Cơ sở */}
+                      <div className="sm:col-span-5">
+                        <label className="text-[10px] text-studio-muted block mb-1">Cơ sở</label>
+                        <select
+                          value={createCampus}
+                          onChange={(e) => setCreateCampus(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-amber-400/50 cursor-pointer"
+                        >
+                          <option value="" className="bg-[#18181b]">-- Chọn cơ sở --</option>
+                          {CAMPUSES.map((c) => (
+                            <option key={c} value={c} className="bg-[#18181b]">
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Nhập Phòng / Địa điểm cụ thể */}
+                      <div className="sm:col-span-7">
+                        <label className="text-[10px] text-studio-muted block mb-1">Phòng / Địa điểm cụ thể</label>
+                        <input
+                          type="text"
+                          placeholder="VD: Phòng B502, Hội trường T, Studio..."
+                          value={createRoom}
+                          onChange={(e) => setCreateRoom(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-amber-400/50"
+                        />
+                      </div>
+                    </div>
+
+                    {(createCampus || createRoom) && (
+                      <p className="text-[11px] text-amber-300/90 font-medium pt-0.5 flex items-center space-x-1">
+                        <span className="text-studio-muted">Địa điểm ghi nhận:</span>
+                        <span className="font-semibold text-white">
+                          {[createCampus, createRoom].filter(Boolean).join(' - ')}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Title */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-studio-muted uppercase block">Tiêu đề nhiệm vụ *</label>
                   <input
                     type="text"
-                    required
                     placeholder="VD: Chụp ảnh kỷ yếu sinh viên khóa 2022..."
                     value={createTitle}
                     onChange={(e) => setCreateTitle(e.target.value)}
@@ -823,7 +1060,6 @@ export default function AdminTasksPage() {
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-studio-muted uppercase block">Cộng tác viên (CTV) phụ trách *</label>
                   <select
-                    required
                     value={createAssigneeId}
                     onChange={(e) => setCreateAssigneeId(e.target.value)}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
@@ -837,15 +1073,98 @@ export default function AdminTasksPage() {
                   </select>
                 </div>
 
-                {/* Deadline */}
+                {/* Thời gian thực hiện: Thời gian bắt đầu (Chụp ảnh, Quay phim, Diễn viên, Khác) HOẶC Hạn chót (Deadline) */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-studio-muted uppercase block">Thời hạn hoàn thành (Deadline)</label>
-                  <input
-                    type="datetime-local"
-                    value={createDeadline}
-                    onChange={(e) => setCreateDeadline(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
-                  />
+                  <label className="text-[11px] font-bold text-studio-muted uppercase flex items-center justify-between">
+                    <span className="flex items-center space-x-1">
+                      <Calendar className="w-3.5 h-3.5 text-brand-primary" />
+                      <span>{requiresLocation(createTaskType) ? 'Thời gian bắt đầu *' : 'Thời hạn hoàn thành (Deadline) *'}</span>
+                    </span>
+                    <span className="text-[10px] text-brand-primary/80 normal-case font-normal">
+                      (Chọn ngày & giờ)
+                    </span>
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    {/* Date Picker (Lịch trực quan ngày/tháng/năm) */}
+                    <div className="sm:col-span-6 relative">
+                      <input
+                        ref={createDatePickerRef}
+                        type="date"
+                        value={createDeadlineDate}
+                        onChange={(e) => setCreateDeadlineDate(e.target.value)}
+                        onClick={(e) => {
+                          try {
+                            (e.currentTarget as any).showPicker?.();
+                          } catch {}
+                        }}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer [color-scheme:dark]"
+                        title="Nhấn để mở lịch chọn ngày/tháng/năm"
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => {
+                          try {
+                            createDatePickerRef.current?.showPicker?.();
+                          } catch {}
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-studio-muted hover:text-white transition-colors cursor-pointer"
+                        title="Mở lịch chọn ngày"
+                      >
+                        <Calendar className="w-4 h-4 text-brand-primary" />
+                      </button>
+                    </div>
+
+                    {/* Hai trường riêng biệt: Giờ và Phút */}
+                    <div className="sm:col-span-6 grid grid-cols-2 gap-2">
+                      {/* Chọn Giờ */}
+                      <div className="relative">
+                        <select
+                          value={createDeadlineHour}
+                          onChange={(e) => setCreateDeadlineHour(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
+                        >
+                          <option value="" disabled className="bg-[#18181b]">Chọn giờ</option>
+                          {HOURS_OPTIONS.map((h) => (
+                            <option key={h} value={h} className="bg-[#18181b]">
+                              {h} giờ
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Chọn Phút */}
+                      <div className="relative">
+                        <select
+                          value={createDeadlineMinute}
+                          onChange={(e) => setCreateDeadlineMinute(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
+                        >
+                          <option value="" disabled className="bg-[#18181b]">Chọn phút</option>
+                          {MINUTES_OPTIONS.map((m) => (
+                            <option key={m} value={m} className="bg-[#18181b]">
+                              {m} phút
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Hiển thị hạn hoàn thành đã chọn trực quan */}
+                  {createDeadlineDate && createDeadlineHour && createDeadlineMinute ? (
+                    <div className="flex items-center space-x-1.5 text-[11px] text-brand-primary font-medium pt-1 px-1">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {requiresLocation(createTaskType) ? 'Bắt đầu:' : 'Hạn chót:'} {format(new Date(`${createDeadlineDate}T${createDeadlineHour}:${createDeadlineMinute}:00`), 'dd/MM/yyyy HH:mm')}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-studio-muted pt-0.5 px-1">
+                      * Nhấn vào ô ngày để chọn trên lịch, sau đó chọn Giờ và Phút {requiresLocation(createTaskType) ? 'bắt đầu thực hiện.' : 'hoàn thành nhiệm vụ.'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -900,7 +1219,7 @@ export default function AdminTasksPage() {
                 </button>
               </div>
 
-              <form onSubmit={handleUpdateTask} className="space-y-4">
+              <form onSubmit={handleUpdateTask} noValidate className="space-y-4">
                 {/* Task Type (Loại công việc) */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-studio-muted uppercase block flex items-center space-x-1">
@@ -909,7 +1228,14 @@ export default function AdminTasksPage() {
                   </label>
                   <select
                     value={editTaskType}
-                    onChange={(e) => setEditTaskType(e.target.value)}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setEditTaskType(newType);
+                      if (!requiresLocation(newType)) {
+                        setEditCampus('');
+                        setEditRoom('');
+                      }
+                    }}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer"
                   >
                     {TASK_TYPES.map((t) => (
@@ -928,7 +1254,6 @@ export default function AdminTasksPage() {
                     </label>
                     <input
                       type="text"
-                      required
                       placeholder="VD: Biên kịch trailer, Lồng tiếng nhân vật..."
                       value={editOtherTaskType}
                       onChange={(e) => setEditOtherTaskType(e.target.value)}
@@ -937,12 +1262,66 @@ export default function AdminTasksPage() {
                   </div>
                 )}
 
+                {/* Trường Địa điểm thực hiện (Chỉ hiển thị khi thuộc các nhóm: Chụp ảnh, Quay phim/video, Diễn viên, Khác) */}
+                {requiresLocation(editTaskType) && (
+                  <div className="space-y-2 p-3.5 rounded-2xl bg-amber-500/5 border border-amber-500/20 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-amber-400 uppercase flex items-center space-x-1.5">
+                        <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Địa điểm thực hiện</span>
+                      </label>
+                      <span className="text-[10px] text-amber-300/70 font-normal">
+                        (Cơ sở &amp; Phòng)
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                      {/* Chọn Cơ sở */}
+                      <div className="sm:col-span-5">
+                        <label className="text-[10px] text-studio-muted block mb-1">Cơ sở</label>
+                        <select
+                          value={editCampus}
+                          onChange={(e) => setEditCampus(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-amber-400/50 cursor-pointer"
+                        >
+                          <option value="" className="bg-[#18181b]">-- Chọn cơ sở --</option>
+                          {CAMPUSES.map((c) => (
+                            <option key={c} value={c} className="bg-[#18181b]">
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Nhập Phòng / Địa điểm cụ thể */}
+                      <div className="sm:col-span-7">
+                        <label className="text-[10px] text-studio-muted block mb-1">Phòng / Địa điểm cụ thể</label>
+                        <input
+                          type="text"
+                          placeholder="VD: Phòng B502, Hội trường T, Studio..."
+                          value={editRoom}
+                          onChange={(e) => setEditRoom(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-amber-400/50"
+                        />
+                      </div>
+                    </div>
+
+                    {(editCampus || editRoom) && (
+                      <p className="text-[11px] text-amber-300/90 font-medium pt-0.5 flex items-center space-x-1">
+                        <span className="text-studio-muted">Địa điểm ghi nhận:</span>
+                        <span className="font-semibold text-white">
+                          {[editCampus, editRoom].filter(Boolean).join(' - ')}
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {/* Title */}
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-studio-muted uppercase block">Tiêu đề nhiệm vụ *</label>
                   <input
                     type="text"
-                    required
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-blue-500/50"
@@ -964,7 +1343,6 @@ export default function AdminTasksPage() {
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-bold text-studio-muted uppercase block">Cộng tác viên phụ trách *</label>
                   <select
-                    required
                     value={editAssigneeId}
                     onChange={(e) => setEditAssigneeId(e.target.value)}
                     className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer"
@@ -985,15 +1363,98 @@ export default function AdminTasksPage() {
                   </select>
                 </div>
 
-                {/* Deadline */}
+                {/* Thời gian thực hiện: Thời gian bắt đầu (Chụp ảnh, Quay phim, Diễn viên, Khác) HOẶC Hạn chót (Deadline) */}
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-bold text-studio-muted uppercase block">Thời hạn hoàn thành (Deadline)</label>
-                  <input
-                    type="datetime-local"
-                    value={editDeadline}
-                    onChange={(e) => setEditDeadline(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer"
-                  />
+                  <label className="text-[11px] font-bold text-studio-muted uppercase flex items-center justify-between">
+                    <span className="flex items-center space-x-1">
+                      <Calendar className="w-3.5 h-3.5 text-blue-400" />
+                      <span>{requiresLocation(editTaskType) ? 'Thời gian bắt đầu *' : 'Thời hạn hoàn thành (Deadline) *'}</span>
+                    </span>
+                    <span className="text-[10px] text-blue-400/80 normal-case font-normal">
+                      (Chọn ngày & giờ)
+                    </span>
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    {/* Date Picker (Lịch trực quan ngày/tháng/năm) */}
+                    <div className="sm:col-span-6 relative">
+                      <input
+                        ref={editDatePickerRef}
+                        type="date"
+                        value={editDeadlineDate}
+                        onChange={(e) => setEditDeadlineDate(e.target.value)}
+                        onClick={(e) => {
+                          try {
+                            (e.currentTarget as any).showPicker?.();
+                          } catch {}
+                        }}
+                        className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer [color-scheme:dark]"
+                        title="Nhấn để mở lịch chọn ngày/tháng/năm"
+                      />
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        onClick={() => {
+                          try {
+                            editDatePickerRef.current?.showPicker?.();
+                          } catch {}
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-studio-muted hover:text-white transition-colors cursor-pointer"
+                        title="Mở lịch chọn ngày"
+                      >
+                        <Calendar className="w-4 h-4 text-blue-400" />
+                      </button>
+                    </div>
+
+                    {/* Hai trường riêng biệt: Giờ và Phút */}
+                    <div className="sm:col-span-6 grid grid-cols-2 gap-2">
+                      {/* Chọn Giờ */}
+                      <div className="relative">
+                        <select
+                          value={editDeadlineHour}
+                          onChange={(e) => setEditDeadlineHour(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer"
+                        >
+                          <option value="" disabled className="bg-[#18181b]">Chọn giờ</option>
+                          {HOURS_OPTIONS.map((h) => (
+                            <option key={h} value={h} className="bg-[#18181b]">
+                              {h} giờ
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Chọn Phút */}
+                      <div className="relative">
+                        <select
+                          value={editDeadlineMinute}
+                          onChange={(e) => setEditDeadlineMinute(e.target.value)}
+                          className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 px-3 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer"
+                        >
+                          <option value="" disabled className="bg-[#18181b]">Chọn phút</option>
+                          {MINUTES_OPTIONS.map((m) => (
+                            <option key={m} value={m} className="bg-[#18181b]">
+                              {m} phút
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Hiển thị hạn hoàn thành đã chọn trực quan */}
+                  {editDeadlineDate && editDeadlineHour && editDeadlineMinute ? (
+                    <div className="flex items-center space-x-1.5 text-[11px] text-blue-400 font-medium pt-1 px-1">
+                      <Clock className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        {requiresLocation(editTaskType) ? 'Bắt đầu:' : 'Hạn chót:'} {format(new Date(`${editDeadlineDate}T${editDeadlineHour}:${editDeadlineMinute}:00`), 'dd/MM/yyyy HH:mm')}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-studio-muted pt-0.5 px-1">
+                      * Nhấn vào ô ngày để chọn trên lịch, sau đó chọn Giờ và Phút {requiresLocation(editTaskType) ? 'bắt đầu thực hiện.' : 'hoàn thành nhiệm vụ.'}
+                    </p>
+                  )}
                 </div>
 
                 {/* Actions */}
@@ -1293,6 +1754,16 @@ export default function AdminTasksPage() {
                   </p>
                 </div>
 
+                {selectedTaskDetail.location && (
+                  <div>
+                    <span className="text-[11px] font-bold text-studio-muted uppercase block">Địa điểm thực hiện</span>
+                    <div className="flex items-center space-x-1.5 text-xs text-amber-300 bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/20 mt-1 font-medium">
+                      <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{selectedTaskDetail.location}</span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-3 bg-white/5 rounded-xl border border-white/5">
                     <span className="text-[10px] font-bold text-studio-muted uppercase block">CTV phụ trách</span>
@@ -1312,9 +1783,13 @@ export default function AdminTasksPage() {
                     <div className="mt-1">{getStatusBadge(selectedTaskDetail.status)}</div>
                   </div>
                   <div>
-                    <span className="text-[11px] font-bold text-studio-muted uppercase block">Hạn hoàn thành</span>
+                    <span className="text-[11px] font-bold text-studio-muted uppercase block">
+                      {selectedTaskDetail.startTime ? 'Thời gian bắt đầu' : 'Hạn hoàn thành'}
+                    </span>
                     <p className="text-xs font-medium text-white mt-1">
-                      {selectedTaskDetail.deadline
+                      {selectedTaskDetail.startTime
+                        ? format(new Date(selectedTaskDetail.startTime), 'dd/MM/yyyy HH:mm')
+                        : selectedTaskDetail.deadline
                         ? format(new Date(selectedTaskDetail.deadline), 'dd/MM/yyyy HH:mm')
                         : 'Không đặt hạn'}
                     </p>

@@ -37,7 +37,7 @@ module.exports = (sequelize) => {
         allowNull: false,
         defaultValue: 'OPEN',
         validate: {
-          isIn: [['OPEN', 'CLOSED', 'ARRANGING', 'CONFIRMED']],
+          isIn: [['OPEN', 'CLOSED', 'ARRANGING', 'CONFIRMED', 'CANCELLED', 'ARCHIVED']],
         },
       },
       registrationDeadline: {

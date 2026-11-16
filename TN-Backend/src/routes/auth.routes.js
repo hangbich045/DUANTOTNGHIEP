@@ -148,7 +148,9 @@ router.post('/login', validateLogin, async (req, res) => {
       return res.status(403).json({
         success: false,
         message: 'Tài khoản chưa được xác thực. Mã OTP mới đã được gửi tới email của bạn.',
-        requireVerification: true, email,
+        requireVerification: true,
+        requiresActivation: true,
+        email,
       });
     }
     if (!user.isActive) {

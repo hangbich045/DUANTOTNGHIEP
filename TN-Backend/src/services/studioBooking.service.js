@@ -7,6 +7,7 @@
 
 const { Op } = require('sequelize');
 const { StudioBooking, User } = require('../models');
+const notificationService = require('./notification.service');
 
 // Khoảng đệm tối thiểu giữa 2 ca đặt phòng Studio: 30 phút
 const BUFFER_MS = 30 * 60 * 1000;
@@ -227,6 +228,23 @@ const create = async (data, userId) => {
     status: 'PENDING',
   });
 
+  // Gửi thông báo in-app cho Admin biết có yêu cầu đặt phòng Studio mới (FR-07)
+  notificationService
+    .notifyAdmins({
+      title: '📅 Yêu cầu đặt phòng Studio mới',
+      message: `Có yêu cầu đặt phòng "${studioName}" cho mục đích "${data.purpose}" (${attendees} người). Khung giờ: ${new Date(data.startTime).toLocaleString('vi-VN')} - ${new Date(data.endTime).toLocaleTimeString('vi-VN')}.`,
+      type: 'STUDIO_BOOKING_REQUEST',
+      link: '/admin/bookings',
+      sendEmail: false,
+      detailRows: [
+        { label: 'Phòng Studio', value: studioName },
+        { label: 'Mục đích', value: data.purpose },
+        { label: 'Số người', value: `${attendees} người` },
+        { label: 'Thời gian', value: `${new Date(data.startTime).toLocaleString('vi-VN')} – ${new Date(data.endTime).toLocaleTimeString('vi-VN')}` },
+      ],
+    })
+    .catch(() => {});
+
   return StudioBooking.findByPk(booking.id, {
     include: [{ model: User, as: 'booker', attributes: ['id', 'fullName', 'email'] }],
   });
@@ -276,8 +294,43 @@ const processBooking = async (bookingId, action, cancelReason = null, options = 
       : booking.notes;
 
     await booking.update({ status: 'CONFIRMED', notes: updatedNotes });
+
+    // Gửi thông báo in-app và email xác nhận duyệt đặt phòng cho người dùng (FR-07)
+    notificationService
+      .createNotification({
+        userId: booking.userId,
+        title: '✅ Lịch đặt phòng Studio đã được xác nhận',
+        message: `Lịch đặt phòng "${booking.studioName}" cho mục đích "${booking.purpose}" của bạn đã được Quản trị viên duyệt xác nhận thành công.`,
+        type: 'STUDIO_BOOKING_APPROVED',
+        link: '/profile',
+        sendEmail: true,
+        detailRows: [
+          { label: 'Phòng Studio', value: booking.studioName },
+          { label: 'Mục đích', value: booking.purpose },
+          { label: 'Thời gian', value: `${new Date(booking.startTime).toLocaleString('vi-VN')} – ${new Date(booking.endTime).toLocaleTimeString('vi-VN')}` },
+          { label: 'Trạng thái', value: 'ĐÃ XÁC NHẬN (CONFIRMED)' },
+        ],
+      })
+      .catch(() => {});
   } else if (action === 'cancel') {
     await booking.update({ status: 'CANCELLED', cancelReason });
+
+    // Gửi thông báo in-app và email từ chối đặt phòng cho người dùng (FR-07)
+    notificationService
+      .createNotification({
+        userId: booking.userId,
+        title: '❌ Lịch đặt phòng Studio không được duyệt',
+        message: `Lịch đặt phòng "${booking.studioName}" của bạn đã bị từ chối/hủy bỏ.${cancelReason ? ` Lý do: ${cancelReason}` : ''}`,
+        type: 'STUDIO_BOOKING_REJECTED',
+        link: '/profile',
+        sendEmail: true,
+        detailRows: [
+          { label: 'Phòng Studio', value: booking.studioName },
+          { label: 'Lý do từ chối', value: cancelReason || 'Không có lý do chi tiết' },
+          { label: 'Trạng thái', value: 'ĐÃ HỦY (CANCELLED)' },
+        ],
+      })
+      .catch(() => {});
   } else {
     const error = new Error('Action không hợp lệ. Chỉ chấp nhận "confirm" hoặc "cancel".');
     error.statusCode = 400;

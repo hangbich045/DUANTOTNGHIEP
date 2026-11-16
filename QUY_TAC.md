@@ -192,3 +192,21 @@ Chi phí sửa chữa/bồi hoàn chỉ áp dụng trong trường hợp cụ th
 3. **Xử lý an toàn các quan hệ dữ liệu liên kết (Task - User - Assignee - Creator)**:
    - Nếu Task thiếu thông tin người giao việc (`creator = null`) hoặc người được giao (`assignee = null`), giao diện hiển thị giá trị mặc định rõ ràng (`'Admin'` hoặc `'Chưa phân công'`), không được làm crash trang và tuyệt đối không tự ý gán người dùng khác vào bản ghi.
    - Dữ liệu liên kết với tài khoản đã bị khóa (`Locked`) hoặc vô hiệu hóa (`Disabled`) vẫn được hiển thị nguyên vẹn thông tin lịch sử.
+
+## 15. Quy tắc đồng bộ giữa Công việc của CTV và Bảng chấm công tháng
+1. **Tự động cập nhật ký hiệu từ `LV` sang `SV`**:
+   - Khi CTV có công việc trong ngày và công việc đó đã được Nhân sự nghiệm thu thành công (`status = 'COMPLETED'`, bao gồm công việc được giao trên hệ thống hoặc công việc ngoài hệ thống đã được xác minh), hệ thống **tự động cập nhật ký hiệu chấm công từ `LV` sang `SV`** tại ngày tương ứng.
+   - Chỉ tính những công việc đã được nghiệm thu thành công (`COMPLETED`), loại trừ công việc đang làm (`IN_PROGRESS`), chờ duyệt (`PENDING_APPROVAL`) hoặc cần chỉnh sửa (`REVISION_REQUESTED`).
+2. **Quy tắc phân bổ buổi theo tổng thời gian làm việc thực tế trong ngày (`actualHours`)**:
+   - **Dưới 5 tiếng (`0 < totalDayHours < 5`)**: Phân bổ ký hiệu `SV` vào **buổi sáng (S)** (quy tắc đã bao gồm cả các công việc từ 4 đến dưới 5 tiếng).
+   - **Từ 5 đến 8 tiếng (`5 <= totalDayHours <= 8`)**: Phân bổ ký hiệu `SV` vào cả **buổi sáng và chiều (S + C)**.
+   - **Trên 8 tiếng (`totalDayHours > 8`)**: Phân bổ ký hiệu `SV` vào cả **sáng, chiều và tối (S + C + T)**.
+   - **Nếu tổng thời gian bằng 0 hoặc không phát sinh giờ công**: Không gán `SV`.
+3. **Bảo toàn dữ liệu và chống tính trùng thời gian**:
+   - Chỉ cập nhật đúng CTV và ngày phát sinh công việc; tuyệt đối không ghi đè hoặc làm ảnh hưởng đến dữ liệu chấm công của ngày khác hoặc CTV khác.
+   - **Khử trùng thời gian giữa ca trực và công việc sự vụ**: Nếu ca trực Studio đã bị chuyển thành `SV` (do có công việc trong ngày và buổi đó được phân bổ `SV`), ca trực đó được tính theo giờ công sự vụ thực tế (`actualHours`), không tính trùng 4 giờ của ca trực Studio trong thù lao (`shiftHours`).
+4. **Cơ chế đồng bộ đa tầng và cập nhật thời gian thực (Real-time Sync)**:
+   - **Database (`AttendanceRecords`)**: Khi Admin nghiệm thu công việc (`reviewTask` COMPLETED), cập nhật giờ công, hoặc khi CTV khai báo công việc ngoài (`createExternalTask`), hệ thống tự động upsert bản ghi trong bảng `AttendanceRecords` (`symbol = 'SV'`, `sourceType = 'TASK'`). Đồng thời hỗ trợ quét đồng bộ toàn diện (`syncAllCompletedTasksToAttendance`) cho toàn bộ dữ liệu lịch sử.
+   - **Đồng bộ thời gian thực cho việc ngoài hệ thống**: Ngay khi CTV gửi khai báo công việc ngoài hệ thống, hệ thống tự động chuẩn hóa ngày làm việc (chống lỗi date picker đảo ngày/tháng) và kích hoạt đồng bộ tức thì, chuyển ngay các ô ca trực ngày đó từ `LV` sang `SV` trên cả CSDL và Bảng chấm công.
+   - **Bảng chấm công ma trận (`getTimesheetData`)**: Render chính xác các ô `SV` theo quy tắc phân bổ, tự động cập nhật `sumLV`, `gioLV`, `gioSV`, `tongGio` và xuất Excel đồng bộ 100%.
+   - **Frontend**: Hiển thị bảng chấm công trực quan, phản ánh ký hiệu `SV` ngay khi thao tác mà không cần tải lại trang.

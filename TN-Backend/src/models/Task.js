@@ -68,7 +68,15 @@ const Task = sequelize.define(
       comment: 'ID của người tạo nhiệm vụ (Admin/Nhân sự hoặc CTV)',
     },
 
-    // Hạn chót hoàn thành nhiệm vụ
+    // Thời gian bắt đầu thực hiện nhiệm vụ (áp dụng cho nhóm: Chụp ảnh, Quay phim/video, Diễn viên, Khác)
+    startTime: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'start_time',
+      comment: 'Thời gian bắt đầu thực hiện nhiệm vụ',
+    },
+
+    // Hạn chót hoàn thành nhiệm vụ (Deadline)
     deadline: {
       type: DataTypes.DATE,
       allowNull: true,
@@ -190,6 +198,30 @@ const Task = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
       comment: 'Ghi chú thời gian làm việc, sự kiện, địa điểm',
+    },
+
+    // Cơ sở thực hiện: Cơ sở 1, Cơ sở 2, Cơ sở 3, Cơ sở 5, Cơ sở 6, Cơ sở Dược
+    campus: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      field: 'campus',
+      comment: 'Cơ sở thực hiện nhiệm vụ',
+    },
+
+    // Phòng hoặc địa điểm cụ thể
+    room: {
+      type: DataTypes.STRING(150),
+      allowNull: true,
+      field: 'room',
+      comment: 'Phòng hoặc địa điểm chi tiết',
+    },
+
+    // Địa điểm thực hiện đầy đủ (Cơ sở - Phòng)
+    location: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'location',
+      comment: 'Địa điểm thực hiện nhiệm vụ (Cơ sở - Phòng)',
     },
 
     // Làm ngoài giờ sau 16:30 T2-T7 (hệ số 1.5)

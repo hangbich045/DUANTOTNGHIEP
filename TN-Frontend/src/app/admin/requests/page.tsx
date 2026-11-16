@@ -67,6 +67,7 @@ export default function AdminRequestsPage() {
   const [bookings, setBookings] = useState<StudioBooking[]>([]);
   const [loading, setLoading] = useState(true);
   const [actioningId, setActioningId] = useState<string | null>(null);
+  const [scanningOverdue, setScanningOverdue] = useState(false);
 
   // Detail Modal states
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -272,6 +273,19 @@ export default function AdminRequestsPage() {
     }
   };
 
+  const handleCheckOverdue = async () => {
+    setScanningOverdue(true);
+    try {
+      const res = await api.post('/notifications/check-overdue', {});
+      toast(res.message || 'Đã quét và gửi cảnh báo nợ quá hạn thành công', 'success');
+      fetchRequests();
+    } catch (err: any) {
+      toast(err.message || 'Lỗi khi kiểm tra nợ quá hạn', 'error');
+    } finally {
+      setScanningOverdue(false);
+    }
+  };
+
   const getStatusBadge = (s: string) => {
     switch (s) {
       case 'PENDING':
@@ -300,13 +314,26 @@ export default function AdminRequestsPage() {
             <h1 className="text-3xl font-extrabold text-white tracking-tight">Phê Duyệt Yêu Cầu</h1>
             <p className="text-sm text-studio-muted mt-1">Xem thông tin chi tiết và phê duyệt lịch đặt phòng Studio hoặc mượn thiết bị.</p>
           </div>
-          <button
-            onClick={fetchRequests}
-            className="p-3 rounded-2xl border border-white/5 hover:bg-white/5 text-studio-muted hover:text-white transition-all cursor-pointer"
-            title="Làm mới"
-          >
-            <RefreshCcw className="w-5 h-5" />
-          </button>
+          <div className="flex items-center space-x-2">
+            {activeTab === 'equipment' && (
+              <button
+                onClick={handleCheckOverdue}
+                disabled={scanningOverdue}
+                className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-2xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+                title="Quét các đơn mượn quá hạn và tự động gửi thông báo cảnh báo"
+              >
+                {scanningOverdue ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldAlert className="w-4 h-4" />}
+                <span>Quét nợ quá hạn</span>
+              </button>
+            )}
+            <button
+              onClick={fetchRequests}
+              className="p-3 rounded-2xl border border-white/5 hover:bg-white/5 text-studio-muted hover:text-white transition-all cursor-pointer"
+              title="Làm mới"
+            >
+              <RefreshCcw className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Tab Controls */}

@@ -198,6 +198,18 @@ const startServer = async () => {
       console.log(`📧 SMTP Mailer:           ${process.env.SMTP_USER ? '✅ ' + process.env.SMTP_USER : '⚠️  Chưa cấu hình'}`);
       console.log(`📄 Swagger Docs:         http://localhost:${PORT}/api-docs`);
       console.log('======================================\n');
+
+      // Bước 6: Khởi chạy worker tự động hoàn thành ca trực quá hạn theo thời gian thực (mỗi 60s)
+      const dutyService = require('./services/duty.service');
+      dutyService.autoCompletePastConfirmedShifts().catch((err) => {
+        console.error('Lỗi khi chạy autoCompletePastConfirmedShifts lúc khởi động:', err.message);
+      });
+
+      setInterval(() => {
+        dutyService.autoCompletePastConfirmedShifts().catch((err) => {
+          console.error('Lỗi worker tự động hoàn thành ca trực:', err.message);
+        });
+      }, 60 * 1000);
     });
   } catch (error) {
     console.error('❌ Không thể khởi động server:', error.message);

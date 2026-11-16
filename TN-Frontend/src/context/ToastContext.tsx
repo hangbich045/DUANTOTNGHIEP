@@ -37,53 +37,84 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const getIcon = (type: ToastType) => {
     switch (type) {
       case 'success':
-        return <CheckCircle className="w-5 h-5 text-brand-success" />;
+        return <CheckCircle className="w-5 h-5" />;
       case 'error':
-        return <AlertOctagon className="w-5 h-5 text-brand-error" />;
+        return <AlertOctagon className="w-5 h-5" />;
       case 'warning':
-        return <AlertTriangle className="w-5 h-5 text-brand-accent" />;
+        return <AlertTriangle className="w-5 h-5" />;
       case 'info':
       default:
-        return <Info className="w-5 h-5 text-brand-secondary" />;
+        return <Info className="w-5 h-5" />;
     }
   };
 
-  const getBgColor = (type: ToastType) => {
+  const getToastStyles = (type: ToastType) => {
     switch (type) {
       case 'success':
-        return 'border-brand-success/20 bg-brand-success/5 text-white';
+        return {
+          container: 'bg-[#0E1B19] border-[#059669] border-l-4 border-l-[#10B981] text-white',
+          iconBox: 'bg-[#064E3B] border border-[#10B981] text-[#34D399]',
+          badgeText: 'Thành công',
+          badgeColor: 'bg-[#064E3B] text-[#34D399] border-[#10B981]',
+        };
       case 'error':
-        return 'border-brand-error/20 bg-brand-error/5 text-white';
+        return {
+          container: 'bg-[#1F1216] border-[#DC2626] border-l-4 border-l-[#EF4444] text-white',
+          iconBox: 'bg-[#7F1D1D] border border-[#EF4444] text-[#F87171]',
+          badgeText: 'Lỗi',
+          badgeColor: 'bg-[#7F1D1D] text-[#F87171] border-[#EF4444]',
+        };
       case 'warning':
-        return 'border-brand-accent/20 bg-brand-accent/5 text-white';
+        return {
+          container: 'bg-[#20180B] border-[#D97706] border-l-4 border-l-[#F59E0B] text-white',
+          iconBox: 'bg-[#78350F] border border-[#F59E0B] text-[#FBBF24]',
+          badgeText: 'Cảnh báo',
+          badgeColor: 'bg-[#78350F] text-[#FBBF24] border-[#F59E0B]',
+        };
       case 'info':
       default:
-        return 'border-brand-secondary/20 bg-brand-secondary/5 text-white';
+        return {
+          container: 'bg-[#101828] border-[#2563EB] border-l-4 border-l-[#3B82F6] text-white',
+          iconBox: 'bg-[#1E3A8A] border border-[#3B82F6] text-[#60A5FA]',
+          badgeText: 'Thông tin',
+          badgeColor: 'bg-[#1E3A8A] text-[#60A5FA] border-[#3B82F6]',
+        };
     }
   };
 
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      {/* Toast container portal */}
-      <div className="fixed bottom-5 right-5 z-50 flex flex-col space-y-3 max-w-sm w-full pointer-events-none">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`pointer-events-auto flex items-start space-x-3 p-4 rounded-xl border glass-panel shadow-2xl animate-in slide-in-from-bottom duration-300 ${getBgColor(
-              t.type
-            )}`}
-          >
-            <div className="flex-shrink-0 mt-0.5">{getIcon(t.type)}</div>
-            <div className="flex-1 text-sm font-medium pr-2 leading-relaxed">{t.message}</div>
-            <button
-              onClick={() => removeToast(t.id)}
-              className="flex-shrink-0 text-studio-muted hover:text-white transition-colors cursor-pointer"
+      {/* Toast container portal - Solid background, high contrast, responsive */}
+      <div className="fixed bottom-4 sm:bottom-6 right-0 sm:right-6 left-0 sm:left-auto mx-auto sm:mx-0 z-50 flex flex-col space-y-3 px-4 sm:px-0 max-w-md w-full pointer-events-none">
+        {toasts.map((t) => {
+          const style = getToastStyles(t.type);
+          return (
+            <div
+              key={t.id}
+              className={`pointer-events-auto flex items-start space-x-3.5 p-4 rounded-2xl border shadow-[0_12px_36px_rgba(0,0,0,0.85)] animate-in slide-in-from-bottom duration-250 ${style.container}`}
             >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
+              <div className={`p-2 rounded-xl shrink-0 mt-0.5 ${style.iconBox}`}>
+                {getIcon(t.type)}
+              </div>
+              <div className="flex-1 min-w-0 pr-1">
+                <div className="flex items-center space-x-2 mb-1">
+                  <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border ${style.badgeColor}`}>
+                    {style.badgeText}
+                  </span>
+                </div>
+                <p className="text-sm font-semibold text-white leading-relaxed">{t.message}</p>
+              </div>
+              <button
+                onClick={() => removeToast(t.id)}
+                className="p-1.5 rounded-lg bg-black/40 hover:bg-white/20 text-gray-400 hover:text-white transition-colors cursor-pointer shrink-0 mt-0.5"
+                title="Đóng thông báo"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

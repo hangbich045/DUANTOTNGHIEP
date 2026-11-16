@@ -272,8 +272,29 @@ Mỗi khi người dùng giao một nhiệm vụ:
       + Kịch bản E2E `TN-Backend/scripts/test_user_delete_fix.js` đạt **8/8 trường hợp kiểm thử PASS 100%** trên SQL Server database thực tế.
       + Kiểm thử hồi quy 21 tiêu chí chấm công & ca trực đạt **21/21 tiêu chí PASS 100%**. Next.js production build 25/25 routes thành công.
 
+- [x] **Nhiệm vụ Bổ sung (16/11/2026): Hoàn thiện Bộ lọc Tuần Date Picker, Ma trận tháng, Chặn chấm công trước nghiệm thu & Tự động xác định hệ số thù lao (QUY_TAC.md Mục 7):**
+  - *Bộ lọc tuần Date Picker:* Tích hợp HTML5 Date Picker mở trực tiếp khi nhấp vào khối hiển thị tuần (`16/11 – 22/11/2026`) trên `WeeklyDutyScheduleTable.tsx`, tự động xác định ngày Thứ Hai đầu tuần qua `getMondayStr()` và chuyển tuần tương ứng.
+  - *Ma trận phân công tháng:* Tách bạch tiêu đề `MONTHLY_MATRIX` khỏi bảng tuần; bổ sung dropdown chọn đợt tháng trực tiếp trên toolbar; ràng buộc dữ liệu ca trực, đăng ký và task nghiêm ngặt trong phạm vi tháng `[startDate, endDate]`.
+  - *Chặn chấm công việc ngoài trước nghiệm thu:* Loại bỏ việc gọi `syncTaskAttendanceToDatabase` khi CTV khai báo việc ngoài (`PENDING_APPROVAL`). Chỉ khi Admin nghiệm thu `COMPLETED` mới tạo `AttendanceRecord` (ký hiệu `SV`) và tính vào Bảng chấm công; nếu `REVISION_REQUESTED`, tự động dọn sạch bản ghi chấm công.
+  - *Tự động xác định hệ số thù lao:*
+    * Xóa hoàn toàn khối checkbox chọn hệ số khỏi biểu mẫu khai báo việc ngoài của CTV (`tasks/page.tsx`). CTV không được tự chọn hoặc can thiệp hệ số.
+    * Backend xây dựng thuật toán `evaluateTaskRateMultiplier`: Kỹ thuật sự kiện sau 16:30 T2-T7 tính 1.5x; Kỹ thuật sự kiện Chủ nhật tính 2.0x (không cộng dồn dù sau 16:30); Các trường hợp còn lại tính 1.0x.
+    * Tự động gán hệ số khi Admin nghiệm thu `COMPLETED` và tự động tính lại khi Admin chỉnh sửa ngày/giờ/loại việc (`updateTask`).
+    * Đồng bộ thống nhất giờ quy đổi (`tongGio`) và thù lao (`tien`) giữa Bảng chấm công (`getTimesheetData`), Bảng lương (`calculateMonthlyPayroll`) và Excel (`exportTimesheetExcel`).
+  - *Kiểm thử tự động:*
+    * Suite 89 Backend Unit Tests: **89/89 PASS 100%**.
+    * Integration tests `test_prompt10_verification.js` và `test_auto_multiplier.js`: **PASS 100%**.
+    * Next.js Production Build: **26/26 routes thành công 100%**.
+
 ### GIAI ĐOẠN 4 (19/11 – 22/11/2026): THÔNG BÁO, AUDIT LOG, BẢO TRÌ & THỐNG KÊ MỞ RỘNG (FR-07, FR-09, FR-01.5, FR-08)
-- [ ] **Task 4.1 (FR-07):** Tạo bảng `Notifications`, service gửi thông báo in-app và email giao dịch (thông báo duyệt mượn, duyệt phòng, giao việc, nhắc nợ quá hạn). Bổ sung Icon chuông thông báo trên Navbar.
+- [x] **Task 4.1 (FR-07):** Tạo bảng `Notifications`, service gửi thông báo in-app và email giao dịch (thông báo duyệt mượn, duyệt phòng, giao việc, nhắc nợ quá hạn). Bổ sung Icon chuông thông báo trên Navbar.
+  - *Kết quả thực hiện:*
+    * Xây dựng `TN-Backend/src/services/notification.service.js`: Tạo thông báo in-app và email giao dịch tập trung (`createNotification`, `notifyAdmins`, `notifyCollaborators`, `checkAndNotifyOverdueBorrowRequests`).
+    * Nâng cấp `TN-Backend/src/config/mailer.js`: Bổ sung `sendNotificationEmail` hỗ trợ HTML template giao dịch chuẩn thương hiệu LHU Media Studio kèm cơ chế fallback an toàn (non-blocking).
+    * Tích hợp trigger thông báo tại 100% sự kiện nghiệp vụ: Giao việc (`TASK_ASSIGNED`), Yêu cầu sửa (`TASK_REVISION_REQUESTED`), Nghiệm thu việc (`TASK_COMPLETED`), CTV nộp bài (`TASK_SUBMITTED`), Yêu cầu mượn (`BORROW_REQUEST_CREATED`), Duyệt mượn (`BORROW_REQUEST_APPROVED`), Từ chối mượn (`BORROW_REQUEST_REJECTED`), Bàn giao máy (`EQUIPMENT_HANDED_OVER`), Trả máy (`EQUIPMENT_RETURNED`), Quá hạn (`BORROW_OVERDUE`), Yêu cầu đặt phòng (`STUDIO_BOOKING_REQUEST`), Duyệt phòng (`STUDIO_BOOKING_APPROVED`), Từ chối phòng (`STUDIO_BOOKING_REJECTED`), Mở đợt trực (`DUTY_PERIOD_OPEN`), Chốt lịch trực (`DUTY_SCHEDULE_CONFIRMED`).
+    * Tuân thủ nghiêm ngặt QUY_TAC.md 10.4: Tuyệt đối không tạo thông báo phê duyệt bảng lương.
+    * Giao diện Frontend: Nút "Quét nợ quá hạn" trên `/admin/requests`; Icon chuông `NotificationBell.tsx` trên Navbar hỗ trợ đếm badge chưa đọc, popup danh sách, đánh dấu đã đọc và điều hướng link chi tiết.
+    * Kiểm thử tự động: Bổ sung Suite 13 -> **83/83 Backend Unit Tests PASS 100%**; Kịch bản kiểm thử Task 4.1 `test_task4_1_notifications.js` đạt **23/23 tiêu chí PASS 100%**.
 - [ ] **Task 4.2 (FR-09):** Tạo bảng `AuditLogs`, middleware tự động ghi vết các thao tác quan trọng (thêm/sửa/xóa, duyệt/từ chối, cấp quyền) lưu `userId`, `action`, `resource`, `details` JSON, `ip`, `timestamp`. Trang tra cứu `/admin/audit-logs`.
 - [ ] **Task 4.3 (FR-01.5):** Tạo bảng `EquipmentMaintenances`, API và giao diện quản lý lịch sử bảo trì, sửa chữa theo hóa đơn chứng từ, báo mất và thanh lý thiết bị.
 - [ ] **Task 4.4 (FR-08):** Mở rộng Dashboard Admin: Bổ sung thẻ thống kê công việc (tiến độ, trễ hạn) và thống kê thù lao CTV theo tháng.
@@ -343,6 +364,231 @@ Mỗi module khi hoàn thành bắt buộc phải pass 100% các testcase sau:
 - [x] **TC-08 (Bảo toàn lịch sử tài khoản khi xóa):** Tài khoản đã có dữ liệu không được xóa vật lý, chuyển sang `Disabled` bảo toàn 100% lịch sử công việc, chấm công, ca trực; tài khoản chưa có dữ liệu cho phép xóa vật lý.
 - [x] **TC-09 (Đồng bộ danh sách CTV trong bộ lọc & dropdown):** Phân định 2 mục đích sử dụng (Phân công mới = chỉ CTV Active; Lọc lịch sử = TẤT CẢ CTV kể cả Disabled/Locked); ràng buộc cứng vai trò `COLLABORATOR` (không lẫn USER/ADMIN); sắp xếp A–Z; hiển thị Họ tên + Email/Mã NV; hỗ trợ tìm kiếm nhanh và tùy chọn Tất cả CTV.
 - [x] **TC-10 (Khắc phục Runtime TypeError MyTasksPage & Phòng thủ Schema):** Đồng bộ cấu trúc payload API `payroll.timesheet` cung cấp đồng thời cả `user` và `ctv`, `daysMeta` và `daysHeader`, camelCase và UPPERCASE summary. Xử lý an toàn triệt để mảng và quan hệ `Task.creator`, `Task.assignee`, không crash khi user/task bị thiếu quan hệ hoặc CTV chưa có dòng chấm công.
+- [x] **TC-11 (Đồng bộ Công việc CTV và Bảng chấm công tháng - Tự động chuyển LV sang SV & Đồng bộ Real-time):**
+  - Tự động chuyển ký hiệu chấm công từ `LV` sang `SV` tại ngày phát sinh khi CTV có công việc đã nghiệm thu thành công (`status = 'COMPLETED'`) hoặc công việc ngoài hệ thống vừa khai báo (`createExternalTask`).
+  - Phân bổ buổi theo tổng thời gian làm việc thực tế trong ngày (`actualHours`):
+    * **Dưới 5 tiếng (`0 < totalDayHours < 5`)**: Phân bổ vào **buổi sáng (S)** (bao gồm cả trường hợp từ 4 đến dưới 5 tiếng theo quy tắc chính thức).
+    * **Từ 5 đến 8 tiếng (`5 <= totalDayHours <= 8`)**: Phân bổ vào cả **buổi sáng và chiều (S + C)**.
+    * **Trên 8 tiếng (`totalDayHours > 8`)**: Phân bổ vào cả **sáng, chiều và tối (S + C + T)**.
+  - Chuẩn hóa ngày toàn diện (`normalizeExecutionDate`): Tự động phát hiện và sửa lỗi date picker trình duyệt đảo ngày đầu tháng 11 (`01..09/11`) thành `YYYY-0M-11`, đồng thời bảo toàn ngày 11/10 (`2026-10-11`).
+  - Cập nhật thời gian thực (Real-time sync): Ngay khi CTV gửi khai báo công việc ngoài, hệ thống tự động upsert CSDL và cập nhật Bảng chấm công tức thì không cần tải lại trang.
+  - Khử trùng giờ tuyệt đối: Ca trực bị chuyển thành `SV` không bị tính trùng 4h trong thù lao ca trực (`shiftHours`).
+  - Kiểm thử tự động: Đạt **89/89 Unit Tests PASS 100%** (Suite 14), kịch bản `test_task_timesheet_sync.js` và `test_realtime_external_task_sync.js` đều **PASS 100%**. Giao diện và API hoạt động ổn định.
+- [x] **TC-12 (Cập nhật Lịch trực Studio & Đồng bộ Sự vụ CTV - Quản lý ca trực toàn diện):**
+  - **1. Hiển thị sự vụ `SV` trên lịch trực Studio:**
+    * Khi Nhân sự giao nhiệm vụ mới cho CTV trong tháng, trên ma trận lịch trực (`admin/duty` và `tasks`), tại ngày tương ứng của CTV tự động hiển thị ký hiệu `SV` màu tím.
+    * Click/hover vào `SV` hiển thị popover/tooltip danh sách tên các nhiệm vụ, số giờ làm thực tế và trạng thái nghiệm thu.
+    * Vẫn hiển thị đầy đủ ca trực phân công, không làm mất ký hiệu ca trực.
+    * **Ràng buộc bảo vệ tối quan trọng:** Ký hiệu `SV` trên Quản lý ca trực chỉ mang ý nghĩa thông báo trực quan. Tuyệt đối KHÔNG tự động ghi nhận `SV` vào Bảng chấm công hoặc tính thù lao khi vừa giao việc; chỉ khi CTV gửi bài và Nhân sự nghiệm thu thành công (`status === 'COMPLETED'`) mới cập nhật `SV` vào Bảng chấm công theo quy tắc giờ làm việc.
+  - **2. Quyền xem lịch trực toàn bộ CTV:**
+    * Cả tài khoản `COLLABORATOR` và `ADMIN` đều có quyền xem toàn bộ lịch trực chính thức của tất cả CTV trong tháng (họ tên, ngày trực, buổi S-C-T) dạng bảng ma trận và danh sách trực quan.
+    * CTV chỉ xem (read-only), không chỉnh sửa hoặc xóa lịch của người khác.
+  - **3. Nhân sự chỉnh sửa & xóa lịch trực đã xác nhận (`CONFIRMED`):**
+    * ADMIN được phép chỉnh sửa ca trực hoặc xóa các ca trực đã xác nhận trong tháng.
+    * Cho phép thay đổi CTV, ngày trực, buổi trực; kiểm tra trùng ca và CTV phải Active.
+    * Tự động ghi nhận lịch sử chỉnh sửa vào bảng `DutyScheduleHistories` (lưu changer, target CTV, date, session, action, oldValue, newValue, reason).
+    * Tự động gửi thông báo in-app đến CTV bị ảnh hưởng (nêu rõ ngày, buổi và nội dung thay đổi).
+  - **4. Hiển thị lịch trực sau khi đóng đăng ký tại Đăng ký thời gian có thể trực:**
+    * Trong thời gian đăng ký: CTV xem và đăng ký các slot có thể trực.
+    * Sau khi Nhân sự đóng đăng ký và chốt lịch (`CONFIRMED`): hiển thị toàn bộ lịch trực chính thức của tất cả CTV trong tháng. Phân biệt rõ lịch đăng ký nguyện vọng và lịch trực chính thức qua 2 tab rõ ràng.
+  - **5. Quy tắc thiết lập hạn chót đăng ký khi Admin tạo đợt mới:**
+    * Mặc định ngày hạn chót = ngày tạo bảng + 2 ngày.
+    * Tháng/năm hạn chót = tháng/năm của đợt trực được chọn (độc lập ngày tạo và tháng đợt trực).
+    * Cho phép Admin tùy chỉnh ngày/tháng/năm và không ghi đè khi Admin đã chọn.
+    * Quá hạn thì tự động đóng quyền đăng ký.
+  - **Kiểm thử tự động:** Script kiểm thử tích hợp E2E `test_duty_schedule_and_task_sync.js` đạt **PASS 100%**, suite kiểm thử Backend đạt **89/89 tests PASS 100%**, Frontend build Next.js thành công 26 routes.
+- [x] **TC-13 (Tự động hoàn thành ca trực theo thời gian thực & Bỏ xác nhận thủ công từ CTV):**
+  - **1. Bỏ nút/chức năng CTV tự xác nhận đã trực xong:**
+    * Xóa bỏ hoàn toàn nút "Xác nhận đã trực xong" và hàm `handleCompleteShift` trên giao diện CTV (`/tasks`).
+    * Chặn quyền CTV tự gọi API `PUT /duty/shifts/:id/complete` (trả về 403 Forbidden nếu không phải ADMIN).
+  - **2. Cơ chế tự động hoàn thành theo thời gian thực:**
+    * Khi thời gian ca trực kết thúc (`now >= shiftEndDate`), hệ thống tự động chuyển trạng thái ca trực từ `CONFIRMED` sang `COMPLETED`.
+    * Khung giờ kết thúc tiêu chuẩn: Sáng = 11:30, Chiều = 17:00, Tối = 21:30.
+    * Cơ chế kích hoạt kép (Dual Trigger): Background worker chạy ngầm mỗi 60 giây VÀ On-demand hooks kích hoạt ngay khi tải trang lịch trực (`getShifts`, `getPeriodRegistrationsSummary`) hoặc khi tải bảng chấm công / tính thù lao (`getTimesheetData`, `calculateMonthlyPayroll`).
+  - **3. Ràng buộc bảo vệ tuyệt đối:**
+    * Chỉ tự động hoàn thành những ca trực đã được Nhân sự xác nhận và phân công chính thức (`CONFIRMED`).
+    * Tuyệt đối KHÔNG tự động hoàn thành ca trực bị hủy (`CANCELLED`).
+    * Tuyệt đối KHÔNG tự động hoàn thành ca trực chưa đến thời gian kết thúc (ca trong tương lai hoặc ca trong ngày nhưng chưa hết giờ `endTime`).
+    * Chống chạy trùng / Idempotency 100%: Quét nhiều lần không gây trùng lặp, không nhân đôi giờ công hoặc thù lao.
+  - **4. Tác động đến Bảng chấm công và thù lao:**
+    * Bảng chấm công chỉ xuất hiện ký hiệu `LV` và bảng lương chỉ tính 4.0 giờ / ca khi ca trực đã chuyển sang `COMPLETED`.
+    * Ca chưa hết giờ hoặc ca hủy tuyệt đối không phát sinh giờ công hay tiền thù lao.
+  - **Kiểm thử tự động:** Script `test_auto_complete_shift_realtime.js` đạt **PASS 100% cả 6 nhóm testcase**, Backend suite đạt **89/89 tests PASS**, Next.js build **26 routes thành công 100%**.
+- [x] **TC-13.1 (Khắc phục triệt để lỗi ca trực tương lai bị đánh dấu hoàn thành trước hạn):**
+  - **Nguyên nhân gốc (Root Cause):** Do script kiểm thử `test_auto_complete_shift_realtime.js` trước đó chạy với ngày giả lập năm 2029 (`2029-11-06`) khi chưa cô lập `periodId`, khiến hàm quét toàn cục chuyển nhầm 60 ca trực tương lai (từ 18/11/2026 trở đi) sang `COMPLETED`.
+  - **Khắc phục CSDL (Data Recovery):**
+    * Đã chạy script phục hồi toàn bộ 60 ca trực tương lai về trạng thái chuẩn xác `CONFIRMED`.
+    * Đã xóa sạch toàn bộ các bản ghi `AttendanceRecord` loại `DUTY_SHIFT` phát sinh sớm ngoài ý muốn của các ngày từ 18/11/2026 trở đi.
+    * Đảm bảo các ca trong quá khứ (từ 02/11 đến 13/11/2026) được bảo toàn nguyên vẹn `COMPLETED` và `LV`.
+  - **Nâng cấp mã nguồn Backend (`TN-Backend/src/services/duty.service.js`):**
+    * Bổ sung tham số `options.periodId` vào `autoCompletePastConfirmedShifts`: Cho phép cô lập quét theo từng đợt trực, tuyệt đối ngăn chặn việc kiểm thử hoặc thao tác ở đợt này ảnh hưởng tràn sang đợt trực khác.
+    * Kiểm tra đối chiếu thời gian kép: Ràng buộc `date <= todayStr` VÀ so sánh chính xác từng phút với `now >= shiftEndDate`.
+  - **Cập nhật script kiểm thử (`TN-Backend/scripts/test_auto_complete_shift_realtime.js`):**
+    * Cô lập hoàn toàn môi trường mock test với `{ targetNow, periodId: testPeriod.id }`, không can thiệp vào các đợt thực tế.
+  - **Frontend CTV (`TN-Frontend/src/app/tasks/page.tsx`):**
+    * Các ca trực tương lai (`CONFIRMED`) hiển thị badge xanh dương *"Lịch chính thức"* và chú thích *"Tự động hoàn thành khi hết giờ"*.
+    * Chỉ các ca đã thực sự diễn ra trong quá khứ (`COMPLETED`) mới hiển thị badge xanh lá *"Đã trực xong"* và *"Đã tính công"*.
+  - **Xác minh thực tế:** Toàn bộ CSDL sạch 100% (0 ca tương lai bị COMPLETED), Backend & Frontend hoạt động ổn định trên cổng 5000 & 3000.
+- [x] **TC-14 (Thiết kế Giao diện Lịch trực Studio dạng Bảng tuần chuẩn BPTT theo hình ảnh tham chiếu 1):**
+  - **1. Cấu trúc Bảng phân công tuần chuẩn tham chiếu:**
+    * Tiêu đề: `BẢNG PHÂN CÔNG LỊCH LÀM VIỆC NHÂN SỰ BPTT (Ngày dd/MM - dd/MM/YYYY)`.
+    * Cột ma trận: `STT`, `NHÂN SỰ`, `Số lượng` (tổng ca/buổi làm việc trong tuần).
+    * 7 ngày trong tuần từ Thứ Hai đến Chủ Nhật, mỗi ngày chia thành 3 buổi con: Sáng (S), Chiều (C), Tối (T).
+    * Nhóm cột bên phải `Số lượng buổi làm`: `SC` (Studio ca), `SV` (Sự vụ), `D` (Đêm / Tối trực).
+    * Nhóm cột `Tình trạng`: `DP` (Dự phòng), `NP` (Nghỉ phép), `SX` (Sản xuất / Sắp xếp).
+    * Hàng `TỔNG` ở cuối: Tổng số lượng buổi làm và tổng từng buổi (S, C, T) của từng ngày trong tuần.
+  - **2. Ký hiệu và Tooltip sự vụ SV:**
+    * Hiển thị chuẩn xác các ký hiệu: `LV`, `SV`, `NL`, `DP`, `NP`, `SX`.
+    * Tại ô có sự vụ (`SV`), hiển thị dấu tam giác chỉ báo note ở góc trên bên phải (Marker tương tự Excel Note).
+    * Khi rê hoặc nhấp chuột vào ô `SV`, hiển thị popover thông tin chi tiết: Avatar + Tên người giao + thời gian giao (`Nguyễn Quang Huy • 09:20 12 thg 11`), Tên sự vụ + địa điểm (`CNTT - Workshop "Bán hàng đa kênh (Omnichannel) cùng SAPO" - A301`), trạng thái nghiệm thu và thời lượng thực tế.
+    * Hỗ trợ hiển thị đầy đủ danh sách khi ngày có nhiều sự vụ.
+  - **3. Thời gian thực và Highlight ngày hiện tại:**
+    * Tự động nhận diện `todayStr` theo thời gian thực hệ thống.
+    * Cột của ngày hiện tại được làm nổi bật với viền/nền hổ phách và badge `"Hôm nay"`.
+    * Khi thời gian sang ngày mới, vị trí highlight tự động cập nhật. Cột Chủ Nhật có màu nền phân biệt.
+  - **4. Quyền truy cập & Điều hướng:**
+    * Cả ADMIN và COLLABORATOR đều có quyền xem toàn bộ nhân sự bộ phận trên cả `/tasks` và `/admin/duty`.
+    * Bộ điều hướng linh hoạt: Tuần trước, Tuần này (Hôm nay), Tuần sau, tìm kiếm CTV nhanh, lọc theo vai trò.
+    * Cho phép chuyển đổi linh hoạt giữa Bảng tuần BPTT và Danh sách chi tiết.
+  - **5. Kiểm thử tự động:**
+    * Script kiểm thử tích hợp `test_weekly_schedule_bptt.js` đạt **PASS 100% cả 6 test criteria**.
+    * Backend Unit test suite đạt **89/89 tests PASS 100%**.
+    * Frontend Next.js build Production thành công **26/26 routes (0 lỗi)**.
+- [x] **TC-15 (Gộp Lịch Trực Studio và Phân Công Sự Vụ thành Lịch Trực Studio Thống Nhất):**
+  - **1. Gộp tên và chức năng:**
+    * Thống nhất một mục duy nhất có tên **Lịch trực Studio** trên toàn hệ thống (loại bỏ hoàn toàn cụm từ trùng lặp "Lịch Trực Studio & Phân Công Sự Vụ BPTT" và "Lịch Trực Studio & Đăng Ký Lịch Rảnh").
+    * Loại bỏ hoàn toàn ma trận lịch tháng 31 ngày bị trùng lặp trên giao diện CTV `/tasks`, tránh gây rối mắt và nhầm lẫn giữa 2 lịch song song.
+    * Đưa Bảng tuần chuẩn BPTT làm trung tâm hiển thị duy nhất cho phân hệ ca trực.
+  - **2. Thiết kế lịch thống nhất cho CTV:**
+    * Bảng tuần hiển thị 7 ngày (Thứ Hai -> Chủ Nhật) x 3 ca (Sáng - Chiều - Tối) cho toàn bộ nhân sự BPTT.
+    * Kết hợp đầy đủ trong cùng một lịch:
+      - Ca trực Studio đã xác nhận (`LV`).
+      - Sự vụ/nhiệm vụ CTV được phân công (`SV` kèm marker tam giác và popover tooltip chi tiết người giao, thời gian, tiêu đề, địa điểm).
+      - Nguyện vọng đăng ký thời gian có thể trực (`ĐK` với viền nét đứt màu hổ phách).
+      - Các trạng thái khác: `NL` (Nghỉ lễ), `DP` (Dự phòng), `NP` (Nghỉ phép), `SX` (Sản xuất).
+      - Hàng TỔNG và nhóm cột thống kê số lượng buổi làm (`SC`, `SV`, `D`) và tình trạng (`DP`, `NP`, `SX`).
+  - **3. Tích hợp dữ liệu đăng ký ca trực của CTV:**
+    * Lịch tuần lấy dữ liệu từ `ShiftRegistration` trong đợt trực tương ứng.
+    * Phân biệt rõ buổi CTV đăng ký nguyện vọng (`ĐK`) và buổi trực chính thức được Nhân sự xác nhận (`LV`).
+    * Nguyện vọng (`ĐK`) không tự động coi là ca trực chính thức và không tính vào cột tổng buổi làm `totalShifts` hay thù lao.
+    * CTV đăng ký lịch rảnh thông qua nút và Modal "Đăng ký thời gian có thể trực Studio" tiện lợi, trực quan khi đợt trực ở trạng thái `OPEN`.
+  - **4. Đồng bộ dữ liệu thời gian thực (Real-time Sync):**
+    * Khi Admin giao việc, sửa, hủy nhiệm vụ tại `/admin/tasks`, hoặc xếp/chốt lịch tại `/admin/duty`, hoặc CTV lưu đăng ký lịch rảnh: Hệ thống phát sự kiện `duty_schedule_updated` và BroadcastChannel `lhu_media_duty_sync`.
+    * `WeeklyDutyScheduleTable` tự động làm mới ngay lập tức mà không cần tải lại toàn bộ trang.
+    * Cơ chế polling chạy ngầm mỗi 15 giây đảm bảo dữ liệu luôn mới nhất giữa các người dùng.
+  - **5. Phân quyền:**
+    * Cả `ADMIN` và `COLLABORATOR` đều được xem lịch trực thống nhất của toàn bộ bộ phận.
+    * CTV chỉ được đăng ký ca trực trong đợt mở đăng ký (`OPEN`).
+    * Chỉ `ADMIN` có quyền xếp lịch, chỉnh sửa và xác nhận lịch trực chính thức.
+  - **6. Kiểm thử tự động:**
+    * TypeScript check: `tsc --noEmit` đạt **0 lỗi (0 errors)**.
+    * Script kiểm thử tích hợp `test_weekly_schedule_bptt.js` đạt **PASS 100% cả 6 test criteria**.
+    * Backend Unit test suite đạt **89/89 tests PASS 100%**.
+    * Frontend Next.js build Production thành công **26/26 routes (0 lỗi)**.
+- [x] **TC-16 (Phân Công Công Việc Trực Tiếp Trên Lịch Trực Studio và Đồng Bộ Hai Chiều Với Quản Lý Công Việc):**
+  - **1. Phân công trực tiếp từ Lịch trực Studio:**
+    * ADMIN có thể nhấn trực tiếp vào bất kỳ ô ngày/buổi (S/C/T) nào của CTV trên `WeeklyDutyScheduleTable` để mở Modal giao việc.
+    * Hệ thống tự động điền sẵn tên CTV, ngày thực hiện (`executionDate`) và ca/buổi (`shiftSession`: S/C/T).
+    * Hỗ trợ nút `+ Giao nhiệm vụ cho CTV vào buổi này` trực tiếp trong popover ca trực rảnh hoặc ca làm việc.
+  - **2. Form giao việc chuẩn hóa với Date Picker và Thời gian linh hoạt:**
+    * Giao diện nhập trực quan: Tên nhiệm vụ, Loại công việc (`TASK_TYPES`), Mô tả, Địa điểm / Khu vực.
+    * Trường Deadline được trang bị Date Picker dạng popup lịch trực quan (`showPicker()`) và tách riêng hai dropdown Giờ (`00`–`23`) và Phút (`00`–`59`), loại bỏ hoàn toàn trường giây.
+    * Xem trước thời hạn deadline thời gian thực theo định dạng chuẩn `dd/MM/yyyy HH:mm`.
+  - **3. Hiển thị ký hiệu SV và Quản lý sự vụ trên Lịch trực:**
+    * Ký hiệu `SV` kèm marker chỉ báo ghi chú hiển thị lập tức tại ô tương ứng ngay sau khi tạo nhiệm vụ thành công.
+    * Khi rê hoặc nhấp vào ô `SV`, hiển thị popover thông tin chi tiết: Tên sự vụ, địa điểm, thời gian, người giao.
+    * ADMIN có đầy đủ bộ công cụ quản trị ngay tại popover:
+      - Nút **"Quản lý"**: Mở trực tiếp trang Quản lý Công việc lọc theo nhiệm vụ (`/admin/tasks?search=...`).
+      - Nút **"Sửa"**: Mở modal Chỉnh sửa nhiệm vụ ngay trên giao diện Lịch trực.
+      - Nút **"Xóa"**: Mở modal Xác nhận xóa nhiệm vụ với cơ chế dọn sạch ký hiệu `SV`.
+      - Nút **"+ Giao thêm nhiệm vụ (sự vụ) cho ca này"**: Cho phép giao thêm việc cho ca đã có SV.
+  - **4. Đồng bộ hai chiều thời gian thực (Real-time Bi-directional Sync):**
+    * Cả hai giao diện (`Lịch trực Studio` và `Quản lý Công việc & Phân Công CTV`) cùng quản lý một nguồn dữ liệu công việc duy nhất (`Task` model trong Database).
+    * Khi tạo, sửa, hoặc xóa nhiệm vụ từ bất kỳ giao diện nào, hệ thống phát sự kiện `BroadcastChannel('lhu_media_duty_sync')` và CustomEvent (`duty_schedule_updated`, `task_updated`) để giao diện còn lại tự động cập nhật ngay mà không cần reload trang.
+  - **5. Kiểm soát chấm công và Phân quyền RBAC:**
+    * Nhiệm vụ mới giao (dù hiển thị SV trên lịch) tuyệt đối KHÔNG được ghi nhận vào Bảng chấm công (`AttendanceRecord` / `Payroll`) khi chưa được CTV báo cáo và Admin nghiệm thu `COMPLETED`.
+    * Phân quyền RBAC nghiêm ngặt: Chỉ `ADMIN` mới có quyền giao việc, chỉnh sửa và xóa nhiệm vụ; `COLLABORATOR` không được tự giao việc cho bản thân hoặc người khác.
+  - **6. Kiểm thử tự động:**
+    * Kịch bản kiểm thử tích hợp `TN-Backend/scripts/test_duty_direct_task_assignment.js`: **PASS 6/6 kịch bản (100%)**.
+    * Backend Unit test suite: **PASS 89/89 tests (100%)**.
+    * TypeScript Compilation: **0 lỗi (0 errors)**.
+    * Next.js Production Build: **26/26 routes hoàn tất thành công**.
+- [x] **TC-17 (Bổ Sung Trường Địa Điểm Thực Hiện Khi Giao Nhiệm Vụ Cho CTV):**
+  - **1. Điều kiện hiển thị thông minh:**
+    * Chỉ tự động hiển thị trường Địa điểm thực hiện khi ADMIN chọn loại công việc thuộc các nhóm: Chụp ảnh, Quay phim/video, Diễn viên, Khác.
+    * Các loại việc như Viết content, Dựng clip, Thiết kế, Kịch bản... tự động ẩn trường địa điểm.
+  - **2. Cấu trúc trường địa điểm 2 thành phần:**
+    * **Cơ sở:** Dropdown 6 cơ sở chuẩn Đại học Lạc Hồng (`Cơ sở 1`, `Cơ sở 2`, `Cơ sở 3`, `Cơ sở 5`, `Cơ sở 6`, `Cơ sở Dược`).
+    * **Phòng:** Ô nhập văn bản để ADMIN nhập tên phòng hoặc địa điểm chi tiết (VD: `Phòng B502`, `Hội trường T`...).
+    * Tự động tổng hợp và xem trước địa điểm: `Cơ sở - Phòng`.
+  - **3. Quy tắc xử lý & Lưu trữ Database:**
+    * Bổ sung các cột `campus`, `room`, `location` vào bảng `Tasks` trong Database MSSQL và Model Sequelize.
+    * Khi thay đổi loại công việc sang nhóm không yêu cầu địa điểm, hệ thống tự động xóa sạch dữ liệu địa điểm cũ cả ở Frontend và Backend, bảo đảm không bị gắn nhầm vào nhiệm vụ.
+  - **4. Đồng bộ hiển thị đa module:**
+    * Hiển thị trong chi tiết công việc của CTV (`/tasks`) và ADMIN (`/admin/tasks`).
+    * Đồng bộ lên ghi chú sự vụ SV và popover chi tiết trên Lịch trực Studio (`WeeklyDutyScheduleTable`).
+    * Cập nhật tức thì khi chỉnh sửa địa điểm nhiệm vụ qua cơ chế BroadcastChannel và CustomEvent.
+  - **5. Kiểm thử tự động:**
+    * Script kiểm thử tích hợp `test_task_location_feature.js`: **PASS 6/6 kịch bản (100%)**.
+    * Script kiểm thử hồi quy `test_duty_direct_task_assignment.js`: **PASS 6/6 kịch bản (100%)**.
+    * Backend Unit Tests: **PASS 89/89 tests (100%)**.
+    * TypeScript Typecheck: **0 lỗi (0 errors)**.
+    * Next.js Production Build: **26/26 routes hoàn tất thành công**.
+- [x] **TC-18 (Bổ Sung Thời Gian Thực Hiện Khi Giao Nhiệm Vụ Cho CTV):**
+  - **1. Thay thế trường Deadline thành Thời gian bắt đầu theo nhóm công việc:**
+    * Đối với 4 nhóm công việc: Chụp ảnh, Quay phim/video, Diễn viên, Khác: Thay thế trường Thời hạn hoàn thành (Deadline) bằng trường **Thời gian bắt đầu** (`startTime`).
+    * Sử dụng Date Picker trực quan dạng lịch để chọn ngày; phần chọn giờ chỉ gồm 2 cột riêng biệt Giờ và Phút (loại bỏ hoàn toàn trường giây).
+    * Giữ nguyên trường Thời hạn hoàn thành (Deadline) cho các nhóm công việc còn lại (Viết content, Dựng clip, Thiết kế, Kịch bản...).
+    * Tự động làm sạch trường không sử dụng: Khi chuyển sang nhóm công việc tại chỗ thì xóa deadline và lưu startTime; khi chuyển sang nhóm việc khác thì xóa startTime và lưu deadline.
+  - **2. Lưu trữ chính xác trong Database và Backend:**
+    * Bổ sung cột `start_time DATETIMEOFFSET NULL` trong bảng `Tasks` MSSQL và model Sequelize `Task.js`.
+    * Backend `task.service.js` tự động đồng bộ `executionDate` theo múi giờ Việt Nam (`Asia/Ho_Chi_Minh`) dựa trên `startTime` của công việc.
+  - **3. Hiển thị thông tin Thời gian thực hiện trên Popup Lịch trực Studio:**
+    * Khi ADMIN giao nhiệm vụ, thời gian bắt đầu được đồng bộ lập tức vào dữ liệu sự vụ trên Lịch trực Studio (`WeeklyDutyScheduleTable`).
+    * Popup tooltip khi rê chuột hoặc nhấp vào ký hiệu `SV` hiển thị thông tin **Thời gian thực hiện** theo định dạng dễ đọc chuẩn Việt Nam: `HH:mm, dd/MM/yyyy` (ví dụ: `08:30, 20/11/2026`).
+    * Khi một buổi có nhiều nhiệm vụ, mỗi nhiệm vụ hiển thị độc lập đúng thời gian thực hiện tương ứng.
+    * Fallback an toàn nếu chưa có thời gian bắt đầu (hiển thị hạn chót hoặc "Chưa xác định", không bị lỗi giao diện).
+    * Khi ADMIN chỉnh sửa thời gian nhiệm vụ, popup cập nhật tự động tức thì.
+  - **4. Đồng bộ trên Quản lý Công việc và Giao diện CTV:**
+    * `/admin/tasks`: Cột thời gian hiển thị rõ ràng thời gian bắt đầu (badge xanh dương) hoặc hạn chót kèm cảnh báo quá hạn; Modal chi tiết hiển thị đúng nhãn.
+    * `/tasks` (CTV): Thẻ nhiệm vụ và modal chi tiết hiển thị đúng `Bắt đầu: HH:mm, dd/MM/yyyy`.
+    * Không ảnh hưởng đến quy tắc chấm công & thù lao: Thời gian được giao chỉ mang tính kế hoạch thực hiện, không tự động tính công khi chưa được nghiệm thu `COMPLETED`.
+  - **5. Kiểm thử tự động:**
+    * Script kiểm thử tích hợp `test_task_start_time_feature.js`: **PASS 100%**.
+    * Backend Unit Tests: **PASS 89/89 tests (100%)**.
+    * TypeScript Compilation: **0 lỗi (0 errors)**.
+    * Next.js Production Build: **26/26 routes hoàn tất thành công**.
+- [x] **TC-19 (Bổ Sung Chức Năng Xóa Đợt Đăng Ký Ca Trực Theo Tháng & Bảo Toàn Lịch Sử):**
+  - **1. Giao diện & Nút xóa đợt đăng ký (Chỉ ADMIN):**
+    * Thêm biểu tượng Thùng rác (`Trash2`) trên từng thẻ tháng tại mục **"CÁC ĐỢT ĐĂNG KÝ CA TRỰC THEO THÁNG"** (`/admin/duty`).
+    * Phân quyền trực quan: Chỉ tài khoản `ADMIN` mới nhìn thấy và thao tác được nút này; ẩn hoàn toàn đối với `COLLABORATOR`.
+    * Ngăn chặn nổi bọt sự kiện (`e.stopPropagation()`) để không kích hoạt chọn đợt khi nhấn xóa.
+  - **2. Hộp thoại xác nhận thông minh (Smart Confirmation Modal):**
+    * Nêu rõ Tháng/Năm của đợt sắp xóa (VD: `Tháng 11/2026`).
+    * Tích hợp gọi API kiểm tra an toàn dữ liệu tự động (`GET /api/duty/periods/:id/deletion-check`) ngay khi mở modal.
+    * Hiển thị bảng tóm tắt an toàn dữ liệu thời gian thực: Số lượng CTV đăng ký nguyện vọng, ca trực đã phân công, ca quá khứ, ca tương lai, số bản ghi chấm công thực tế và bảng thù lao.
+  - **3. Cơ chế Xóa sạch (Hard Delete) vs Lưu trữ & Hủy đợt (Archive / Soft Delete):**
+    * **Xóa vật lý an toàn (Hard Delete):** Áp dụng cho các đợt trống, đợt chỉ có nguyện vọng đăng ký nháp, hoặc đợt đã xác nhận trong tương lai chưa từng phát sinh buổi trực quá khứ, chấm công hoặc thù lao. Xóa sạch sẽ đợt và các bản ghi liên quan trong transaction Sequelize.
+    * **Lưu trữ & Hủy đợt bảo toàn 100% dữ liệu (Archive / Cancel):** Nếu đợt đã có dữ liệu lịch sử quan trọng (ca trực đã qua, buổi chấm công đã ghi nhận, hoặc bảng thanh toán thù lao đã tạo), hệ thống **tuyệt đối không xóa vật lý**; chuyển đợt sang trạng thái `CANCELLED` / `ARCHIVED`, hủy các ca trong tương lai, gỡ khung lịch khỏi danh sách hiển thị đang hoạt động, đồng thời ghi log kiểm toán đầy đủ thời gian và người thao tác. Toàn bộ lịch sử chấm công, nhiệm vụ và thù lao CTV được bảo toàn 100%.
+    * Hiển thị lý do cụ thể và hướng dẫn xử lý trực tiếp trên giao diện modal.
+  - **4. Cập nhật tức thì không reload trang & Đồng bộ thời gian thực:**
+    * Sau khi xóa hoặc lưu trữ thành công, cập nhật state `periods` trên giao diện tức thì.
+    * Nếu đợt vừa bị xóa/lưu trữ đang được chọn (`selectedPeriodId`), hệ thống tự động chuyển sang chọn đợt khả dụng tiếp theo.
+    * Phát sự kiện `BroadcastChannel('lhu_media_duty_sync')` và CustomEvent `duty_schedule_updated` để tất cả các tab và giao diện liên quan đồng bộ ngay lập tức.
+  - **5. Bảo mật phân quyền RBAC Backend:**
+    * Các endpoint `GET /periods/:id/deletion-check` và `DELETE /periods/:id` được bảo vệ nghiêm ngặt bởi middleware `authenticate` và `authorize('ADMIN')`.
+    * CTV (`COLLABORATOR`) gọi API bị từ chối ngay lập tức với mã lỗi `403 Forbidden`.
+  - **6. Kiểm thử tự động:**
+    * Script kiểm thử tích hợp `TN-Backend/scripts/test_delete_duty_period_feature.js`: **PASS 6/6 kịch bản (100%)**:
+      - Chặn CTV (403 Forbidden).
+      - Xóa sạch đợt trống.
+      - Xóa sạch đợt có CTV đăng ký nguyện vọng.
+      - Xóa sạch đợt có ca trực nháp.
+      - Xóa an toàn đợt tương lai đã xác nhận.
+      - Bảo vệ dữ liệu lịch sử Tháng 11/2026: Chặn xóa vật lý, lưu trữ thành công, bảo toàn 100% 59 bản ghi chấm công và 7 bảng thù lao.
+    * Backend Unit Tests: **89/89 tests PASS 100%**.
+    * TypeScript Compilation: **0 lỗi (0 errors)**.
+    * Next.js Production Build: **26/26 routes hoàn tất thành công**.
 
 ---
 

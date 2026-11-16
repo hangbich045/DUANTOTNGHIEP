@@ -48,6 +48,14 @@ interface TimesheetSession {
   tien: number;
 }
 
+interface PendingConfirmationItem {
+  date: string;
+  day: number;
+  totalHours: number;
+  taskCount: number;
+  message: string;
+}
+
 interface TimesheetRow {
   stt: number;
   ctv: CTVItem;
@@ -59,6 +67,7 @@ interface TimesheetRow {
     tongGio: number;
     tien: number;
   };
+  pendingConfirmationDays?: PendingConfirmationItem[];
 }
 
 interface TaskSummaryItem {
@@ -98,6 +107,14 @@ export default function AdminPayrollPage() {
     daysHeader: { day: number; dow: string; dateStr: string }[];
     rows: TimesheetRow[];
     grandTotalAmount: number;
+    pendingConfirmations?: {
+      ctv: CTVItem;
+      date: string;
+      day: number;
+      totalHours: number;
+      taskCount: number;
+      message: string;
+    }[];
   } | null>(null);
 
   // Dữ liệu Bảng thống kê công việc
@@ -465,6 +482,25 @@ export default function AdminPayrollPage() {
               </span>
             </div>
 
+            {/* Thông báo trường hợp công việc từ 4 đến dưới 5 tiếng chờ xác nhận quy tắc */}
+            {timesheetData?.pendingConfirmations && timesheetData.pendingConfirmations.length > 0 && (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-3 flex items-start space-x-3 text-xs text-amber-200">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-bold text-amber-300">
+                    Ghi nhận {timesheetData.pendingConfirmations.length} trường hợp tổng thời gian làm việc trong ngày từ 4 đến dưới 5 tiếng:
+                  </div>
+                  <ul className="list-disc list-inside space-y-0.5 text-[11px] text-amber-200/90">
+                    {timesheetData.pendingConfirmations.map((item, idx) => (
+                      <li key={idx}>
+                        <strong className="text-white">{item.ctv.fullName}</strong> ({item.date}): Tổng giờ thực tế {item.totalHours} giờ. Hệ thống <strong>giữ nguyên trạng thái hiện tại</strong> theo quy tắc nghiệp vụ chờ Nhân sự xác nhận.
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            )}
+
             {loading ? (
               <div className="flex items-center justify-center py-24">
                 <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
@@ -531,6 +567,15 @@ export default function AdminPayrollPage() {
                                   <div className="text-[9px] text-studio-muted font-normal mt-0.5 truncate max-w-[130px]">
                                     {row.ctv.employeeCode || row.ctv.email}
                                   </div>
+                                  {row.pendingConfirmationDays && row.pendingConfirmationDays.length > 0 && (
+                                    <div
+                                      className="inline-flex items-center space-x-1 px-1.5 py-0.5 mt-1 rounded bg-amber-500/20 text-amber-300 text-[9px] border border-amber-500/30 font-medium"
+                                      title={row.pendingConfirmationDays.map((d) => d.message).join('\n')}
+                                    >
+                                      <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                                      <span>Chờ xác nhận (4h-5h)</span>
+                                    </div>
+                                  )}
                                 </td>
                               </>
                             )}

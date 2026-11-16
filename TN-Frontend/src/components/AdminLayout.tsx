@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import Link from 'next/link';
+import NotificationBell from '@/components/NotificationBell';
 import {
   LayoutDashboard,
   Camera,
@@ -116,21 +117,24 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="min-h-screen flex bg-studio-dark">
       <aside className="w-72 border-r border-white/5 bg-black/40 backdrop-blur-xl flex flex-col justify-between p-6 shrink-0 hidden md:flex">
         <div className="space-y-8">
-          <Link href="/" className="flex items-center space-x-2 pl-2">
-            <div className="w-11 h-11 flex items-center justify-center">
-              <Image
-                src="/LOGO.png"
-                alt="LHU Media"
-                width={44}
-                height={44}
-                className="object-contain drop-shadow-lg"
-                priority
-              />
-            </div>
-            <span className="font-extrabold text-lg tracking-tight text-white">
-              LHU <span className="text-gradient">MEDIA</span>
-            </span>
-          </Link>
+          <div className="flex items-center justify-between pl-1">
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="w-11 h-11 flex items-center justify-center">
+                <Image
+                  src="/LOGO.png"
+                  alt="LHU Media"
+                  width={44}
+                  height={44}
+                  className="object-contain drop-shadow-lg"
+                  priority
+                />
+              </div>
+              <span className="font-extrabold text-lg tracking-tight text-white">
+                LHU <span className="text-gradient">MEDIA</span>
+              </span>
+            </Link>
+            <NotificationBell align="left" />
+          </div>
 
           <nav className="space-y-6 text-left">
             <div className="space-y-2">
@@ -208,6 +212,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className="font-extrabold text-base tracking-tight text-white">ADMIN PANEL</span>
           </Link>
           <div className="flex items-center space-x-2 overflow-x-auto">
+            <NotificationBell align="right" />
             {allMobileLinks.map((link) => {
               const Icon = link.icon;
               return (

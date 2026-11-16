@@ -49,6 +49,7 @@ const MonthlyPayroll = require('./MonthlyPayroll');
 const DutyPeriod = require('./DutyPeriod')(sequelize);
 const ShiftRegistration = require('./ShiftRegistration')(sequelize);
 const Notification = require('./Notification')(sequelize);
+const DutyScheduleHistory = require('./DutyScheduleHistory')(sequelize);
 
 // ============================================================
 // ĐỊNH NGHĨA ASSOCIATIONS (QUAN HỆ GIỮA CÁC BẢNG)
@@ -273,6 +274,30 @@ Notification.belongsTo(User, {
   as: 'user',
 });
 
+/**
+ * QUAN HỆ 15: DutyScheduleHistory (Lịch sử chỉnh sửa lịch trực)
+ */
+DutyPeriod.hasMany(DutyScheduleHistory, {
+  foreignKey: 'period_id',
+  as: 'editHistories',
+  onDelete: 'SET NULL',
+});
+
+DutyScheduleHistory.belongsTo(DutyPeriod, {
+  foreignKey: 'period_id',
+  as: 'period',
+});
+
+DutyScheduleHistory.belongsTo(User, {
+  foreignKey: 'changed_by_user_id',
+  as: 'changer',
+});
+
+DutyScheduleHistory.belongsTo(User, {
+  foreignKey: 'target_user_id',
+  as: 'targetCollaborator',
+});
+
 // ============================================================
 // ĐỒNG BỘ DATABASE (DATABASE SYNC)
 // ============================================================
@@ -315,4 +340,5 @@ module.exports = {
   DutyPeriod,
   ShiftRegistration,
   Notification,
+  DutyScheduleHistory,
 };

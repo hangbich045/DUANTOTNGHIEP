@@ -22,6 +22,12 @@ router.get('/periods', authenticate, authorize('COLLABORATOR', 'ADMIN'), dutyCon
 // Cập nhật trạng thái đợt đăng ký (OPEN, CLOSED, ARRANGING, CONFIRMED)
 router.put('/periods/:id/status', authenticate, authorize('ADMIN'), dutyController.updateDutyPeriodStatus);
 
+// Kiểm tra dữ liệu liên quan và tính an toàn trước khi xóa đợt đăng ký ca trực (chỉ ADMIN)
+router.get('/periods/:id/deletion-check', authenticate, authorize('ADMIN'), dutyController.checkPeriodDeletionSafety);
+
+// Xóa hoặc Lưu trữ đợt đăng ký ca trực theo tháng (chỉ ADMIN)
+router.delete('/periods/:id', authenticate, authorize('ADMIN'), dutyController.deleteDutyPeriod);
+
 // =========================================================================
 // GIAI ĐOẠN 2: CTV ĐĂNG KÝ THỜI GIAN CÓ THỂ TRỰC (AVAILABILITY)
 // =========================================================================
@@ -32,12 +38,15 @@ router.post('/availability', authenticate, authorize('COLLABORATOR', 'ADMIN'), d
 router.get('/availability', authenticate, authorize('COLLABORATOR', 'ADMIN'), dutyController.getCTVRegistrations);
 
 // =========================================================================
-// GIAI ĐOẠN 3: NHÂN SỰ SẮP XẾP VÀ XÁC NHẬN LỊCH TRỰC THÁNG
+// GIAI ĐOẠN 3: NHÂN SỰ SẮP XẾP, XÁC NHẬN VÀ CHỈNH SỬA LỊCH TRỰC THÁNG
 // =========================================================================
-// Xem bảng tổng hợp đăng ký của tất cả CTV trong đợt
-router.get('/periods/:id/summary', authenticate, authorize('ADMIN'), dutyController.getPeriodRegistrationsSummary);
+// Xem bảng tổng hợp đăng ký và toàn bộ lịch trực của tất cả CTV trong đợt (Cả CTV và Admin đều có quyền xem)
+router.get('/periods/:id/summary', authenticate, authorize('COLLABORATOR', 'ADMIN'), dutyController.getPeriodRegistrationsSummary);
 
-// Nhân sự sắp xếp / phân công ca trực
+// Lịch sử chỉnh sửa lịch trực của đợt (Dành cho Admin)
+router.get('/periods/:id/history', authenticate, authorize('ADMIN'), dutyController.getScheduleHistories);
+
+// Nhân sự sắp xếp / phân công ca trực (hoặc điều chỉnh lịch trực đã xác nhận)
 router.post('/periods/:id/assign', authenticate, authorize('ADMIN'), dutyController.assignShifts);
 
 // Nhân sự xác nhận lịch trực tháng chính thức
@@ -46,6 +55,9 @@ router.post('/periods/:id/confirm-schedule', authenticate, authorize('ADMIN'), d
 // =========================================================================
 // CÁC ENDPOINT QUẢN LÝ CA TRỰC ĐƠN LẺ HIỆN CÓ (TƯƠNG THÍCH NGƯỢC)
 // =========================================================================
+// Xem bảng phân công lịch làm việc tuần BPTT (Toàn bộ CTV & Admin đều có quyền xem)
+router.get('/weekly-schedule', authenticate, authorize('COLLABORATOR', 'ADMIN'), dutyController.getWeeklySchedule);
+
 // CTV đăng ký ca trực Studio
 router.post('/register', authenticate, authorize('COLLABORATOR', 'ADMIN'), dutyController.registerShift);
 
@@ -55,8 +67,8 @@ router.get('/shifts', authenticate, authorize('COLLABORATOR', 'ADMIN'), dutyCont
 // Admin duyệt xác nhận ca trực đơn lẻ
 router.put('/shifts/:id/confirm', authenticate, authorize('ADMIN'), dutyController.confirmShift);
 
-// Xác nhận hoàn thành ca trực (Admin hoặc CTV sau khi trực)
-router.put('/shifts/:id/complete', authenticate, authorize('COLLABORATOR', 'ADMIN'), dutyController.completeShift);
+// Xác nhận hoàn thành ca trực thủ công (Chỉ dành cho Admin khi cần can thiệp; hệ thống tự động hoàn thành khi hết giờ trực)
+router.put('/shifts/:id/complete', authenticate, authorize('ADMIN'), dutyController.completeShift);
 
 // Hủy ca trực
 router.delete('/shifts/:id', authenticate, authorize('COLLABORATOR', 'ADMIN'), dutyController.cancelShift);

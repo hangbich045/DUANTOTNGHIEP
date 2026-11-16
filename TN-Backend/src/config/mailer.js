@@ -110,6 +110,122 @@ async function sendOTPEmail(to, otp, type = 'verify') {
 }
 
 /**
+ * Gửi email thông báo giao dịch nghiệp vụ (FR-07)
+ * (Duyệt mượn, duyệt phòng, giao việc, nhắc nợ quá hạn, lịch trực...)
+ *
+ * @param {string} to - Email người nhận
+ * @param {Object} data - { title, message, link, type, detailRows }
+ * @returns {Promise<{ success: boolean, messageId?: string, error?: string }>}
+ */
+async function sendNotificationEmail(to, data = {}) {
+  // Nếu chưa cấu hình SMTP thì ghi nhận và không làm gián đoạn nghiệp vụ
+  if (!process.env.SMTP_USER || process.env.SMTP_USER.includes('example.com')) {
+    return { success: false, reason: 'SMTP_NOT_CONFIGURED' };
+  }
+
+  const { title, message, link, type = 'NOTIFICATION', detailRows = [] } = data;
+  const subject = `📢 [LHU Media Studio] ${title}`;
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
+  const fullLink = link ? (link.startsWith('http') ? link : `${clientUrl}${link}`) : null;
+
+  const rowsHtml = Array.isArray(detailRows) && detailRows.length > 0
+    ? `
+      <table width="100%" cellpadding="6" cellspacing="0" style="margin:16px 0;border-collapse:collapse;font-size:13px;color:#c8cad0;background:rgba(255,255,255,0.02);border-radius:8px;">
+        <tbody>
+          ${detailRows.map(r => `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.05);">
+              <td style="font-weight:600;color:#8a8d9a;width:35%;">${r.label}:</td>
+              <td style="color:#ffffff;">${r.value}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `
+    : '';
+
+  const buttonHtml = fullLink
+    ? `
+      <div style="text-align:center;margin:28px 0 16px;">
+        <a href="${fullLink}" target="_blank" style="background:#284F9E;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:10px;font-size:14px;font-weight:bold;display:inline-block;letter-spacing:0.3px;">
+          👉 Xem chi tiết trên hệ thống
+        </a>
+      </div>
+    `
+    : '';
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin:0;padding:0;background:#0a0a0f;font-family:'Segoe UI',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:550px;background:#13131a;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="background:linear-gradient(135deg,#1a2540,#284F9E);padding:28px 32px;text-align:center;">
+              <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;">
+                🎬 LHU Media Studio
+              </h1>
+              <p style="color:rgba(255,255,255,0.8);margin:6px 0 0;font-size:13px;">Thông báo cập nhật hệ thống</p>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px;">
+              <h2 style="color:#ffffff;font-size:18px;font-weight:700;margin:0 0 12px;line-height:1.4;">
+                ${title}
+              </h2>
+              <p style="color:#c8cad0;font-size:14px;margin:0 0 16px;line-height:1.6;white-space:pre-wrap;">
+                ${message}
+              </p>
+
+              ${rowsHtml}
+              ${buttonHtml}
+
+              <p style="color:#8a8d9a;font-size:12px;margin:24px 0 0;line-height:1.5;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px;">
+                Bạn nhận được email này vì là người dùng có liên quan trên cổng thông tin <strong>LHU Media Studio – Trường Đại học Lạc Hồng</strong>.
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:rgba(255,255,255,0.03);padding:18px 32px;border-top:1px solid rgba(255,255,255,0.06);">
+              <p style="color:#555;font-size:11px;margin:0;text-align:center;">
+                © 2026 LHU Media Studio · Bộ phận Truyền thông · Trường Đại học Lạc Hồng
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+
+  try {
+    const info = await transporter.sendMail({
+      from: process.env.SMTP_FROM || `"LHU Media Studio" <${process.env.SMTP_USER}>`,
+      to,
+      subject,
+      html,
+    });
+    return { success: true, messageId: info.messageId };
+  } catch (err) {
+    console.warn(`[sendNotificationEmail] Gửi email đến ${to} thất bại:`, err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Kiểm tra kết nối SMTP khi khởi động
  */
 async function verifyMailer() {
@@ -121,4 +237,4 @@ async function verifyMailer() {
   }
 }
 
-module.exports = { transporter, sendOTPEmail, verifyMailer };
+module.exports = { transporter, sendOTPEmail, sendNotificationEmail, verifyMailer };

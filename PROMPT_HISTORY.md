@@ -663,3 +663,117 @@ Cập nhật hệ thống quản lý chấm công, thống kê công việc, t�
     * Suite collaborator sync: **19/19 checks PASS 100%**.
   - **Cập nhật tài liệu:** `QUY_TAC.md` (Mục 14), `KE_HOACH_TRIEN_KHAI.md` (TC-10), `PROMPT_HISTORY.md`.
 - **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #18
+- **Thời gian tiếp nhận:** 16/11/2026 - Bổ sung chức năng Xóa đợt đăng ký ca trực theo tháng
+- **Nội dung câu lệnh:**
+```markdown
+### BỔ SUNG: CHỨC NĂNG XÓA ĐỢT ĐĂNG KÝ CA TRỰC THEO THÁNG
+
+Tại mục **Các đợt đăng ký ca trực theo tháng** trong module Quản lý ca trực (theo giao diện hình ảnh tham chiếu), bổ sung quyền cho ADMIN xóa các khung lịch đăng ký của từng tháng.
+
+Yêu cầu:
+- Mỗi khung lịch tháng có nút hoặc biểu tượng Xóa, chỉ ADMIN được nhìn thấy và sử dụng.
+- Khi nhấn Xóa, hiển thị hộp thoại xác nhận, nêu rõ tháng/năm của đợt đăng ký sắp xóa.
+- Sau khi xác nhận, cập nhật danh sách ngay lập tức, không cần tải lại trang.
+- Kiểm tra các dữ liệu liên quan như đăng ký nguyện vọng của CTV, ca đã phân công, lịch trực đã xác nhận và bảng chấm công trước khi xóa.
+- Không xóa vật lý các dữ liệu lịch trực đã xác nhận hoặc đã phát sinh chấm công. Nếu có dữ liệu lịch sử, phải áp dụng cơ chế lưu trữ hoặc hủy đợt có lưu lịch sử phù hợp.
+- Không làm mất dữ liệu công việc, chấm công hoặc thù lao liên quan.
+- Nếu đợt đăng ký không thể xóa do đã phát sinh dữ liệu quan trọng, hiển thị lý do cụ thể và hướng xử lý cho ADMIN.
+
+Kiểm tra quyền ở cả Frontend và Backend, bảo đảm CTV không thể gọi API để xóa đợt đăng ký.
+
+Chỉ bổ sung chức năng còn thiếu, không viết lại module Quản lý ca trực. Kiểm thử với các trường hợp: đợt chưa có đăng ký, đợt đã có CTV đăng ký, đợt đã phân công ca và đợt đã xác nhận lịch trực.
+```
+- **Mục tiêu chính:**
+  1. Thêm nút Xóa (Trash2 icon) tại từng thẻ đợt tháng trong danh sách "CÁC ĐỢT ĐĂNG KÝ CA TRỰC THEO THÁNG" trên `/admin/duty`, chỉ hiển thị cho ADMIN.
+  2. Khi nhấn Xóa, mở modal xác nhận hiển thị chính xác Tháng/Năm (ví dụ: `Tháng 11/2026`), đồng thời gọi API kiểm tra an toàn dữ liệu thời gian thực (`/api/duty/periods/:id/deletion-check`).
+  3. Cơ chế kiểm tra an toàn toàn diện:
+     - Kiểm tra nguyện vọng đăng ký (`ShiftRegistration`).
+     - Kiểm tra ca trực (`StudioShift`), phân định ca quá khứ vs ca tương lai.
+     - Kiểm tra bản ghi chấm công thực tế (`AttendanceRecord`).
+     - Kiểm tra bảng thanh toán thù lao tháng (`MonthlyPayroll`).
+  4. Quy tắc bảo vệ lịch sử & dữ liệu thù lao tuyệt đối:
+     - **Trường hợp đợt trống, đợt chỉ có nguyện vọng nháp, hoặc đợt tương lai chưa phát sinh chấm công/thù lao:** Cho phép xóa vật lý an toàn (`action: 'DELETED'`), giải phóng hoàn toàn bản ghi và ca nháp.
+     - **Trường hợp đợt đã có dữ liệu lịch sử (đã có ca quá khứ, chấm công hoặc thù lao):** Nghiêm cấm xóa vật lý; chuyển sang cơ chế **Lưu trữ & Hủy đợt (`action: 'ARCHIVED'`)** với `status: 'CANCELLED'` (hoặc `ARCHIVED`), ghi log kiểm toán (audit trail), gỡ khung lịch khỏi danh sách hiển thị, nhưng bảo toàn 100% dữ liệu chấm công, công việc và thù lao của CTV.
+     - Hiển thị lý do và hướng dẫn rõ ràng cho Admin ngay trên giao diện modal.
+  5. Cập nhật giao diện tức thì không cần reload trang; phát sóng đồng bộ đa tab (`BroadcastChannel` & `CustomEvent`).
+  6. Bảo mật RBAC 2 đầu: Chặn triệt để CTV gọi API xóa (trả về 403 Forbidden).
+- **Hành động & Kết quả thực hiện:**
+  1. **Database & Backend Models:**
+     - `TN-Backend/src/models/DutyPeriod.js`: Mở rộng enum validation cho cột `status`: `['OPEN', 'CLOSED', 'ARRANGING', 'CONFIRMED', 'CANCELLED', 'ARCHIVED']`.
+  2. **Backend Services & Controllers (`duty.service.js`, `duty.controller.js`):**
+     - `getDutyPeriods`: Mặc định lọc bỏ các đợt `CANCELLED` và `ARCHIVED` để danh sách đợt hoạt động luôn sạch sẽ và cập nhật tức thì.
+     - `createDutyPeriod`: Tích hợp logic tái kích hoạt (reactivate) nếu đợt tháng/năm đó trước đó đã bị `CANCELLED`/`ARCHIVED`, tránh lỗi vi phạm ràng buộc Unique `UQ_DutyPeriods_MonthYear` trong MSSQL.
+     - `checkPeriodDeletionSafety(periodId)`: Trả về phân tích chi tiết: số lượng nguyện vọng, ca trực tổng, ca quá khứ, ca tương lai, chấm công, thù lao, cờ `hasHistoricalData`, `isHardDeletable`, cùng `reason`, `guidance` và `recommendedAction`.
+     - `deleteDutyPeriod(adminUserId, periodId, options)`: Thực hiện xóa vật lý (transaction Sequelize an toàn) hoặc lưu trữ an toàn (hủy ca tương lai, giữ nguyên ca quá khứ, chấm công và thù lao, ghi log ghi chú kiểm toán).
+     - `duty.routes.js`: Định nghĩa các route được bảo vệ bởi middleware `authenticate` và `authorize('ADMIN')`:
+       + `GET /api/duty/periods/:id/deletion-check`
+       + `DELETE /api/duty/periods/:id`
+  3. **Frontend UI/UX (`TN-Frontend`):**
+     - `TN-Frontend/src/lib/api.ts`: Bổ sung tham số `body` tùy chọn cho `api.delete`.
+     - `TN-Frontend/src/app/admin/duty/page.tsx`:
+       - Thêm icon thùng rác (`Trash2`) tại góc phải mỗi thẻ đợt tháng (bảo đảm `e.stopPropagation()` để không trigger chọn đợt).
+       - Modal xác nhận xóa đợt phong cách dark theme hiện đại: Hiển thị tiêu đề rõ ràng `Xác nhận xóa đợt đăng ký - Tháng M/YYYY`.
+       - Hiển thị thẻ tóm tắt an toàn dữ liệu: Báo cáo số CTV đăng ký, số ca trực, số bản ghi chấm công và thù lao.
+       - Hiển thị badge động: "Xóa an toàn" (Màu xanh lá) cho đợt trống/nháp, hoặc "Lưu trữ bảo toàn dữ liệu" (Màu vàng cam/đỏ) kèm cảnh báo chi tiết và hướng xử lý cụ thể cho đợt có dữ liệu lịch sử.
+       - Cập nhật state nội bộ ngay lập tức sau khi xóa/lưu trữ thành công, tự động chuyển selection sang đợt kế tiếp nếu đợt đang chọn bị xóa, đồng thời phát `BroadcastChannel` và CustomEvent `duty_schedule_updated`.
+  4. **Kiểm thử tự động toàn diện:**
+     - Tạo kịch bản kiểm thử tích hợp `TN-Backend/scripts/test_delete_duty_period_feature.js` bao quát 6 ca kiểm thử:
+       + Test 1: Kiểm tra phân quyền RBAC (CTV bị chặn 403 Forbidden). -> **PASS**
+       + Test 2: Đợt chưa có đăng ký (Xóa vật lý hoàn toàn). -> **PASS**
+       + Test 3: Đợt đã có CTV đăng ký nguyện vọng (Xóa sạch nguyện vọng & đợt). -> **PASS**
+       + Test 4: Đợt đã phân công ca nháp (Xóa sạch ca nháp & đợt). -> **PASS**
+       + Test 5: Đợt đã xác nhận lịch trong tương lai (Xóa an toàn). -> **PASS**
+       + Test 6: Đợt đã có dữ liệu lịch sử quan trọng (Tháng 11/2026: Chặn xóa vật lý, áp dụng Lưu trữ / Hủy đợt, bảo toàn 100% 59 bản ghi chấm công và 7 bảng thù lao). -> **PASS**
+     - Backend Unit Tests: **89/89 tests PASS 100%**.
+     - TypeScript Compilation (`tsc --noEmit`): **0 lỗi (0 errors)**.
+     - Next.js Production Build: **26/26 routes hoàn tất thành công**.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #19
+- **Thời gian tiếp nhận:** 16/11/2026 - Tinh chỉnh chức năng Xóa toàn bộ dữ liệu khi xóa đợt đăng ký và Làm mới / Để trống hoàn toàn khi tạo đợt mới
+- **Nội dung câu lệnh:**
+```markdown
+khi xoá đợt đăng ký toàn bộ dữ liệu sẽ bị xoá, khi tạo đợt mới dữ liệu sẽ hoàn toàn dc làm mới và để trống, hãy fix lại
+```
+- **Mục tiêu chính:**
+  1. Loại bỏ hoàn toàn cơ chế "Lưu trữ / Hủy đợt (Archive / Soft cancel)" gây giữ lại dữ liệu lịch sử hoặc ca cũ.
+  2. Khi ADMIN xóa một đợt đăng ký ca trực (`DELETE /api/duty/periods/:id`):
+     - Xóa vật lý sạch sẽ 100% (Hard Delete) toàn bộ dữ liệu liên quan trong transaction:
+       * Toàn bộ nguyện vọng đăng ký của CTV (`ShiftRegistration`) của đợt và trong toàn bộ tháng.
+       * Toàn bộ ca trực Studio (`StudioShift`) thuộc đợt và trong tháng.
+       * Toàn bộ bản ghi chấm công ca trực (`AttendanceRecord` mang ký hiệu `LV`, `sourceType: 'DUTY_SHIFT'/'STUDIO_SHIFT'`) của tháng.
+       * Toàn bộ lịch sử chỉnh sửa (`DutyScheduleHistory`) của đợt và trong tháng.
+       * Xóa vĩnh viễn bản ghi `DutyPeriod` chính nó khỏi Database MSSQL.
+       * Tự động reset và đồng bộ lại bảng thù lao tháng (`MonthlyPayroll`: `totalShiftCount = 0, shiftHours = 0`).
+  3. Khi tạo đợt mới (`POST /api/duty/periods`):
+     - Dữ liệu hoàn toàn được làm mới và để trống 100%:
+       * Dọn sạch mọi dữ liệu ca trực, nguyện vọng hoặc chấm công còn sót lại của tháng đó.
+       * Khởi tạo `DutyPeriod` hoàn toàn mới với trạng thái `OPEN`, `confirmedByUserId = null`, `confirmedAt = null`.
+       * Dữ liệu phân công và ma trận ca trực hoàn toàn sạch và để trống 100% (`0 CTV đăng ký, 0 ca phân công`, các slot ngày đều trống).
+  4. Tinh chỉnh giao diện & Modal xác nhận:
+     - Loại bỏ hoàn toàn cảnh báo chặn "Không thể xóa vật lý" và nút "Lưu trữ & Hủy đợt".
+     - Hộp thoại xác nhận thống nhất: "Xác nhận xóa toàn bộ dữ liệu đợt này", nêu rõ số lượng đăng ký và ca phân công sẽ bị xóa.
+     - Sau khi xóa, cập nhật state tức thì, tự động chuyển chọn đợt tiếp theo và phát sóng đa tab qua `BroadcastChannel` và CustomEvent `duty_schedule_updated`.
+- **Hành động & Kết quả thực hiện:**
+  1. **Backend (`duty.service.js`):**
+     - `createDutyPeriod`: Hỗ trợ linh hoạt cả 2 kiểu tham số `(adminUserId, data)` và `(adminUserId, month, year, ...)`. Tự động dọn sạch mọi dữ liệu dư thừa của tháng đó trước khi tạo bản ghi mới để đảm bảo đợt mới hoàn toàn trống 100%. Nếu đợt cũ ở trạng thái CANCELLED/ARCHIVED, xóa đợt cũ hoàn toàn để tạo đợt mới tinh.
+     - `checkPeriodDeletionSafety`: Báo cáo số lượng bản ghi liên quan (nguyện vọng, ca trực, chấm công), đặt `isHardDeletable = true` luôn luôn cho phép xóa toàn bộ.
+     - `deleteDutyPeriod`: Thực hiện xóa vật lý triệt để toàn bộ `ShiftRegistration`, `StudioShift`, `AttendanceRecord` ca trực, `DutyScheduleHistory`, `DutyPeriod` trong transaction; reset `MonthlyPayroll` và tự động đồng bộ lại bảng thù lao.
+  2. **Frontend UI/UX (`TN-Frontend/src/app/admin/duty/page.tsx`):**
+     - Cập nhật `handleCreatePeriod`: Sau khi tạo thành công, tự động chọn đợt mới, tải summary trống, thông báo rõ ràng "Dữ liệu đã được làm mới và để trống" và phát sự kiện đồng bộ lịch.
+     - Cập nhật `handleConfirmDeletePeriod`: Thực hiện gọi API DELETE trực tiếp không thông qua archive, thông báo thành công và cập nhật tức thì danh sách.
+     - Cập nhật Modal Xóa đợt: Giao diện cảnh báo màu đỏ tinh gọn, xác nhận xóa toàn bộ dữ liệu, loại bỏ hoàn toàn nút và thông báo lưu trữ.
+  3. **Kiểm thử tự động:**
+     - Script kiểm thử `test_delete_duty_period_feature.js`: **PASS 100%** (Test 1: CTV bị chặn 403; Test 2: Đợt phong phú dữ liệu bị xóa sạch hoàn toàn từ DB; Test 3: Tạo đợt mới cho tháng đó có 0 CTV đăng ký, 0 ca phân công, 0 bản ghi chấm công, các slot đều rỗng).
+     - Backend unit tests: **89/89 tests PASS 100%**.
+     - TypeScript Compilation: **0 errors**.
+     - Next.js Production Build: **26/26 routes hoàn tất thành công**.
+- **Trạng thái:** `COMPLETED`

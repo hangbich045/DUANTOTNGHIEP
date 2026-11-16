@@ -131,13 +131,17 @@ export default function Navbar() {
         )}
       </div>
 
-      {/* Mobile menu toggle */}
-      <button
-        onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-        className="md:hidden p-2 rounded-xl border border-white/5 text-studio-text hover:bg-white/5 transition-all"
-      >
-        {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-      </button>
+      {/* Mobile controls (Notification Bell + Hamburger menu) */}
+      <div className="flex md:hidden items-center space-x-2">
+        {user && <NotificationBell />}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="p-2 rounded-xl border border-white/10 bg-[#13151F] text-studio-text hover:bg-white/5 transition-all cursor-pointer"
+          aria-label="Menu"
+        >
+          {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+        </button>
+      </div>
 
       {/* Mobile drawer */}
       {mobileMenuOpen && (

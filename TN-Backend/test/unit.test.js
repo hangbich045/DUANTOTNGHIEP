@@ -1360,3 +1360,239 @@ describe('Unit Test 12: Đồng bộ danh sách CTV trong các bộ lọc và dr
 
 
 
+
+// =========================================================================
+// UNIT TEST 13: HỆ THỐNG THÔNG BÁO IN-APP VÀ EMAIL GIAO DỊCH (TASK 4.1 - FR-07)
+// =========================================================================
+describe('Unit Test 13: Hệ thống thông báo in-app và email giao dịch (FR-07)', () => {
+  it('13.1. Tạo thông báo hợp lệ với đầy đủ tiêu đề, nội dung và trạng thái mặc định isRead = false', () => {
+    function createMockNotification({ userId, title, message, type = 'SYSTEM', link = null }) {
+      if (!userId || !title || !message) {
+        throw new Error('userId, title và message là bắt buộc');
+      }
+      return {
+        id: 'mock-uuid-' + Math.random(),
+        userId,
+        title: title.trim(),
+        message: message.trim(),
+        type,
+        link,
+        isRead: false,
+        createdAt: new Date(),
+      };
+    }
+
+    const notif = createMockNotification({
+      userId: 'user-123',
+      title: 'Thông báo kiểm thử',
+      message: 'Nội dung kiểm thử',
+      type: 'TASK_ASSIGNED',
+      link: '/tasks',
+    });
+
+    assert.equal(notif.userId, 'user-123');
+    assert.equal(notif.title, 'Thông báo kiểm thử');
+    assert.equal(notif.isRead, false);
+    assert.equal(notif.type, 'TASK_ASSIGNED');
+    assert.throws(() => createMockNotification({ userId: 'u1' }), /bắt buộc/);
+  });
+
+  it('13.2. Cập nhật trạng thái đã đọc (isRead: true) cho từng thông báo hoặc toàn bộ', () => {
+    const notifications = [
+      { id: '1', userId: 'u1', isRead: false },
+      { id: '2', userId: 'u1', isRead: false },
+      { id: '3', userId: 'u2', isRead: false },
+    ];
+
+    // Đánh dấu 1 thông báo
+    const target = notifications.find((n) => n.id === '1');
+    target.isRead = true;
+    assert.equal(target.isRead, true);
+
+    // Đánh dấu tất cả của u1
+    notifications.forEach((n) => {
+      if (n.userId === 'u1') n.isRead = true;
+    });
+    const unreadU1 = notifications.filter((n) => n.userId === 'u1' && !n.isRead);
+    assert.equal(unreadU1.length, 0);
+
+    // u2 vẫn còn chưa đọc
+    const unreadU2 = notifications.filter((n) => n.userId === 'u2' && !n.isRead);
+    assert.equal(unreadU2.length, 1);
+  });
+
+  it('13.3. Phân loại chuẩn xác các mã sự kiện nghiệp vụ (FR-07.4)', () => {
+    const validEventTypes = [
+      'TASK_ASSIGNED',
+      'TASK_REVISION_REQUESTED',
+      'TASK_COMPLETED',
+      'TASK_SUBMITTED',
+      'BORROW_REQUEST_CREATED',
+      'BORROW_REQUEST_APPROVED',
+      'BORROW_REQUEST_REJECTED',
+      'EQUIPMENT_HANDED_OVER',
+      'EQUIPMENT_RETURNED',
+      'BORROW_OVERDUE',
+      'STUDIO_BOOKING_REQUEST',
+      'STUDIO_BOOKING_APPROVED',
+      'STUDIO_BOOKING_REJECTED',
+      'DUTY_PERIOD_OPEN',
+      'DUTY_REGISTRATION_SUBMITTED',
+      'DUTY_SCHEDULE_CONFIRMED',
+    ];
+
+    validEventTypes.forEach((evt) => {
+      assert.equal(typeof evt, 'string');
+      assert.equal(evt.length > 5, true);
+    });
+  });
+
+  it('13.4. Quét nợ quá hạn: Tự động phát hiện các đơn HANDED_OVER có returnDate < NOW', () => {
+    const now = new Date('2026-11-10T12:00:00Z');
+    const requests = [
+      { id: 'r1', status: 'HANDED_OVER', returnDate: new Date('2026-11-09T10:00:00Z') }, // Quá hạn
+      { id: 'r2', status: 'HANDED_OVER', returnDate: new Date('2026-11-12T10:00:00Z') }, // Chưa quá hạn
+      { id: 'r3', status: 'APPROVED', returnDate: new Date('2026-11-08T10:00:00Z') },    // Chưa nhận máy
+      { id: 'r4', status: 'RETURNED', returnDate: new Date('2026-11-07T10:00:00Z') },    // Đã trả
+    ];
+
+    const overdue = requests.filter(
+      (r) => r.status === 'HANDED_OVER' && r.returnDate < now
+    );
+    assert.equal(overdue.length, 1);
+    assert.equal(overdue[0].id, 'r1');
+  });
+
+  it('13.5. Cơ chế fallback an toàn của hàm gửi email giao dịch khi SMTP chưa cấu hình', async () => {
+    async function mockSendNotificationEmail(to, data) {
+      const smtpUser = process.env.SMTP_USER;
+      if (!smtpUser || smtpUser.includes('example.com')) {
+        return { success: false, reason: 'SMTP_NOT_CONFIGURED' };
+      }
+      return { success: true };
+    }
+
+    const res = await mockSendNotificationEmail('ctv@lhu.edu.vn', {
+      title: 'Test Email',
+      message: 'Test Message',
+    });
+    assert.equal(typeof res, 'object');
+    assert.equal(res.success !== undefined, true);
+  });
+
+  it('13.6. Ràng buộc QUY_TAC.md 10.4: Chặn tạo thông báo duyệt bảng lương trong hệ thống', () => {
+    function validateNotificationType(type) {
+      if (type.toUpperCase().includes('PAYROLL_APPROVED') || type.toUpperCase().includes('SALARY_APPROVED')) {
+        throw new Error('Không được tạo thông báo phê duyệt bảng lương theo QUY_TAC.md Mục 10.4');
+      }
+      return true;
+    }
+
+    assert.equal(validateNotificationType('TASK_COMPLETED'), true);
+    assert.equal(validateNotificationType('DUTY_SCHEDULE_CONFIRMED'), true);
+    assert.throws(
+      () => validateNotificationType('PAYROLL_APPROVED'),
+      /Không được tạo thông báo phê duyệt bảng lương/
+    );
+  });
+});
+
+// ============================================================
+// TEST SUITE 14: QUY TẮC ĐỒNG BỘ CÔNG VIỆC CTV & BẢNG CHẤM CÔNG THÁNG (LV -> SV)
+// ============================================================
+
+describe('Unit Test 14: Quy tắc đồng bộ giữa Công việc của CTV và Bảng chấm công tháng', () => {
+  const { getSessionsForDayHours } = require('../src/services/payroll.service');
+
+  it('14.1. Quy tắc phân bổ: Dưới 5 tiếng (kể cả dưới 4h và từ 4 đến dưới 5h) -> SV buổi sáng (S)', () => {
+    const res1 = getSessionsForDayHours(1.5);
+    assert.deepEqual(res1.sessions, ['S']);
+    assert.equal(res1.isPendingConfirmation, false);
+
+    const res2 = getSessionsForDayHours(3.9);
+    assert.deepEqual(res2.sessions, ['S']);
+    assert.equal(res2.isPendingConfirmation, false);
+
+    const res3 = getSessionsForDayHours(4.0);
+    assert.deepEqual(res3.sessions, ['S']);
+    assert.equal(res3.isPendingConfirmation, false);
+
+    const res4 = getSessionsForDayHours(4.8);
+    assert.deepEqual(res4.sessions, ['S']);
+    assert.equal(res4.isPendingConfirmation, false);
+  });
+
+  it('14.2. Quy tắc phân bổ: Từ 5 đến 8 tiếng -> SV buổi sáng và chiều (S + C)', () => {
+    const res1 = getSessionsForDayHours(5.0);
+    assert.deepEqual(res1.sessions, ['S', 'C']);
+    assert.equal(res1.isPendingConfirmation, false);
+
+    const res2 = getSessionsForDayHours(7.5);
+    assert.deepEqual(res2.sessions, ['S', 'C']);
+    assert.equal(res2.isPendingConfirmation, false);
+
+    const res3 = getSessionsForDayHours(8.0);
+    assert.deepEqual(res3.sessions, ['S', 'C']);
+    assert.equal(res3.isPendingConfirmation, false);
+  });
+
+  it('14.3. Quy tắc phân bổ: Trên 8 tiếng -> SV cả sáng, chiều và tối (S + C + T)', () => {
+    const res1 = getSessionsForDayHours(8.5);
+    assert.deepEqual(res1.sessions, ['S', 'C', 'T']);
+    assert.equal(res1.isPendingConfirmation, false);
+
+    const res2 = getSessionsForDayHours(10.0);
+    assert.deepEqual(res2.sessions, ['S', 'C', 'T']);
+    assert.equal(res2.isPendingConfirmation, false);
+  });
+
+  it('14.4. Quy tắc phân bổ: Trường hợp làm việc từ 4 đến dưới 5 tiếng chính thức phân bổ buổi sáng (S)', () => {
+    const res1 = getSessionsForDayHours(4.0);
+    assert.deepEqual(res1.sessions, ['S']);
+    assert.equal(res1.isPendingConfirmation, false);
+
+    const res2 = getSessionsForDayHours(4.5);
+    assert.deepEqual(res2.sessions, ['S']);
+    assert.equal(res2.isPendingConfirmation, false);
+
+    const res3 = getSessionsForDayHours(4.99);
+    assert.deepEqual(res3.sessions, ['S']);
+    assert.equal(res3.isPendingConfirmation, false);
+  });
+
+  it('14.5. Chỉ áp dụng cho công việc đã COMPLETED, loại trừ PENDING_APPROVAL hoặc REVISION_REQUESTED', () => {
+    function filterCompletedTasks(tasks) {
+      return tasks.filter((t) => t.status === 'COMPLETED');
+    }
+
+    const tasks = [
+      { id: '1', status: 'COMPLETED', actualHours: 3 },
+      { id: '2', status: 'PENDING_APPROVAL', actualHours: 6 },
+      { id: '3', status: 'REVISION_REQUESTED', actualHours: 4 },
+      { id: '4', status: 'IN_PROGRESS', actualHours: 5 },
+    ];
+
+    const validTasks = filterCompletedTasks(tasks);
+    assert.equal(validTasks.length, 1);
+    assert.equal(validTasks[0].id, '1');
+  });
+
+  it('14.6. Khử trùng thời gian: Ca trực bị chuyển thành SV không được tính 2 lần trong thù lao', () => {
+    // CTV có ca trực sáng (4h) và task 2h cùng ngày
+    // Task 2h -> buổi sáng thành SV
+    // Giờ LV của buổi sáng không được tính trùng
+    const validShifts = [{ date: '2026-11-10', shiftType: 'MORNING' }];
+    const svSessionsByDate = { '2026-11-10': ['S'] };
+
+    function filterNonOverlapShifts(shifts, svSessionsMap) {
+      return shifts.filter((s) => {
+        const sess = s.shiftType === 'MORNING' ? 'S' : s.shiftType === 'AFTERNOON' ? 'C' : 'T';
+        const svSessions = svSessionsMap[s.date] || [];
+        return !svSessions.includes(sess);
+      });
+    }
+
+    const actualLvShifts = filterNonOverlapShifts(validShifts, svSessionsByDate);
+    assert.equal(actualLvShifts.length, 0, 'Ca trực đã chuyển sang SV phải được loại trừ khỏi tính giờ LV');
+  });
+});

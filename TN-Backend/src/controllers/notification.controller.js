@@ -6,6 +6,7 @@
  */
 
 const { Notification } = require('../models');
+const notificationService = require('../services/notification.service');
 
 const getMyNotifications = async (req, res) => {
   try {
@@ -81,9 +82,26 @@ const markAllAsRead = async (req, res) => {
   }
 };
 
+const checkOverdueBorrowRequests = async (req, res) => {
+  try {
+    const result = await notificationService.checkAndNotifyOverdueBorrowRequests();
+    return res.status(200).json({
+      success: true,
+      message: `Đã quét và xử lý ${result.updatedCount} đơn mượn quá hạn, gửi ${result.notifiedCount} thông báo cảnh báo.`,
+      data: result,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || 'Lỗi khi kiểm tra nợ quá hạn',
+    });
+  }
+};
+
 module.exports = {
   getMyNotifications,
   markAsRead,
   markAllAsRead,
+  checkOverdueBorrowRequests,
 };
 

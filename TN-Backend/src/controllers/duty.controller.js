@@ -55,6 +55,42 @@ const updateDutyPeriodStatus = async (req, res) => {
   }
 };
 
+const checkPeriodDeletionSafety = async (req, res) => {
+  try {
+    const analysis = await dutyService.checkPeriodDeletionSafety(req.params.id);
+    return res.status(200).json({
+      success: true,
+      data: analysis,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      message: error.message || 'Lỗi khi kiểm tra dữ liệu đợt đăng ký',
+    });
+  }
+};
+
+const deleteDutyPeriod = async (req, res) => {
+  try {
+    const options = {
+      ...(req.body || {}),
+      ...(req.query || {}),
+    };
+    const result = await dutyService.deleteDutyPeriod(req.user.id, req.params.id, options);
+    return res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      message: error.message || 'Lỗi khi xóa đợt đăng ký ca trực',
+      details: error.details || null,
+    });
+  }
+};
+
 // Giai đoạn 2: CTV đăng ký thời gian có thể trực (Availability)
 const registerAvailability = async (req, res) => {
   try {
@@ -106,16 +142,36 @@ const getPeriodRegistrationsSummary = async (req, res) => {
 
 const assignShifts = async (req, res) => {
   try {
-    const result = await dutyService.assignShifts(req.user.id, req.params.id, req.body.assignments || []);
+    const result = await dutyService.assignShifts(
+      req.user.id,
+      req.params.id,
+      req.body.assignments || [],
+      { reason: req.body.reason }
+    );
     return res.status(200).json({
       success: true,
-      message: `Đã phân công ${result.count} ca trực thành công!`,
+      message: result.message || `Đã phân công ${result.count} ca trực thành công!`,
       data: result,
     });
   } catch (error) {
     return res.status(error.statusCode || 400).json({
       success: false,
       message: error.message || 'Lỗi khi phân công ca trực',
+    });
+  }
+};
+
+const getScheduleHistories = async (req, res) => {
+  try {
+    const histories = await dutyService.getScheduleHistories(req.params.id);
+    return res.status(200).json({
+      success: true,
+      data: histories,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Lỗi khi lấy lịch sử chỉnh sửa ca trực',
     });
   }
 };
@@ -186,11 +242,12 @@ const completeShift = async (req, res) => {
 
 const cancelShift = async (req, res) => {
   try {
-    const shift = await dutyService.cancelShift(req.params.id, req.user.id, req.user.role);
+    const reason = req.body?.reason || req.query?.reason || '';
+    const result = await dutyService.cancelShift(req.params.id, req.user.id, req.user.role, reason);
     return res.status(200).json({
       success: true,
-      message: 'Hủy ca trực thành công!',
-      data: shift,
+      message: result.message || 'Hủy ca trực thành công!',
+      data: result,
     });
   } catch (error) {
     return res.status(error.statusCode || 400).json({
@@ -215,18 +272,41 @@ const getShifts = async (req, res) => {
   }
 };
 
+/**
+ * Lấy Bảng phân công lịch làm việc nhân sự tuần (mẫu BPTT)
+ * Cả CTV và ADMIN đều có quyền xem toàn bộ bộ phận
+ */
+const getWeeklySchedule = async (req, res) => {
+  try {
+    const schedule = await dutyService.getWeeklySchedule(req.query, req.user);
+    return res.status(200).json({
+      success: true,
+      data: schedule,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Lỗi khi lấy bảng phân công lịch làm việc tuần',
+    });
+  }
+};
+
 module.exports = {
   createDutyPeriod,
   getDutyPeriods,
   updateDutyPeriodStatus,
+  checkPeriodDeletionSafety,
+  deleteDutyPeriod,
   registerAvailability,
   getCTVRegistrations,
   getPeriodRegistrationsSummary,
   assignShifts,
   confirmPeriodSchedule,
+  getScheduleHistories,
   registerShift,
   confirmShift,
   completeShift,
   cancelShift,
   getShifts,
+  getWeeklySchedule,
 };

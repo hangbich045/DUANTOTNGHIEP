@@ -107,11 +107,15 @@ class ApiClient {
     return this.handleResponse(response);
   }
 
-  async delete(endpoint: string) {
-    const response = await fetch(`${getBaseUrl()}${endpoint}`, {
+  async delete(endpoint: string, body?: any) {
+    const options: RequestInit = {
       method: 'DELETE',
       headers: this.getHeaders(),
-    });
+    };
+    if (body !== undefined) {
+      options.body = JSON.stringify(body);
+    }
+    const response = await fetch(`${getBaseUrl()}${endpoint}`, options);
     return this.handleResponse(response);
   }
 }
