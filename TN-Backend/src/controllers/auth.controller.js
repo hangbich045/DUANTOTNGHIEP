@@ -132,6 +132,9 @@ const register = async (req, res) => {
 const login = async (req, res) => {
   try {
     const result = await authService.login(req.body);
+    if (result && result.user) {
+      res.locals.userId = result.user.id;
+    }
     return res.status(200).json({
       success: true,
       message: 'Đăng nhập thành công!',

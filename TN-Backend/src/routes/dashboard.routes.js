@@ -7,7 +7,7 @@
 
 const { Router } = require('express');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
-const { User, Equipment, BorrowRequest, StudioBooking, EquipmentCategory } = require('../models');
+const { User, Equipment, BorrowRequest, StudioBooking, EquipmentCategory, Task, MonthlyPayroll } = require('../models');
 const userService = require('../services/user.service');
 const { Op, fn, col, literal } = require('sequelize');
 const { sequelize } = require('../config/database');
@@ -59,10 +59,18 @@ router.use(authenticate, authorize('ADMIN'));
  */
 router.get('/stats', async (req, res) => {
   try {
+    const now = new Date();
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+
     const [
       totalUsers, totalEquipment, availableEquipment,
       borrowedEquipment, maintenanceEquipment,
       pendingBorrows, pendingBookings,
+      totalTasks, notStartedTasks, inProgressTasks,
+      pendingApprovalTasks, revisionTasks, completedTasks,
+      overdueTasks,
+      urgentTasksList,
     ] = await Promise.all([
       User.count(),
       Equipment.count(),
@@ -71,13 +79,116 @@ router.get('/stats', async (req, res) => {
       Equipment.count({ where: { status: 'MAINTENANCE' } }),
       BorrowRequest.count({ where: { status: 'PENDING' } }),
       StudioBooking.count({ where: { status: 'PENDING' } }),
+      Task.count(),
+      Task.count({ where: { status: 'NOT_STARTED' } }),
+      Task.count({ where: { status: 'IN_PROGRESS' } }),
+      Task.count({ where: { status: 'PENDING_APPROVAL' } }),
+      Task.count({ where: { status: 'REVISION_REQUESTED' } }),
+      Task.count({ where: { status: 'COMPLETED' } }),
+      Task.count({
+        where: {
+          status: { [Op.notIn]: ['COMPLETED', 'CANCELLED'] },
+          deadline: { [Op.lt]: now, [Op.ne]: null },
+        },
+      }),
+      Task.findAll({
+        where: {
+          status: { [Op.notIn]: ['COMPLETED', 'CANCELLED'] },
+          deadline: { [Op.ne]: null },
+        },
+        include: [
+          { model: User, as: 'assignee', attributes: ['id', 'fullName', 'email', 'avatarUrl'] },
+        ],
+        order: [['deadline', 'ASC']],
+        limit: 5,
+      }),
     ]);
+
+    // Lấy thông tin bảng lương tháng hiện tại
+    let monthlyPayrolls = await MonthlyPayroll.findAll({
+      where: { month: currentMonth, year: currentYear },
+    });
+
+    // Nếu chưa có dữ liệu trong MonthlyPayrolls của tháng hiện tại, tự động tính toán
+    if (monthlyPayrolls.length === 0) {
+      try {
+        const payrollService = require('../services/payroll.service');
+        const calculated = await payrollService.calculateMonthlyPayroll(currentMonth, currentYear);
+        if (calculated && Array.isArray(calculated)) {
+          monthlyPayrolls = calculated.map((item) => item.payroll).filter(Boolean);
+        }
+      } catch (payrollErr) {
+        console.warn('Dashboard stats payroll calculation fallback:', payrollErr.message);
+      }
+    }
+
+    let currentMonthTotalAmount = 0;
+    let currentMonthHours = 0;
+    let collaboratorCount = 0;
+    const payrollStatusBreakdown = { DRAFT: 0, CONFIRMED: 0, PAID: 0 };
+
+    if (monthlyPayrolls && monthlyPayrolls.length > 0) {
+      for (const p of monthlyPayrolls) {
+        const amt = parseFloat(p.totalAmount || 0);
+        const hrs = parseFloat(p.totalCalculatedHours || p.totalStandardHours || 0);
+        currentMonthTotalAmount += amt;
+        currentMonthHours += hrs;
+        if (amt > 0 || hrs > 0) {
+          collaboratorCount++;
+        }
+        if (payrollStatusBreakdown[p.status] !== undefined) {
+          payrollStatusBreakdown[p.status]++;
+        }
+      }
+      if (collaboratorCount === 0 && monthlyPayrolls.length > 0) {
+        collaboratorCount = monthlyPayrolls.length;
+      }
+    }
+
+    const urgentTasks = (urgentTasksList || []).map((t) => {
+      const isOverdue = t.deadline && new Date(t.deadline) < now;
+      return {
+        id: t.id,
+        title: t.title,
+        status: t.status,
+        deadline: t.deadline,
+        isOverdue: Boolean(isOverdue),
+        assignee: t.assignee
+          ? {
+              id: t.assignee.id,
+              fullName: t.assignee.fullName,
+              email: t.assignee.email,
+              avatar: t.assignee.avatarUrl || null,
+            }
+          : null,
+      };
+    });
+
     return res.status(200).json({
       equipment: { total: totalEquipment, available: availableEquipment, borrowed: borrowedEquipment, maintenance: maintenanceEquipment },
       requests: { pendingBorrows, pendingBookings },
       users: { total: totalUsers },
+      tasks: {
+        total: totalTasks,
+        notStarted: notStartedTasks,
+        inProgress: inProgressTasks,
+        pendingApproval: pendingApprovalTasks,
+        revisionRequested: revisionTasks,
+        completed: completedTasks,
+        overdue: overdueTasks,
+        urgentTasks,
+      },
+      payroll: {
+        month: currentMonth,
+        year: currentYear,
+        totalAmount: Math.round(currentMonthTotalAmount),
+        totalHours: Math.round(currentMonthHours * 10) / 10,
+        collaboratorCount,
+        statusBreakdown: payrollStatusBreakdown,
+      },
     });
   } catch (error) {
+    console.error('Dashboard stats error:', error.message);
     return res.status(500).json({ message: error.message });
   }
 });
@@ -202,7 +313,7 @@ router.get('/reports', async (req, res) => {
 
     const dateWhere = { created_at: { [Op.between]: [rangeStart, rangeEnd] } };
 
-    const [borrows, bookings, topRaw, totalEquipment] = await Promise.all([
+    const [borrows, bookings, tasks, topRaw, totalEquipment, payrollTrendRows] = await Promise.all([
       BorrowRequest.findAll({
         where: dateWhere,
         include: [
@@ -215,6 +326,11 @@ router.get('/reports', async (req, res) => {
       StudioBooking.findAll({
         where: dateWhere,
         include: [{ model: User, as: 'booker', attributes: ['fullName', 'email', 'employeeCode'] }],
+        order: [['created_at', 'DESC']],
+      }),
+      Task.findAll({
+        where: dateWhere,
+        attributes: ['id', 'status', 'deadline', 'created_at', 'createdAt'],
         order: [['created_at', 'DESC']],
       }),
       sequelize.query(`
@@ -232,21 +348,53 @@ router.get('/reports', async (req, res) => {
         ORDER BY COUNT(br.equipment_id) DESC
       `, { replacements: { start: rangeStart, end: rangeEnd }, type: sequelize.QueryTypes.SELECT }),
       Equipment.count(),
+      sequelize.query(`
+        SELECT
+          [year],
+          [month],
+          SUM(total_amount) AS totalAmount,
+          SUM(total_calculated_hours) AS totalHours,
+          COUNT(DISTINCT user_id) AS collaboratorCount
+        FROM MonthlyPayrolls
+        GROUP BY [year], [month]
+        ORDER BY [year] ASC, [month] ASC
+      `, { type: sequelize.QueryTypes.SELECT }).catch(() => []),
     ]);
 
     const chartMap = {};
     for (const b of borrows) {
       const d = new Date(b.created_at || b.createdAt);
       const key = range === 'year' ? `${d.getMonth() + 1}/${d.getFullYear()}` : `${d.getDate()}/${d.getMonth() + 1}`;
-      if (!chartMap[key]) chartMap[key] = { date: key, borrows: 0, bookings: 0 };
+      if (!chartMap[key]) chartMap[key] = { date: key, borrows: 0, bookings: 0, tasks: 0 };
       chartMap[key].borrows++;
     }
     for (const b of bookings) {
       const d = new Date(b.created_at || b.createdAt);
       const key = range === 'year' ? `${d.getMonth() + 1}/${d.getFullYear()}` : `${d.getDate()}/${d.getMonth() + 1}`;
-      if (!chartMap[key]) chartMap[key] = { date: key, borrows: 0, bookings: 0 };
+      if (!chartMap[key]) chartMap[key] = { date: key, borrows: 0, bookings: 0, tasks: 0 };
       chartMap[key].bookings++;
     }
+
+    let tasksCompletedCount = 0;
+    let tasksInProgressCount = 0;
+    let tasksPendingApprovalCount = 0;
+    let tasksOverdueCount = 0;
+
+    for (const t of tasks) {
+      if (t.status === 'COMPLETED') tasksCompletedCount++;
+      else if (t.status === 'IN_PROGRESS') tasksInProgressCount++;
+      else if (t.status === 'PENDING_APPROVAL') tasksPendingApprovalCount++;
+
+      if (t.deadline && new Date(t.deadline) < now && !['COMPLETED', 'CANCELLED'].includes(t.status)) {
+        tasksOverdueCount++;
+      }
+
+      const d = new Date(t.created_at || t.createdAt);
+      const key = range === 'year' ? `${d.getMonth() + 1}/${d.getFullYear()}` : `${d.getDate()}/${d.getMonth() + 1}`;
+      if (!chartMap[key]) chartMap[key] = { date: key, borrows: 0, bookings: 0, tasks: 0 };
+      chartMap[key].tasks = (chartMap[key].tasks || 0) + 1;
+    }
+
     const chartData = Object.values(chartMap).sort((a, b) => {
       const [dA, mA] = a.date.split('/').map(Number);
       const [dB, mB] = b.date.split('/').map(Number);
@@ -262,13 +410,46 @@ router.get('/reports', async (req, res) => {
       count: parseInt(item.count) || 0,
     }));
 
+    const payrollTrend = (payrollTrendRows || []).map((row) => ({
+      year: row.year,
+      month: row.month,
+      label: `T${row.month}/${row.year}`,
+      totalAmount: Math.round(Number(row.totalAmount || 0)),
+      totalHours: Math.round(Number(row.totalHours || 0) * 10) / 10,
+      collaboratorCount: Number(row.collaboratorCount || 0),
+    }));
+
     const currentBorrowed = await Equipment.count({ where: { status: 'BORROWED' } });
     const utilizationRate = totalEquipment > 0 ? Math.round((currentBorrowed / totalEquipment) * 100) : 0;
 
-    return res.status(200).json({ borrowsCount: borrows.length, bookingsCount: bookings.length, utilizationRate, topEquipment, chartData });
+    return res.status(200).json({
+      borrowsCount: borrows.length,
+      bookingsCount: bookings.length,
+      tasksCount: tasks.length,
+      tasksCompletedCount,
+      tasksInProgressCount,
+      tasksPendingApprovalCount,
+      tasksOverdueCount,
+      utilizationRate,
+      topEquipment,
+      chartData,
+      payrollTrend,
+    });
   } catch (error) {
     console.error('Dashboard reports error:', error.message);
-    return res.status(200).json({ borrowsCount: 0, bookingsCount: 0, utilizationRate: 0, topEquipment: [], chartData: [] });
+    return res.status(200).json({
+      borrowsCount: 0,
+      bookingsCount: 0,
+      tasksCount: 0,
+      tasksCompletedCount: 0,
+      tasksInProgressCount: 0,
+      tasksPendingApprovalCount: 0,
+      tasksOverdueCount: 0,
+      utilizationRate: 0,
+      topEquipment: [],
+      chartData: [],
+      payrollTrend: [],
+    });
   }
 });
 

@@ -15,6 +15,7 @@
 const { Op } = require('sequelize');
 const { Task, User } = require('../models');
 const notificationService = require('./notification.service');
+const { calculateTaskHoursAndMultiplier } = require('./payroll.service');
 
 // Thông tin người dùng cơ bản khi join
 const USER_ATTRIBUTES = ['id', 'fullName', 'email', 'employeeCode', 'avatarUrl', 'phone', 'role'];
@@ -40,70 +41,25 @@ const requiresLocation = (taskType) => {
 };
 
 /**
- * Tự động xác định hệ số thù lao cho công việc sự vụ theo quy định BPTT LHU Media:
- * - Công việc kỹ thuật chụp ảnh/quay phim sự kiện sau 16:30 từ thứ Hai đến thứ Bảy: hệ số 1.5x.
- * - Công việc kỹ thuật sự kiện vào Chủ nhật: hệ số 2.0x.
- * - Nếu vừa là Chủ nhật vừa thuộc khung giờ ngoài giờ: chỉ áp dụng 2.0x, không cộng dồn hệ số.
- * - Các trường hợp còn lại áp dụng hệ số thông thường 1.0x.
+ * Đánh giá hệ số thù lao cho công việc sự vụ (FR-05 & QUY_TAC.md Mục 7).
+ * Sử dụng calculateTaskHoursAndMultiplier từ payroll.service đảm bảo thống nhất 100%.
  *
- * @param {object} taskInfo - { taskType, otherTaskType, title, executionDate, shiftSession, actualHours, note }
- * @returns {{ isSunday: boolean, isOvertime: boolean, overtimeHours: number, multiplier: number }}
+ * @param {object} taskInfo - Thông tin công việc
+ * @returns {{ isSunday: boolean, isOvertime: boolean, overtimeHours: number, normalHours: number, sundayHours: number, multiplier: number, convertedHours: number, multiplierNote: string, isHighlighted: boolean, reason: string }}
  */
 const evaluateTaskRateMultiplier = (taskInfo = {}) => {
-  const { taskType, otherTaskType, title, executionDate, shiftSession, actualHours, note } = taskInfo;
-  const hours = parseFloat(actualHours) || 0;
-
-  // 1. Kiểm tra loại công việc có phải kỹ thuật chụp ảnh / quay phim sự kiện không
-  const text = `${taskType || ''} ${otherTaskType || ''} ${title || ''}`.toLowerCase();
-  const techKeywords = [
-    'chụp', 'quay', 'ảnh', 'hình', 'phim', 'clip', 'video', 'highlight', 'tiktok', 'dựng', 'livestream', 'kỹ thuật', 'camera'
-  ];
-  const isTechnicalEvent = techKeywords.some((kw) => text.includes(kw));
-
-  // 2. Xác định ngày thực hiện có phải Chủ nhật không
-  let isSunday = false;
-  if (executionDate) {
-    const dateStr = String(executionDate).trim().slice(0, 10);
-    const [y, m, d] = dateStr.split('-').map(Number);
-    if (y && m && d) {
-      const dt = new Date(y, m - 1, d, 12, 0, 0);
-      isSunday = dt.getDay() === 0;
-    }
-  }
-
-  // 3. Xác định khung giờ sau 16:30 từ Thứ Hai đến Thứ Bảy:
-  // Buổi Tối ('T') là ca tối sau 16:30 (17:30 - 21:30), hoặc ghi chú nêu rõ sau 16:30/ngoài giờ/làm tối
-  const isAfter1630 =
-    shiftSession === 'T' ||
-    Boolean(note && /(sau 16:30|16h30|ngoài giờ|buổi tối|làm tối)/i.test(note));
-
-  // 4. Áp dụng quy tắc hệ số:
-  // - Nếu là Chủ nhật và là công việc kỹ thuật sự kiện: hệ số 2.0x (nếu vừa là Chủ nhật vừa ngoài giờ: chỉ 2.0x, không cộng dồn)
-  if (isSunday && isTechnicalEvent) {
-    return {
-      isSunday: true,
-      isOvertime: false,
-      overtimeHours: 0,
-      multiplier: 2.0,
-    };
-  }
-
-  // - Nếu từ thứ Hai đến thứ Bảy và là công việc kỹ thuật sự kiện sau 16:30: hệ số 1.5x
-  if (!isSunday && isTechnicalEvent && isAfter1630) {
-    return {
-      isSunday: false,
-      isOvertime: true,
-      overtimeHours: hours,
-      multiplier: 1.5,
-    };
-  }
-
-  // - Các trường hợp còn lại: hệ số thông thường 1.0x
+  const calc = calculateTaskHoursAndMultiplier(taskInfo);
   return {
-    isSunday: false,
-    isOvertime: false,
-    overtimeHours: 0,
-    multiplier: 1.0,
+    isSunday: calc.isSunday,
+    isOvertime: calc.isOvertime,
+    overtimeHours: calc.overtimeHours,
+    normalHours: calc.normalHours,
+    sundayHours: calc.sundayHours,
+    multiplier: calc.multiplier,
+    convertedHours: calc.convertedHours,
+    multiplierNote: calc.multiplierNote,
+    isHighlighted: calc.isHighlighted,
+    reason: calc.reason,
   };
 };
 
@@ -247,9 +203,8 @@ const createTask = async (data, currentUser) => {
       userId: assignedToUserId,
       userEmail: assignee.email,
       title: '📋 Bạn được giao nhiệm vụ mới',
-      message: `Nhân sự Studio vừa giao nhiệm vụ "${title.trim()}" cho bạn${
-        formattedDeadline ? `. Hạn chót: ${new Date(formattedDeadline).toLocaleDateString('vi-VN')}` : ''
-      }.`,
+      message: `Nhân sự Studio vừa giao nhiệm vụ "${title.trim()}" cho bạn${formattedDeadline ? `. Hạn chót: ${new Date(formattedDeadline).toLocaleDateString('vi-VN')}` : ''
+        }.`,
       type: 'TASK_ASSIGNED',
       link: '/tasks',
       sendEmail: true,
@@ -260,7 +215,7 @@ const createTask = async (data, currentUser) => {
         { label: 'Người giao', value: currentUser.fullName || 'Nhân sự Studio' },
       ],
     })
-    .catch(() => {});
+    .catch(() => { });
 
   return findById(task.id, currentUser);
 };
@@ -355,7 +310,7 @@ const createExternalTask = async (data, currentUser) => {
         { label: 'Số giờ thực tế', value: `${actualHours || 0} giờ` },
       ],
     })
-    .catch(() => {});
+    .catch(() => { });
 
   return findById(task.id, currentUser);
 };
@@ -538,6 +493,14 @@ const updateProgress = async (id, data, currentUser) => {
     task.resultLink = finalResultLink || null;
     task.proofFile = finalProofFile || null;
 
+    if (data.actualHours !== undefined && data.actualHours !== null && data.actualHours !== '') {
+      const parsedHours = parseFloat(data.actualHours);
+      if (isNaN(parsedHours) || parsedHours <= 0) {
+        throw new Error('Số giờ thực hiện phải là số hợp lệ lớn hơn 0');
+      }
+      task.actualHours = Math.round(parsedHours * 100) / 100;
+    }
+
     // Gửi thông báo in-app cho Nhân sự (Admin) biết CTV đã nộp kết quả duyệt (FR-07)
     notificationService
       .notifyAdmins({
@@ -549,10 +512,11 @@ const updateProgress = async (id, data, currentUser) => {
         detailRows: [
           { label: 'Nhiệm vụ', value: task.title },
           { label: 'CTV nộp bài', value: currentUser.fullName },
+          { label: 'Số giờ thực hiện', value: `${task.actualHours || 0} giờ` },
           { label: 'Link kết quả', value: finalResultLink || 'Đính kèm file minh chứng' },
         ],
       })
-      .catch(() => {});
+      .catch(() => { });
   }
 
   // Cập nhật các trường kết quả nếu có gửi kèm khi đang làm
@@ -561,6 +525,12 @@ const updateProgress = async (id, data, currentUser) => {
   }
   if (proofFile !== undefined && status !== 'PENDING_APPROVAL') {
     task.proofFile = proofFile ? proofFile.trim() : null;
+  }
+  if (data.actualHours !== undefined && data.actualHours !== null && data.actualHours !== '' && status !== 'PENDING_APPROVAL') {
+    const parsedHours = parseFloat(data.actualHours);
+    if (!isNaN(parsedHours) && parsedHours > 0) {
+      task.actualHours = Math.round(parsedHours * 100) / 100;
+    }
   }
 
   await task.save();
@@ -611,7 +581,7 @@ const reviewTask = async (id, data, currentUser) => {
     }
 
     // Tự động kiểm tra thời gian và loại công việc để gán hệ số theo quy định BPTT LHU Media:
-    // - Kỹ thuật sự kiện sau 16:30 T2-T7: hệ số 1.5x
+    // - Kỹ thuật sự kiện sau 16:30 T2-T7: hệ số 1.5x (tách rõ giờ trong giờ và ngoài giờ)
     // - Kỹ thuật sự kiện Chủ nhật: hệ số 2.0x (không cộng dồn)
     // - Các trường hợp còn lại: hệ số 1.0x
     const rateInfo = evaluateTaskRateMultiplier({
@@ -619,8 +589,10 @@ const reviewTask = async (id, data, currentUser) => {
       otherTaskType: task.otherTaskType,
       title: task.title,
       executionDate: task.executionDate,
+      startTime: task.startTime,
       shiftSession: task.shiftSession,
       actualHours: task.actualHours,
+      overtimeHours: data.overtimeHours !== undefined ? data.overtimeHours : task.overtimeHours,
       note: task.note,
     });
     task.isSunday = rateInfo.isSunday;
@@ -632,9 +604,8 @@ const reviewTask = async (id, data, currentUser) => {
       .createNotification({
         userId: task.assignedToUserId,
         title: '🎉 Công việc đã được nghiệm thu hoàn thành',
-        message: `Nhiệm vụ "${task.title}" của bạn đã được Nhân sự Studio nghiệm thu đạt yêu cầu và ghi nhận vào bảng thống kê công việc${
-          data.actualHours ? ` (${data.actualHours} giờ)` : ''
-        }.`,
+        message: `Nhiệm vụ "${task.title}" của bạn đã được Nhân sự Studio nghiệm thu đạt yêu cầu và ghi nhận vào bảng thống kê công việc${data.actualHours ? ` (${data.actualHours} giờ)` : ''
+          }.`,
         type: 'TASK_COMPLETED',
         link: '/tasks',
         sendEmail: true,
@@ -645,7 +616,7 @@ const reviewTask = async (id, data, currentUser) => {
           { label: 'Trạng thái', value: 'HOÀN THÀNH (COMPLETED)' },
         ],
       })
-      .catch(() => {});
+      .catch(() => { });
   } else if (decision === 'REVISION_REQUESTED') {
     if (!feedback || !feedback.trim()) {
       throw new Error('Vui lòng nhập nội dung phản hồi / yêu cầu cần chỉnh sửa cho CTV');
@@ -671,7 +642,7 @@ const reviewTask = async (id, data, currentUser) => {
           { label: 'Người đánh giá', value: currentUser.fullName || 'Nhân sự Studio' },
         ],
       })
-      .catch(() => {});
+      .catch(() => { });
   } else {
     throw new Error("Quyết định đánh giá không hợp lệ. Chỉ chấp nhận 'COMPLETED' hoặc 'REVISION_REQUESTED'");
   }
@@ -840,8 +811,10 @@ const updateTask = async (id, data, currentUser) => {
       otherTaskType: task.otherTaskType,
       title: task.title,
       executionDate: task.executionDate,
+      startTime: task.startTime,
       shiftSession: task.shiftSession,
       actualHours: task.actualHours,
+      overtimeHours: data.overtimeHours !== undefined ? data.overtimeHours : task.overtimeHours,
       note: task.note,
     });
     task.isSunday = rateInfo.isSunday;

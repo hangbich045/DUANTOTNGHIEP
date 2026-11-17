@@ -156,6 +156,9 @@ const { validateCreateStudioBooking } = require('../middlewares/validate.middlew
 
 const router = Router();
 
+// Lấy danh sách khung giờ trống gợi ý theo ngày
+router.get('/available-slots', authenticate, studioBookingController.getAvailableSlots);
+
 // Lấy danh sách booking (RBAC ở service)
 router.get('/', authenticate, studioBookingController.getAll);
 
@@ -187,5 +190,22 @@ router.put('/:id/reject', authenticate, authorize('ADMIN'), async (req, res) => 
 
 // User tự huỷ booking của mình
 router.patch('/:id/cancel', authenticate, studioBookingController.cancelByUser);
+
+// [PROMPT #32] Xác nhận đến sử dụng Studio (Check-in)
+router.put('/:id/check-in', authenticate, studioBookingController.checkIn);
+router.patch('/:id/check-in', authenticate, studioBookingController.checkIn);
+
+// [PROMPT #32] Admin xác nhận đã sử dụng Studio hoàn tất
+router.put('/:id/confirm-usage', authenticate, authorize('ADMIN'), studioBookingController.confirmUsage);
+router.patch('/:id/confirm-usage', authenticate, authorize('ADMIN'), studioBookingController.confirmUsage);
+
+// [PROMPT #32] Admin đánh dấu không đến sử dụng (Vắng mặt)
+router.put('/:id/mark-absent', authenticate, authorize('ADMIN'), studioBookingController.markAbsent);
+router.patch('/:id/mark-absent', authenticate, authorize('ADMIN'), studioBookingController.markAbsent);
+
+// [FR-03.6] Dời lịch / Chỉnh sửa lịch đặt phòng Studio (kèm check xung đột)
+router.put('/:id/reschedule', authenticate, studioBookingController.reschedule);
+router.patch('/:id/reschedule', authenticate, studioBookingController.reschedule);
+router.put('/:id', authenticate, studioBookingController.reschedule);
 
 module.exports = router;

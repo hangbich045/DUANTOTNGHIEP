@@ -52,9 +52,21 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
         setIsOpen(false);
       }
     };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen]);
 
   const fetchNotifications = async () => {
     try {
@@ -144,15 +156,15 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
         )}
       </button>
 
-      {/* DROPDOWN THÔNG BÁO SOLID BACKGROUND HOÀN TOÀN (100% ĐẶC, KHÔNG TRONG SUỐT) */}
+      {/* DROPDOWN THÔNG BÁO SOLID BACKGROUND HOÀN TOÀN (100% ĐẶC, KHÔNG TRONG SUỐT, NỔI BẬT Z-INDEX) */}
       {isOpen && (
         <div
-          className={`fixed sm:absolute inset-x-3 sm:inset-x-auto top-16 sm:top-full mt-2 w-auto sm:w-[420px] max-w-[calc(100vw-1.5rem)] rounded-2xl border-2 border-[#2B3553] bg-[#0D101A] shadow-[0_25px_60px_rgba(0,0,0,0.95)] z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
+          className={`fixed sm:absolute inset-x-3 sm:inset-x-auto top-16 sm:top-full mt-2 w-auto sm:w-[420px] max-w-[calc(100vw-1.5rem)] rounded-2xl border-2 border-[#2B3553] bg-[#0D101A] shadow-[0_25px_60px_rgba(0,0,0,0.95)] z-[100] max-h-[min(580px,85vh)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
             align === 'left' ? 'sm:left-0 sm:right-auto' : 'sm:right-0 sm:left-auto'
           }`}
         >
           {/* Header đặc, độ tương phản cao */}
-          <div className="bg-[#151928] px-4 py-3.5 border-b border-[#2B3553]">
+          <div className="bg-[#151928] px-4 py-3.5 border-b border-[#2B3553] shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Bell className="w-4 h-4 text-brand-accent" />
@@ -164,16 +176,27 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
                 )}
               </div>
 
-              {unreadCount > 0 && (
+              <div className="flex items-center space-x-1.5">
+                {unreadCount > 0 && (
+                  <button
+                    onClick={handleMarkAllAsRead}
+                    className="text-xs text-[#60A5FA] hover:text-white font-semibold flex items-center space-x-1 px-2.5 py-1 rounded-lg hover:bg-[#1E293B] border border-transparent hover:border-[#3B82F6] transition-all cursor-pointer"
+                    title="Đánh dấu tất cả thông báo là đã đọc"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Đã đọc tất cả</span>
+                  </button>
+                )}
                 <button
-                  onClick={handleMarkAllAsRead}
-                  className="text-xs text-[#60A5FA] hover:text-white font-semibold flex items-center space-x-1 px-2 py-1 rounded-lg hover:bg-[#1E293B] border border-transparent hover:border-[#3B82F6] transition-all cursor-pointer"
-                  title="Đánh dấu tất cả thông báo là đã đọc"
+                  type="button"
+                  onClick={() => setIsOpen(false)}
+                  className="p-1 rounded-lg text-studio-muted hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Đóng thông báo (Esc)"
+                  aria-label="Đóng"
                 >
-                  <CheckCheck className="w-3.5 h-3.5" />
-                  <span>Đã đọc tất cả</span>
+                  <X className="w-4 h-4" />
                 </button>
-              )}
+              </div>
             </div>
 
             {/* Thanh lọc nhanh: Tất cả / Chưa đọc */}
@@ -201,8 +224,8 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
             </div>
           </div>
 
-          {/* Danh sách thông báo dạng Card với màu nền đặc, tương phản cao */}
-          <div className="max-h-[380px] overflow-y-auto p-2.5 space-y-2.5 bg-[#0A0C14] divide-y-0">
+          {/* Danh sách thông báo dạng Card với màu nền đặc, tương phản cao, cuộn độc lập */}
+          <div className="flex-1 max-h-[380px] overflow-y-auto overscroll-contain p-2.5 space-y-2.5 bg-[#0A0C14] divide-y-0">
             {displayedNotifications.length === 0 ? (
               <div className="py-12 px-4 text-center space-y-2">
                 <Inbox className="w-10 h-10 text-gray-500 mx-auto opacity-50" />
@@ -312,7 +335,7 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
           </div>
 
           {/* Footer đặc, có nút xem toàn bộ trang */}
-          <div className="bg-[#151928] px-4 py-2.5 border-t border-[#2B3553] flex items-center justify-between">
+          <div className="bg-[#151928] px-4 py-2.5 border-t border-[#2B3553] flex items-center justify-between shrink-0">
             <span className="text-[11px] text-[#94A3B8] font-medium">
               Hiển thị {displayedNotifications.length} thông báo gần nhất
             </span>

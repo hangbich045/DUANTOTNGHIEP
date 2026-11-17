@@ -29,6 +29,7 @@ import {
   Pencil,
   Tag,
   MapPin,
+  Sparkles,
 } from 'lucide-react';
 import { TASK_TYPES, CAMPUSES, requiresLocation } from '@/lib/constants';
 
@@ -63,6 +64,17 @@ interface TaskItem {
   campus?: string;
   room?: string;
   location?: string;
+  actualHours?: number;
+  normalHours?: number;
+  overtimeHours?: number;
+  sundayHours?: number;
+  multiplier?: number;
+  convertedHours?: number;
+  isHighlighted?: boolean;
+  multiplierNote?: string;
+  multiplierReason?: string;
+  isSunday?: boolean;
+  isOvertime?: boolean;
   assignee?: TaskAssignee;
   creator?: TaskAssignee;
 }
@@ -455,7 +467,8 @@ export default function AdminTasksPage() {
     setReviewDecision('COMPLETED');
     setReviewFeedback(task.feedback || '');
     setReviewExecutionDate((task as any).executionDate || new Date().toISOString().slice(0, 10));
-    setReviewActualHours((task as any).actualHours || 2);
+    const parsedHours = (task as any).actualHours !== undefined && (task as any).actualHours !== null ? Number((task as any).actualHours) : 0;
+    setReviewActualHours(parsedHours > 0 ? parsedHours : 2);
     setReviewShiftSession(((task as any).shiftSession as 'S' | 'C' | 'T') || 'S');
     setReviewIsOvertime((task as any).isOvertime || false);
     setReviewOvertimeHours((task as any).overtimeHours || 0);
@@ -1628,7 +1641,9 @@ export default function AdminTasksPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] text-studio-muted mb-0.5 font-medium">Số giờ thực tế</label>
+                      <label className="block text-[10px] text-studio-muted mb-0.5 font-medium">
+                        Số giờ thực tế
+                      </label>
                       <input
                         type="number"
                         step="0.5"
@@ -1834,6 +1849,63 @@ export default function AdminTasksPage() {
                     <p className="text-xs text-amber-200 mt-1 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
                       {selectedTaskDetail.feedback}
                     </p>
+                  </div>
+                )}
+
+                {selectedTaskDetail.status === 'PENDING_APPROVAL' && (
+                  <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/25 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-amber-300 uppercase flex items-center space-x-1">
+                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Số giờ thực hiện do CTV đề xuất</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Chờ kiểm tra &amp; nghiệm thu
+                      </span>
+                    </div>
+                    <div className="flex items-baseline space-x-2">
+                      <strong className="text-white text-base">
+                        {selectedTaskDetail.actualHours !== undefined && selectedTaskDetail.actualHours !== null
+                          ? selectedTaskDetail.actualHours
+                          : 0}{' '}
+                        giờ
+                      </strong>
+                      <span className="text-[11px] text-studio-muted">
+                        (Thời lượng thực tế CTV dành cho nhiệm vụ)
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-amber-200/80 italic">
+                      * Nhân sự có thể kiểm tra và điều chỉnh số giờ này khi bấm nút &quot;Nghiệm thu&quot; nhiệm vụ. Giờ công chỉ được tính vào Bảng thống kê công việc sau khi hoàn tất nghiệm thu.
+                    </p>
+                  </div>
+                )}
+
+                {selectedTaskDetail.status === 'COMPLETED' && (
+                  <div className="p-3.5 bg-white/5 rounded-2xl border border-white/5 space-y-2">
+                    <span className="text-[11px] font-bold text-studio-muted uppercase block">Nghiệm thu & Thù lao</span>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-studio-muted block text-[10px]">Thời lượng thực tế:</span>
+                        <strong className="text-white text-sm">{selectedTaskDetail.actualHours || 0} giờ</strong>
+                      </div>
+                      <div>
+                        <span className="text-studio-muted block text-[10px]">Giờ quy đổi tính lương:</span>
+                        <strong className="text-amber-300 text-sm">
+                          {selectedTaskDetail.convertedHours !== undefined ? selectedTaskDetail.convertedHours : (selectedTaskDetail.actualHours || 0)} giờ
+                        </strong>
+                      </div>
+                    </div>
+                    {selectedTaskDetail.multiplierNote && (
+                      <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-300 font-bold text-xs mt-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Hệ số: {selectedTaskDetail.multiplierNote}</span>
+                      </div>
+                    )}
+                    {selectedTaskDetail.multiplierReason && (
+                      <p className="text-[11px] text-studio-muted italic">
+                        Lý do: {selectedTaskDetail.multiplierReason}
+                      </p>
+                    )}
                   </div>
                 )}
 

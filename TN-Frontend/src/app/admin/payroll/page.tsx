@@ -64,6 +64,9 @@ interface TimesheetRow {
     sumLV: number;
     gioLV: number;
     gioSV: number;
+    gioThuong?: number;
+    gioOt?: number;
+    gioSunday?: number;
     tongGio: number;
     tien: number;
   };
@@ -76,6 +79,14 @@ interface TaskSummaryItem {
   content: string;
   taskType: string;
   hours: number;
+  normalHours?: number;
+  overtimeHours?: number;
+  sundayHours?: number;
+  multiplier?: number;
+  convertedHours?: number;
+  isHighlighted?: boolean;
+  multiplierNote?: string;
+  reason?: string;
   note: string;
 }
 
@@ -83,7 +94,40 @@ interface CTVTaskGroup {
   stt: number;
   ctv: CTVItem;
   totalHours: number;
+  totalConvertedHours?: number;
+  totalAmount?: number;
   tasks: TaskSummaryItem[];
+}
+
+interface MonthlyPayrollItem {
+  ctv: CTVItem;
+  payroll: {
+    id: string;
+    userId: string;
+    month: number;
+    year: number;
+    totalShiftCount: number;
+    shiftHours: number;
+    taskHours: number;
+    overtimeHours: number;
+    sundayHours: number;
+    totalStandardHours: number;
+    totalCalculatedHours: number;
+    hourlyRate: number;
+    totalAmount: number;
+    status: string;
+    calculatedAt: string;
+  };
+  summary: {
+    sumLV: number;
+    gioLV: number;
+    gioSV: number;
+    gioThuong?: number;
+    gioOt?: number;
+    gioSunday?: number;
+    tongGio: number;
+    tien: number;
+  };
 }
 
 export default function AdminPayrollPage() {
@@ -92,8 +136,8 @@ export default function AdminPayrollPage() {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
-  // Hạng mục 1: 2 tab chính Bảng chấm công tháng & Bảng thống kê công việc
-  const [activeTab, setActiveTab] = useState<'TIMESHEET' | 'TASKS_SUMMARY'>('TIMESHEET');
+  // 3 tab chính: Bảng chấm công tháng, Bảng thống kê công việc & Bảng lương tháng
+  const [activeTab, setActiveTab] = useState<'TIMESHEET' | 'TASKS_SUMMARY' | 'PAYROLL'>('TIMESHEET');
   const [loading, setLoading] = useState(false);
   const [calculating, setCalculating] = useState(false);
 
@@ -119,6 +163,8 @@ export default function AdminPayrollPage() {
 
   // Dữ liệu Bảng thống kê công việc
   const [tasksSummaryData, setTasksSummaryData] = useState<CTVTaskGroup[]>([]);
+  // Dữ liệu Bảng lương tháng tổng hợp
+  const [payrollData, setPayrollData] = useState<MonthlyPayrollItem[]>([]);
   const [collaborators, setCollaborators] = useState<CTVItem[]>([]);
 
   // Modal chỉnh sửa ô chấm công
@@ -172,6 +218,12 @@ export default function AdminPayrollPage() {
       const sumRes = await api.get(`/payroll/tasks-summary?month=${selectedMonth}&year=${selectedYear}`);
       if (sumRes.success && sumRes.data && Array.isArray(sumRes.data.ctvGroups)) {
         setTasksSummaryData(sumRes.data.ctvGroups);
+      }
+
+      // 3. Fetch monthly payroll overview
+      const prRes = await api.get(`/payroll/monthly?month=${selectedMonth}&year=${selectedYear}`);
+      if (prRes.success && Array.isArray(prRes.data)) {
+        setPayrollData(prRes.data);
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi tải dữ liệu chấm công & thù lao', 'error');
@@ -283,6 +335,18 @@ export default function AdminPayrollPage() {
       return matchCtv && matchSearch;
     });
   }, [tasksSummaryData, selectedCtvFilter, searchCtvTerm]);
+
+  const filteredPayrollData = useMemo(() => {
+    return payrollData.filter((item) => {
+      const matchCtv = selectedCtvFilter === 'ALL' || item.ctv.id === selectedCtvFilter;
+      const matchSearch =
+        !searchCtvTerm.trim() ||
+        item.ctv.fullName.toLowerCase().includes(searchCtvTerm.toLowerCase()) ||
+        item.ctv.email.toLowerCase().includes(searchCtvTerm.toLowerCase()) ||
+        (item.ctv.employeeCode && item.ctv.employeeCode.toLowerCase().includes(searchCtvTerm.toLowerCase()));
+      return matchCtv && matchSearch;
+    });
+  }, [payrollData, selectedCtvFilter, searchCtvTerm]);
 
   return (
     <AdminLayout>
@@ -443,11 +507,12 @@ export default function AdminPayrollPage() {
           </div>
         </div>
 
-        {/* HẠNG MỤC 1: ĐIỀU CHỈNH TÊN CÁC MỤC (BỎ PHẦN TÊN SHEET TRÊN GIAO DIỆN) */}
+        {/* 3 tab chính: Chấm công - Thống kê công việc - Bảng lương */}
         <div className="flex space-x-2 border-b border-white/5 pb-2 overflow-x-auto">
           {[
             { id: 'TIMESHEET', label: 'Bảng chấm công tháng' },
             { id: 'TASKS_SUMMARY', label: 'Bảng thống kê công việc' },
+            { id: 'PAYROLL', label: 'Bảng lương tháng' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -636,7 +701,14 @@ export default function AdminPayrollPage() {
                                   {row.summary.gioLV}
                                 </td>
                                 <td className="p-2 border-r border-white/10 text-center font-bold text-white/90" rowSpan={3}>
-                                  {row.summary.gioSV}
+                                  <div className="font-extrabold text-purple-300">{row.summary.gioSV}</div>
+                                  {((row.summary.gioOt ?? 0) > 0 || (row.summary.gioSunday ?? 0) > 0) && (
+                                    <div className="text-[9px] text-amber-300/90 font-medium leading-tight mt-0.5 space-y-0.5">
+                                      {(row.summary.gioThuong ?? 0) > 0 && <div>Thường: {row.summary.gioThuong}h</div>}
+                                      {(row.summary.gioOt ?? 0) > 0 && <div className="text-amber-400 font-bold">x1.5: {row.summary.gioOt}h</div>}
+                                      {(row.summary.gioSunday ?? 0) > 0 && <div className="text-orange-400 font-bold">x2: {row.summary.gioSunday}h</div>}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className="p-2 border-r border-white/10 text-center font-extrabold text-amber-300 text-xs" rowSpan={3}>
                                   {row.summary.tongGio}
@@ -711,41 +783,270 @@ export default function AdminPayrollPage() {
                             </td>
                           </tr>
                         ) : (
-                          group.tasks.map((task, tIdx) => (
-                            <tr key={task.id} className="hover:bg-white/2 transition-colors">
-                              {tIdx === 0 && (
-                                <>
-                                  <td className="p-3 text-center text-studio-muted font-bold align-top border-r border-white/5" rowSpan={group.tasks.length}>
-                                    {group.stt}
-                                  </td>
-                                  <td className="p-3 font-bold text-white align-top border-r border-white/5" rowSpan={group.tasks.length}>
-                                    <div>{group.ctv.fullName}</div>
-                                    <div className="text-[10px] text-studio-muted font-normal mt-0.5">
-                                      {group.ctv.employeeCode || group.ctv.email}
-                                    </div>
-                                  </td>
-                                </>
-                              )}
-                              <td className="p-3 text-white/90 font-medium whitespace-nowrap">{task.date}</td>
-                              <td className="p-3 text-white font-medium">{task.content}</td>
-                              <td className="p-3">
-                                <span className="px-2 py-0.5 rounded bg-brand-primary/10 text-brand-primary border border-brand-primary/20 text-[10px] font-semibold">
-                                  {task.taskType}
-                                </span>
-                              </td>
-                              <td className="p-3 text-center font-bold text-white/90">{task.hours}</td>
-                              {tIdx === 0 && (
-                                <td className="p-3 text-center font-black text-amber-300 text-sm align-top border-l border-white/5" rowSpan={group.tasks.length}>
-                                  {group.totalHours}
+                          group.tasks.map((task, tIdx) => {
+                            const isHighlighted = task.isHighlighted;
+                            return (
+                              <tr
+                                key={task.id}
+                                className={`transition-colors ${
+                                  isHighlighted
+                                    ? 'bg-amber-500/10 hover:bg-amber-500/15 border-l-4 border-l-amber-400 shadow-sm'
+                                    : 'hover:bg-white/2'
+                                }`}
+                              >
+                                {tIdx === 0 && (
+                                  <>
+                                    <td className="p-3 text-center text-studio-muted font-bold align-top border-r border-white/5" rowSpan={group.tasks.length}>
+                                      {group.stt}
+                                    </td>
+                                    <td className="p-3 font-bold text-white align-top border-r border-white/5" rowSpan={group.tasks.length}>
+                                      <div>{group.ctv.fullName}</div>
+                                      <div className="text-[10px] text-studio-muted font-normal mt-0.5">
+                                        {group.ctv.employeeCode || group.ctv.email}
+                                      </div>
+                                    </td>
+                                  </>
+                                )}
+                                <td className="p-3 text-white/90 font-medium whitespace-nowrap">{task.date}</td>
+                                <td className="p-3 text-white font-medium">{task.content}</td>
+                                <td className="p-3">
+                                  <div className="flex flex-col gap-1 items-start">
+                                    <span className="px-2 py-0.5 rounded bg-brand-primary/10 text-brand-primary border border-brand-primary/20 text-[10px] font-semibold">
+                                      {task.taskType}
+                                    </span>
+                                    {isHighlighted && task.multiplier && task.multiplier > 1 && (
+                                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[9px] font-bold flex items-center gap-1">
+                                        <Sparkles className="w-2.5 h-2.5" />
+                                        <span>Hệ số ×{task.multiplier}</span>
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
-                              )}
-                              <td className="p-3 text-studio-muted text-[11px]">{task.note || '—'}</td>
-                            </tr>
-                          ))
+                                <td className="p-3 text-center">
+                                  <div className="font-bold text-white/90">{task.hours}h</div>
+                                  {isHighlighted && task.convertedHours !== undefined && task.convertedHours !== task.hours && (
+                                    <div className="text-[10px] text-amber-300 font-bold mt-0.5">
+                                      ➔ {task.convertedHours}h quy đổi
+                                    </div>
+                                  )}
+                                </td>
+                                {tIdx === 0 && (
+                                  <td className="p-3 text-center align-top border-l border-white/5" rowSpan={group.tasks.length}>
+                                    <div className="font-black text-amber-300 text-sm">
+                                      {group.totalConvertedHours !== undefined ? group.totalConvertedHours : group.totalHours}h
+                                    </div>
+                                    {group.totalConvertedHours !== undefined && group.totalConvertedHours !== group.totalHours && (
+                                      <div className="text-[10px] text-studio-muted font-normal mt-0.5">
+                                        ({group.totalHours}h thực tế)
+                                      </div>
+                                    )}
+                                    {group.totalAmount !== undefined && group.totalAmount > 0 && (
+                                      <div className="text-[10px] text-emerald-400 font-bold mt-1">
+                                        {group.totalAmount.toLocaleString('vi-VN')} đ
+                                      </div>
+                                    )}
+                                  </td>
+                                )}
+                                <td className="p-3 text-xs">
+                                  {isHighlighted && task.multiplierNote ? (
+                                    <div className="space-y-1">
+                                      <div className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-lg bg-amber-500/20 border border-amber-500/30 text-amber-300 font-bold text-[11px]">
+                                        <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
+                                        <span>{task.multiplierNote}</span>
+                                      </div>
+                                      {task.note && task.note !== task.multiplierNote && (
+                                        <div className="text-studio-muted text-[11px] mt-0.5">{task.note}</div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-studio-muted text-[11px]">{task.note || '—'}</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
                         )}
                       </React.Fragment>
                     ))}
                   </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 3: BẢNG LƯƠNG THÁNG TỔNG HỢP (FR-05)                                 */}
+        {/* ========================================================================= */}
+        {activeTab === 'PAYROLL' && (
+          <div className="space-y-4">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-black/40 space-y-1">
+                <span className="text-xs text-studio-muted block font-medium">Tổng ngân sách chi trả</span>
+                <div className="text-xl sm:text-2xl font-black text-emerald-400">
+                  {filteredPayrollData.reduce((acc, p) => acc + (p.payroll?.totalAmount || p.summary?.tien || 0), 0).toLocaleString('vi-VN')} VNĐ
+                </div>
+                <span className="text-[10px] text-studio-muted block">Đơn giá chuẩn: 20.000 VNĐ / giờ</span>
+              </div>
+
+              <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-black/40 space-y-1">
+                <span className="text-xs text-studio-muted block font-medium">Tổng giờ quy đổi (tính lương)</span>
+                <div className="text-xl sm:text-2xl font-black text-amber-300">
+                  {filteredPayrollData.reduce((acc, p) => acc + (p.payroll?.totalCalculatedHours || p.summary?.tongGio || 0), 0)} giờ
+                </div>
+                <span className="text-[10px] text-amber-400/80 block">Đã bao gồm hệ số 1.5x ngoài giờ & 2.0x Chủ nhật</span>
+              </div>
+
+              <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-black/40 space-y-1">
+                <span className="text-xs text-studio-muted block font-medium">Tổng giờ thực tế ghi nhận</span>
+                <div className="text-xl sm:text-2xl font-black text-white">
+                  {filteredPayrollData.reduce((acc, p) => acc + (p.payroll?.totalStandardHours || ((p.summary?.gioLV || 0) + (p.summary?.gioSV || 0))), 0)} giờ
+                </div>
+                <span className="text-[10px] text-studio-muted block">Ca trực Studio + Giờ thực tế sự vụ</span>
+              </div>
+
+              <div className="glass-panel p-4 rounded-3xl border border-white/10 bg-black/40 space-y-1">
+                <span className="text-xs text-studio-muted block font-medium">Số lượng CTV được chi trả</span>
+                <div className="text-xl sm:text-2xl font-black text-blue-400">
+                  {filteredPayrollData.filter((p) => (p.payroll?.totalAmount || p.summary?.tien || 0) > 0).length} / {filteredPayrollData.length} CTV
+                </div>
+                <span className="text-[10px] text-studio-muted block">Cộng tác viên có phát sinh giờ công trong tháng</span>
+              </div>
+            </div>
+
+            {/* Bảng chi tiết lương tháng */}
+            {loading ? (
+              <div className="flex items-center justify-center py-24">
+                <Loader2 className="w-8 h-8 animate-spin text-brand-primary" />
+              </div>
+            ) : filteredPayrollData.length === 0 ? (
+              <div className="text-center py-20 bg-white/5 rounded-3xl border border-white/5 border-dashed">
+                <Calculator className="w-12 h-12 text-studio-muted mx-auto mb-3 opacity-30" />
+                <p className="text-white font-bold">Chưa có dữ liệu thù lao tháng {selectedMonth}/{selectedYear}</p>
+                <p className="text-xs text-studio-muted mt-1">Hãy nhấn nút &quot;Tính lại thù lao&quot; để tổng hợp bảng lương từ Bảng chấm công.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto glass-panel rounded-3xl border border-white/10 shadow-xl">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-black/60 text-studio-muted border-b border-white/10 font-bold uppercase text-[10px]">
+                      <th className="p-3 w-12 text-center" rowSpan={2}>STT</th>
+                      <th className="p-3 w-52" rowSpan={2}>Cộng tác viên</th>
+                      <th className="p-2 text-center border-l border-white/10 bg-blue-950/20" colSpan={3}>Ca trực Studio (4h/ca)</th>
+                      <th className="p-2 text-center border-l border-white/10 bg-purple-950/20" colSpan={5}>Công việc sự vụ</th>
+                      <th className="p-2 text-center border-l border-white/10 bg-emerald-950/20" colSpan={3}>Tổng cộng thù lao</th>
+                      <th className="p-3 text-center border-l border-white/10 w-28" rowSpan={2}>Trạng thái</th>
+                    </tr>
+                    <tr className="bg-black/40 text-studio-muted border-b border-white/10 font-bold text-[10px]">
+                      <th className="p-2 text-center border-l border-white/10 w-16">Số ca</th>
+                      <th className="p-2 text-center w-16">Giờ trực</th>
+                      <th className="p-2 text-right pr-3 w-24">Thành tiền</th>
+                      <th className="p-2 text-center border-l border-white/10 w-16">Thực tế</th>
+                      <th className="p-2 text-center w-16">Thường (x1)</th>
+                      <th className="p-2 text-center w-16 text-amber-300">OT (x1.5)</th>
+                      <th className="p-2 text-center w-16 text-orange-400">CN (x2)</th>
+                      <th className="p-2 text-center w-20 text-purple-300">Quy đổi</th>
+                      <th className="p-2 text-center border-l border-white/10 w-20 text-amber-300">Tổng giờ</th>
+                      <th className="p-2 text-center w-20">Đơn giá</th>
+                      <th className="p-2 text-right pr-3 w-28 text-emerald-400">Thực nhận</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-white/5">
+                    {filteredPayrollData.map((item, idx) => {
+                      const ctv = item.ctv;
+                      const p = item.payroll;
+                      const s = item.summary;
+                      const shiftCount = p?.totalShiftCount ?? s?.sumLV ?? 0;
+                      const shiftHours = p?.shiftHours ?? s?.gioLV ?? 0;
+                      const shiftMoney = shiftHours * 20000;
+                      const taskActual = p?.taskHours ?? s?.gioSV ?? 0;
+                      const taskNormal = s?.gioThuong ?? (taskActual - (p?.overtimeHours ?? s?.gioOt ?? 0) - (p?.sundayHours ?? s?.gioSunday ?? 0));
+                      const taskOt = p?.overtimeHours ?? s?.gioOt ?? 0;
+                      const taskSun = p?.sundayHours ?? s?.gioSunday ?? 0;
+                      const taskConverted = Math.round((taskNormal + (taskOt * 1.5) + (taskSun * 2.0)) * 100) / 100;
+                      const totalCalcHours = p?.totalCalculatedHours ?? s?.tongGio ?? 0;
+                      const totalPay = p?.totalAmount ?? s?.tien ?? 0;
+
+                      return (
+                        <tr key={ctv.id} className="hover:bg-white/2 transition-colors">
+                          <td className="p-3 text-center text-studio-muted font-bold">{idx + 1}</td>
+                          <td className="p-3">
+                            <div className="font-bold text-white text-xs">{ctv.fullName}</div>
+                            <div className="text-[10px] text-studio-muted">{ctv.employeeCode || ctv.email}</div>
+                          </td>
+
+                          {/* Ca trực Studio */}
+                          <td className="p-2 text-center border-l border-white/5 font-semibold text-blue-400">{shiftCount} ca</td>
+                          <td className="p-2 text-center font-bold text-white/90">{shiftHours}h</td>
+                          <td className="p-2 text-right pr-3 font-semibold text-blue-300">{shiftMoney.toLocaleString('vi-VN')} đ</td>
+
+                          {/* Sự vụ */}
+                          <td className="p-2 text-center border-l border-white/5 font-semibold text-white/80">{taskActual}h</td>
+                          <td className="p-2 text-center font-medium text-studio-muted">{taskNormal > 0 ? `${taskNormal}h` : '—'}</td>
+                          <td className="p-2 text-center font-bold text-amber-400">{taskOt > 0 ? `${taskOt}h` : '—'}</td>
+                          <td className="p-2 text-center font-bold text-orange-400">{taskSun > 0 ? `${taskSun}h` : '—'}</td>
+                          <td className="p-2 text-center font-extrabold text-purple-300">{taskConverted}h</td>
+
+                          {/* Tổng cộng */}
+                          <td className="p-2 text-center border-l border-white/5 font-black text-amber-300 text-xs">{totalCalcHours}h</td>
+                          <td className="p-2 text-center text-studio-muted text-[11px]">20.000 đ</td>
+                          <td className="p-2 text-right pr-3 font-black text-emerald-400 text-xs">{totalPay.toLocaleString('vi-VN')} VNĐ</td>
+
+                          {/* Trạng thái */}
+                          <td className="p-3 text-center border-l border-white/5">
+                            {totalPay > 0 ? (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 text-[10px] font-bold">
+                                Sẵn sàng
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-zinc-500/15 text-zinc-400 border border-zinc-500/25 text-[10px] font-medium">
+                                0 đ
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-black/60 font-bold border-t border-white/10 text-white">
+                      <td colSpan={2} className="p-3 text-center uppercase text-[10px] text-studio-muted">Tổng cộng toàn trường:</td>
+                      <td className="p-2 text-center text-blue-400">
+                        {filteredPayrollData.reduce((acc, p) => acc + (p.payroll?.totalShiftCount ?? p.summary?.sumLV ?? 0), 0)} ca
+                      </td>
+                      <td className="p-2 text-center text-white">
+                        {filteredPayrollData.reduce((acc, p) => acc + (p.payroll?.shiftHours ?? p.summary?.gioLV ?? 0), 0)}h
+                      </td>
+                      <td className="p-2 text-right pr-3 text-blue-300">
+                        {filteredPayrollData.reduce((acc, p) => acc + ((p.payroll?.shiftHours ?? p.summary?.gioLV ?? 0) * 20000), 0).toLocaleString('vi-VN')} đ
+                      </td>
+                      <td className="p-2 text-center border-l border-white/5">
+                        {filteredPayrollData.reduce((acc, p) => acc + (p.payroll?.taskHours ?? p.summary?.gioSV ?? 0), 0)}h
+                      </td>
+                      <td colSpan={3} className="p-2 text-center text-studio-muted text-[10px]">
+                        (Tổng hợp theo hệ số)
+                      </td>
+                      <td className="p-2 text-center text-purple-300 font-extrabold">
+                        {Math.round(filteredPayrollData.reduce((acc, p) => {
+                          const s = p.summary;
+                          const tAct = p.payroll?.taskHours ?? s?.gioSV ?? 0;
+                          const tOt = p.payroll?.overtimeHours ?? s?.gioOt ?? 0;
+                          const tSun = p.payroll?.sundayHours ?? s?.gioSunday ?? 0;
+                          const tNorm = s?.gioThuong ?? (tAct - tOt - tSun);
+                          return acc + (tNorm + (tOt * 1.5) + (tSun * 2.0));
+                        }, 0) * 100) / 100}h
+                      </td>
+                      <td className="p-2 text-center border-l border-white/5 text-amber-300 font-black">
+                        {filteredPayrollData.reduce((acc, p) => acc + (p.payroll?.totalCalculatedHours ?? p.summary?.tongGio ?? 0), 0)}h
+                      </td>
+                      <td className="p-2 text-center text-studio-muted">—</td>
+                      <td className="p-2 text-right pr-3 text-emerald-400 font-black text-xs">
+                        {filteredPayrollData.reduce((acc, p) => acc + (p.payroll?.totalAmount ?? p.summary?.tien ?? 0), 0).toLocaleString('vi-VN')} VNĐ
+                      </td>
+                      <td className="p-3"></td>
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}

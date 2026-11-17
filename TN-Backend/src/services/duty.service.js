@@ -1695,6 +1695,12 @@ const formatTaskInfo = (t) => {
     executionTimeFormatted = 'Chưa xác định';
   }
 
+  let calc = { normalHours: 0, overtimeHours: 0, sundayHours: 0, multiplier: 1.0, convertedHours: parseFloat(t.actualHours) || 0, isHighlighted: false, multiplierNote: '', reason: '' };
+  try {
+    const { calculateTaskHoursAndMultiplier } = require('./payroll.service');
+    calc = calculateTaskHoursAndMultiplier(t);
+  } catch (err) {}
+
   return {
     id: t.id,
     title: t.title,
@@ -1702,6 +1708,14 @@ const formatTaskInfo = (t) => {
     taskType: t.taskType,
     otherTaskType: t.otherTaskType,
     actualHours: parseFloat(t.actualHours) || 0,
+    normalHours: calc.normalHours,
+    overtimeHours: calc.overtimeHours,
+    sundayHours: calc.sundayHours,
+    multiplier: calc.multiplier,
+    convertedHours: calc.convertedHours,
+    isHighlighted: calc.isHighlighted,
+    multiplierNote: calc.multiplierNote,
+    multiplierReason: calc.reason,
     status: t.status,
     startTime: t.startTime || null,
     deadline: t.deadline,

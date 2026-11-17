@@ -95,6 +95,354 @@ const getSessionsForDayHours = (dayHours) => {
 };
 
 /**
+ * Định dạng số giờ sang tiếng Việt: 2.5 -> '2,5', 4.0 -> '4'
+ */
+const formatHoursVi = (num) => {
+  if (num === null || num === undefined || isNaN(num)) return '0';
+  const val = Number(parseFloat(num).toFixed(2));
+  return String(val).replace('.', ',');
+};
+
+/**
+ * Kiểm tra xem một công việc có phải là công việc KỸ THUẬT SỰ KIỆN hay không
+ * (Chụp ảnh, quay phim/quay video sự kiện, kỹ thuật sự kiện, highlight, tiktok...).
+ * 
+ * Danh sách 7 nhóm công việc được nhân giờ theo quy định:
+ * 1. Chụp & xử lý hình (chụp hình, chụp ảnh, chụp & xử lý hình sự kiện)
+ * 2. Quay phim
+ * 3. Quay highlight
+ * 4. Quay clip TikTok
+ * 5. MC bản tin
+ * 6. Thư ký trường quay
+ * 7. Diễn viên
+ *
+ * Các công việc KHÔNG được nhân giờ (luôn áp dụng hệ số 1,0):
+ * - Viết content, Viết kịch bản, Thiết kế
+ * - Dựng clip highlight, Dựng clip TikTok, Dựng phim
+ */
+const isMultiplierEligibleTask = (task = {}) => {
+  const typeStr = (task.taskType || '').trim().toLowerCase();
+  const otherStr = (task.otherTaskType || '').trim().toLowerCase();
+  const titleStr = (task.title || '').trim().toLowerCase();
+  const descStr = (task.description || '').trim().toLowerCase();
+
+  // 1. Kiểm tra 7 nhóm công việc được nhân giờ theo taskType
+  // 1.1. Chụp & xử lý hình
+  if (
+    typeStr.includes('chụp & xử lý') ||
+    typeStr.includes('chụp hình') ||
+    typeStr.includes('chụp ảnh') ||
+    typeStr.includes('xử lý hình') ||
+    typeStr === 'chụp & xử lý hình sự kiện'
+  ) {
+    return true;
+  }
+
+  // 1.2. Quay phim (không bao gồm dựng phim)
+  if (typeStr === 'quay phim' || (typeStr.startsWith('quay phim') && !typeStr.includes('dựng'))) {
+    return true;
+  }
+
+  // 1.3. Quay highlight (không bao gồm dựng clip highlight)
+  if (typeStr === 'quay highlight' || (typeStr.includes('quay highlight') && !typeStr.includes('dựng'))) {
+    return true;
+  }
+
+  // 1.4. Quay clip tiktok (không bao gồm dựng clip tiktok)
+  if (
+    (typeStr.includes('quay clip tiktok') || typeStr.includes('quay tiktok')) &&
+    !typeStr.includes('dựng')
+  ) {
+    return true;
+  }
+
+  // 1.5. MC bản tin
+  if (typeStr === 'mc bản tin' || typeStr.includes('mc bản tin') || typeStr === 'mc') {
+    return true;
+  }
+
+  // 1.6. Thư ký trường quay
+  if (typeStr === 'thư ký trường quay' || typeStr.includes('thư ký trường quay')) {
+    return true;
+  }
+
+  // 1.7. Diễn viên
+  if (typeStr === 'diễn viên' || typeStr.includes('diễn viên')) {
+    return true;
+  }
+
+  // 2. Chặn các công việc không thuộc danh sách nhân giờ
+  if (
+    typeStr.includes('viết content') ||
+    typeStr.includes('viết kịch bản') ||
+    typeStr.includes('thiết kế') ||
+    typeStr.includes('dựng clip') ||
+    typeStr.includes('dựng phim') ||
+    typeStr.includes('dựng highlight') ||
+    typeStr.includes('dựng tiktok')
+  ) {
+    return false;
+  }
+
+  // 3. Với công việc loại 'Khác' hoặc không có taskType: kiểm tra chi tiết trong otherTaskType, title
+  const contextToCheck = `${otherStr} ${titleStr} ${descStr}`.toLowerCase();
+  if (
+    contextToCheck.includes('chụp & xử lý') ||
+    contextToCheck.includes('chụp hình') ||
+    contextToCheck.includes('chụp ảnh') ||
+    contextToCheck.includes('quay phim') ||
+    contextToCheck.includes('quay highlight') ||
+    contextToCheck.includes('quay clip tiktok') ||
+    contextToCheck.includes('quay tiktok') ||
+    contextToCheck.includes('mc bản tin') ||
+    contextToCheck.includes('thư ký trường quay') ||
+    contextToCheck.includes('diễn viên')
+  ) {
+    // Nếu trong context có từ khóa "dựng" mà không có từ khóa "quay"/"chụp" chính thức
+    if (contextToCheck.includes('dựng') && !/(quay|chụp|mc|thư ký|diễn viên)/.test(contextToCheck)) {
+      return false;
+    }
+    return true;
+  }
+
+  return false;
+};
+
+const isTechnicalTask = isMultiplierEligibleTask;
+
+/**
+ * Tính toán số giờ thực tế, giờ thường, giờ ngoài giờ (x1.5), giờ Chủ nhật (x2.0),
+ * tổng giờ quy đổi và tạo câu ghi chú chuẩn hóa cho từng công việc.
+ * 
+ * Tuân thủ nghiêm ngặt 100% các quy tắc nghiệp vụ:
+ * 1. Mức cơ bản: 20.000 đ/giờ.
+ * 2. Kỹ thuật sau 16:30 T2-T7: nhân 1,5.
+ * 3. Kỹ thuật Chủ nhật: nhân 2.
+ * 4. Nếu vừa Chủ nhật vừa ngoài giờ: chỉ nhân 2 (ưu tiên hệ số Chủ nhật, không nhân chồng).
+ * 5. Các công việc còn lại: nhân 1.
+ * 6. Tách rõ từng khoảng giờ: nếu công việc kéo dài qua 16:30, phần trước 16:30 tính x1.0, phần sau 16:30 tính x1.5.
+ * 
+ * @param {object} task - Đối tượng Task từ CSDL
+ * @returns {{
+ *   actualHours: number,
+ *   normalHours: number,
+ *   overtimeHours: number,
+ *   sundayHours: number,
+ *   multiplier: number,
+ *   convertedHours: number,
+ *   isHighlighted: boolean,
+ *   isSunday: boolean,
+ *   isOvertime: boolean,
+ *   multiplierNote: string,
+ *   fullNote: string,
+ *   reason: string
+ * }}
+ */
+const calculateTaskHoursAndMultiplier = (task = {}) => {
+  const actualHours = parseFloat(task.actualHours) || 0;
+  if (actualHours <= 0) {
+    return {
+      actualHours: 0,
+      normalHours: 0,
+      overtimeHours: 0,
+      sundayHours: 0,
+      multiplier: 1.0,
+      convertedHours: 0,
+      isHighlighted: false,
+      isSunday: false,
+      isOvertime: false,
+      multiplierNote: '',
+      fullNote: task.note || '',
+      reason: 'Chưa có giờ thực hiện',
+    };
+  }
+
+  // 1. Xác định ngày và thứ
+  let rawDate = task.executionDate;
+  if (!rawDate && task.startTime) {
+    rawDate = typeof task.startTime === 'string' ? task.startTime.slice(0, 10) : task.startTime.toISOString().slice(0, 10);
+  }
+  if (!rawDate && task.completedAt) {
+    rawDate = typeof task.completedAt === 'string' ? task.completedAt.slice(0, 10) : task.completedAt.toISOString().slice(0, 10);
+  }
+  if (!rawDate && task.createdAt) {
+    rawDate = typeof task.createdAt === 'string' ? task.createdAt.slice(0, 10) : task.createdAt.toISOString().slice(0, 10);
+  }
+  const dateStr = normalizeExecutionDate(rawDate);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d, 12, 0, 0);
+  const isSunday = dt.getDay() === 0;
+
+  // 2. Kiểm tra có phải công việc kỹ thuật sự kiện hay không
+  const isTech = isTechnicalTask(task);
+
+  // NẾU KHÔNG PHẢI KỸ THUẬT: Áp dụng hệ số 1.0 cho toàn bộ giờ
+  if (!isTech) {
+    return {
+      actualHours,
+      normalHours: actualHours,
+      overtimeHours: 0,
+      sundayHours: 0,
+      multiplier: 1.0,
+      convertedHours: actualHours * 1.0,
+      isHighlighted: false,
+      isSunday: false,
+      isOvertime: false,
+      multiplierNote: '',
+      fullNote: task.note || '',
+      reason: 'Công việc tiêu chuẩn (hệ số 1,0)',
+    };
+  }
+
+  // NẾU LÀ KỸ THUẬT:
+  // TRƯỜNG HỢP 1: CHỦ NHẬT (x2.0)
+  if (isSunday) {
+    // Kiểm tra xem có làm ngoài giờ sau 16:30 vào Chủ nhật không
+    let isAfter1630OnSunday = false;
+    if (task.startTime) {
+      const st = new Date(task.startTime);
+      if (!isNaN(st.getTime())) {
+        const startHour = st.getHours() + st.getMinutes() / 60;
+        if (startHour >= 16.5 || (startHour + actualHours) > 16.5) {
+          isAfter1630OnSunday = true;
+        }
+      }
+    }
+    if (task.shiftSession === 'T' || task.isOvertime || (task.note && /(sau 16:30|16h30|ngoài giờ|buổi tối|làm tối)/i.test(task.note))) {
+      isAfter1630OnSunday = true;
+    }
+
+    const multiplier = 2.0;
+    const convertedHours = Math.round(actualHours * multiplier * 100) / 100;
+    const multiplierNote = isAfter1630OnSunday
+      ? `Chủ nhật (ưu tiên hệ số Chủ nhật): ${formatHoursVi(actualHours)} giờ × 2`
+      : `Chủ nhật: ${formatHoursVi(actualHours)} giờ × 2`;
+
+    const fullNote = task.note ? `${task.note} | ${multiplierNote}` : multiplierNote;
+
+    return {
+      actualHours,
+      normalHours: 0,
+      overtimeHours: 0,
+      sundayHours: actualHours,
+      multiplier,
+      convertedHours,
+      isHighlighted: true,
+      isSunday: true,
+      isOvertime: isAfter1630OnSunday,
+      multiplierNote,
+      fullNote,
+      reason: isAfter1630OnSunday
+        ? 'Làm nhiệm vụ sự vụ/trường quay vào Chủ nhật ngoài giờ (ưu tiên hệ số Chủ nhật 2.0, không cộng dồn)'
+        : 'Làm nhiệm vụ sự vụ/trường quay vào Chủ nhật (hệ số 2.0)',
+    };
+  }
+
+  // TRƯỜNG HỢP 2: TỪ THỨ HAI ĐẾN THỨ BẢY (T2 - T7)
+  // Cần tách rõ từng khoảng giờ: trong giờ (x1.0) và ngoài giờ sau 16:30 (x1.5)
+  let normalHours = actualHours;
+  let overtimeHours = 0;
+
+  // Cách A: Xác định theo startTime (thời gian bắt đầu chính xác)
+  if (task.startTime) {
+    const st = new Date(task.startTime);
+    if (!isNaN(st.getTime())) {
+      const startDec = st.getHours() + st.getMinutes() / 60;
+      const endDec = startDec + actualHours;
+      const cutoff = 16.5; // 16:30
+
+      if (startDec >= cutoff) {
+        // Hoàn toàn sau 16:30
+        overtimeHours = actualHours;
+        normalHours = 0;
+      } else if (endDec <= cutoff) {
+        // Hoàn toàn trước 16:30
+        normalHours = actualHours;
+        overtimeHours = 0;
+      } else {
+        // Bắt đầu trước 16:30, kết thúc sau 16:30 -> Tách 2 khoảng
+        normalHours = Math.round((cutoff - startDec) * 100) / 100;
+        overtimeHours = Math.round((actualHours - normalHours) * 100) / 100;
+      }
+    }
+  } else if (task.overtimeHours && parseFloat(task.overtimeHours) > 0) {
+    // Cách B: Nhân sự đã nhập cụ thể số giờ sau 16:30 khi nghiệm thu
+    const ot = Math.min(actualHours, parseFloat(task.overtimeHours));
+    overtimeHours = ot;
+    normalHours = Math.round((actualHours - ot) * 100) / 100;
+  } else if (task.shiftSession === 'T') {
+    // Ca Tối (17:30 - 21:30): Hoàn toàn sau 16:30
+    overtimeHours = actualHours;
+    normalHours = 0;
+  } else if (task.shiftSession === 'C') {
+    // Ca Chiều (13:00 - 17:00): 13:00 đến 16:30 là 3.5 tiếng
+    if (actualHours > 3.5) {
+      normalHours = 3.5;
+      overtimeHours = Math.round((actualHours - 3.5) * 100) / 100;
+    } else {
+      normalHours = actualHours;
+      overtimeHours = 0;
+    }
+  } else if (task.isOvertime || (task.note && /(sau 16:30|16h30|ngoài giờ|buổi tối|làm tối)/i.test(task.note))) {
+    // Có ghi chú ngoài giờ nhưng không rõ mốc: mặc định tính toàn bộ giờ là ngoài giờ nếu note nêu rõ
+    overtimeHours = actualHours;
+    normalHours = 0;
+  }
+
+  // Đảm bảo không âm và tổng bằng actualHours
+  normalHours = Math.max(0, normalHours);
+  overtimeHours = Math.max(0, Math.min(actualHours, overtimeHours));
+  if (Math.abs(normalHours + overtimeHours - actualHours) > 0.01) {
+    normalHours = Math.max(0, Math.round((actualHours - overtimeHours) * 100) / 100);
+  }
+
+  if (overtimeHours > 0) {
+    const convertedHours = Math.round((normalHours * 1.0 + overtimeHours * 1.5) * 100) / 100;
+    let multiplierNote = '';
+    if (normalHours > 0) {
+      multiplierNote = `Trong giờ: ${formatHoursVi(normalHours)} giờ × 1,0; Ngoài giờ: ${formatHoursVi(overtimeHours)} giờ × 1,5`;
+    } else {
+      multiplierNote = `Ngoài giờ: ${formatHoursVi(overtimeHours)} giờ × 1,5`;
+    }
+
+    const fullNote = task.note ? `${task.note} | ${multiplierNote}` : multiplierNote;
+
+    return {
+      actualHours,
+      normalHours,
+      overtimeHours,
+      sundayHours: 0,
+      multiplier: normalHours === 0 ? 1.5 : Math.round((convertedHours / actualHours) * 100) / 100,
+      convertedHours,
+      isHighlighted: true,
+      isSunday: false,
+      isOvertime: true,
+      multiplierNote,
+      fullNote,
+      reason: normalHours > 0
+        ? `Làm nhiệm vụ sự vụ/trường quay: ${formatHoursVi(normalHours)}h trong giờ (x1.0) và ${formatHoursVi(overtimeHours)}h ngoài giờ sau 16:30 (x1.5)`
+        : `Làm nhiệm vụ sự vụ/trường quay ngoài giờ sau 16:30 (x1.5)`,
+    };
+  }
+
+  // Toàn bộ trong giờ hành chính T2-T7: Hệ số 1.0
+  return {
+    actualHours,
+    normalHours: actualHours,
+    overtimeHours: 0,
+    sundayHours: 0,
+    multiplier: 1.0,
+    convertedHours: actualHours * 1.0,
+    isHighlighted: false,
+    isSunday: false,
+    isOvertime: false,
+    multiplierNote: '',
+    fullNote: task.note || '',
+    reason: 'Công việc kỹ thuật trong giờ hành chính (hệ số 1,0)',
+  };
+};
+
+/**
  * Tự động đồng bộ công việc COMPLETED của CTV trong ngày vào bảng AttendanceRecords (Database CSDL).
  * Tự động chuyển ký hiệu từ LV sang SV tại các buổi tương ứng.
  * 
@@ -273,131 +621,33 @@ const syncAllCompletedTasksToAttendance = async (month, year) => {
  * Tính toán và tổng hợp dữ liệu tiền công tháng (FR-05, QUY_TAC.md Mục 7)
  * Áp dụng đầy đủ 7 quy tắc bắt buộc và các testcase TC-03, TC-04, TC-05, TC-06, TC-07.
  */
-const calculateMonthlyPayroll = async (month, year) => {
+/**
+ * Tính toán và tổng hợp dữ liệu tiền công tháng (FR-05, QUY_TAC.md Mục 7).
+ * Đồng bộ 100% với Bảng chấm công (Timesheet) và Bảng thống kê công việc (Single Source of Truth).
+ * Áp dụng đầy đủ 7 quy tắc bắt buộc và các testcase TC-03, TC-04, TC-05, TC-06, TC-07.
+ */
+async function calculateMonthlyPayroll(month, year) {
   const m = parseInt(month, 10);
   const y = parseInt(year, 10);
-  const daysCount = getDaysInMonth(m, y);
-  const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
-  const endDate = `${y}-${String(m).padStart(2, '0')}-${String(daysCount).padStart(2, '0')}`;
 
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-
-  // Tự động đồng bộ CSDL và tự động hoàn thành các ca trực đã kết thúc trước khi tính toán
-  const dutyService = require('./duty.service');
-  try {
-    await dutyService.autoCompletePastConfirmedShifts();
-  } catch (dutyErr) {
-    console.error('Lỗi tự động hoàn thành ca trực trong calculateMonthlyPayroll:', dutyErr);
-  }
-  await syncAllCompletedTasksToAttendance(m, y);
-
-  // 1. Lấy tất cả CTV trong hệ thống
-  const collaborators = await User.findAll({
-    where: { role: 'COLLABORATOR' },
-    attributes: ['id', 'fullName', 'email', 'employeeCode'],
-    order: [['fullName', 'ASC']],
-  });
-
+  // Lấy dữ liệu Bảng chấm công thống nhất (Single Source of Truth)
+  const timesheetData = await getTimesheetData(m, y);
   const payrollResults = [];
 
-  for (const ctv of collaborators) {
-    // 2. Lấy các ca trực Studio của CTV trong tháng
-    // TC-04: Ca trực tương lai hoặc chưa kết thúc giờ trực TUYỆT ĐỐI không được tính tiền trước!
-    const shifts = await StudioShift.findAll({
-      where: {
-        userId: ctv.id,
-        date: { [Op.between]: [startDate, endDate] },
-        status: { [Op.in]: ['COMPLETED', 'CONFIRMED'] },
-      },
-    });
+  for (const row of timesheetData.rows) {
+    const ctv = row.ctv;
+    const summary = row.summary || {};
 
-    // Lọc chỉ tính ca trực đã hoàn thành theo thời gian thực (đã kết thúc giờ trực)
-    const validShifts = shifts.filter((s) => s.status === 'COMPLETED');
-
-    // 3. Lấy các công việc Tasks đã hoàn thành trong tháng
-    // TC-03: Chỉ tính công việc đã COMPLETED (loại trừ IN_PROGRESS, PENDING_APPROVAL, REVISION_REQUESTED)
-    const allTasks = await Task.findAll({
-      where: {
-        assignedToUserId: ctv.id,
-        status: 'COMPLETED',
-      },
-      order: [['executionDate', 'ASC'], ['completedAt', 'ASC']],
-    });
-
-    // Lọc các task thuộc tháng/năm đang xét
-    const monthTasks = allTasks.filter((t) => {
-      const rawDate = t.executionDate || (t.completedAt ? t.completedAt.toISOString().slice(0, 10) : t.createdAt.toISOString().slice(0, 10));
-      const taskDateStr = normalizeExecutionDate(rawDate);
-      return taskDateStr >= startDate && taskDateStr <= endDate;
-    });
-
-    // Gom nhóm task theo ngày để xác định các buổi SV chuyển đổi (tránh tính trùng thời gian)
-    const tasksByDay = {};
-    for (const task of monthTasks) {
-      const rawDate = task.executionDate || (task.completedAt ? task.completedAt.toISOString().slice(0, 10) : task.createdAt.toISOString().slice(0, 10));
-      const taskDateStr = normalizeExecutionDate(rawDate);
-      if (!tasksByDay[taskDateStr]) {
-        tasksByDay[taskDateStr] = { dateStr: taskDateStr, totalHours: 0, tasks: [] };
-      }
-      tasksByDay[taskDateStr].totalHours += parseFloat(task.actualHours) || 0;
-      tasksByDay[taskDateStr].tasks.push(task);
-    }
-
-    const svSessionsByDate = {};
-    for (const [dStr, dayInfo] of Object.entries(tasksByDay)) {
-      const { sessions: targetSessions, isPendingConfirmation } = getSessionsForDayHours(dayInfo.totalHours);
-      if (!isPendingConfirmation && targetSessions.length > 0) {
-        svSessionsByDate[dStr] = targetSessions;
-      }
-    }
-
-    // Không tính trùng thời gian giữa công việc và ca trực:
-    // Nếu ca trực rơi vào buổi đã chuyển thành SV thì ca trực đó không tính vào LV
-    const actualLvShifts = validShifts.filter((s) => {
-      const sDateStr = String(s.date).slice(0, 10);
-      const sess = shiftTypeToSession(s.shiftType);
-      const svSessions = svSessionsByDate[sDateStr] || [];
-      return !svSessions.includes(sess);
-    });
-
-    const totalShiftCount = actualLvShifts.length; // Sum LV (không tính trùng ca trực đã chuyển thành SV)
-    const shiftHours = totalShiftCount * 4.0;   // Giờ LV = Sum LV * 4
-
-    let taskHours = 0;
-    let overtimeHours = 0;
-    let sundayHours = 0;
-    let calculatedTaskHours = 0;
-
-    for (const task of monthTasks) {
-      const hours = parseFloat(task.actualHours) || 0;
-      taskHours += hours;
-
-      const taskDateStr = task.executionDate || (task.completedAt ? task.completedAt.toISOString().slice(0, 10) : task.createdAt.toISOString().slice(0, 10));
-      const taskDate = new Date(taskDateStr);
-      const isSunday = task.isSunday || taskDate.getDay() === 0;
-
-      // TC-06: Chống nhân chồng hệ số:
-      // Nếu vào Chủ nhật và sau 16:30 -> chỉ áp dụng hệ số 2.0 (không nhân 1.5 x 2.0)
-      if (isSunday) {
-        sundayHours += hours;
-        calculatedTaskHours += hours * 2.0;
-      } else if (task.isOvertime || parseFloat(task.overtimeHours) > 0) {
-        const otH = parseFloat(task.overtimeHours) > 0 ? parseFloat(task.overtimeHours) : hours;
-        const normalH = Math.max(0, hours - otH);
-        overtimeHours += otH;
-        calculatedTaskHours += normalH * 1.0 + otH * 1.5;
-      } else {
-        calculatedTaskHours += hours * 1.0;
-      }
-    }
-
-    const totalStandardHours = shiftHours + taskHours; // Tổng giờ thực tế (Cột Tổng trên Sheet1)
-    const totalCalculatedHours = shiftHours * 1.0 + calculatedTaskHours; // Tổng giờ quy đổi sau hệ số
+    const totalShiftCount = summary.sumLV || 0;
+    const shiftHours = summary.gioLV || 0;
+    const taskHours = summary.gioSV || 0;
+    const overtimeHours = summary.gioOt || 0;
+    const sundayHours = summary.gioSunday || 0;
+    const totalStandardHours = Math.round((shiftHours + taskHours) * 100) / 100;
+    const totalCalculatedHours = summary.tongGio || 0;
     const hourlyRate = 20000.00;
-    const totalAmount = Math.round(totalCalculatedHours * hourlyRate); // Cột Tiền trên Sheet1
+    const totalAmount = summary.tien || 0;
 
-    // 4. Lưu / Cập nhật vào MonthlyPayroll
     let payroll = await MonthlyPayroll.findOne({
       where: { userId: ctv.id, month: m, year: y },
     });
@@ -441,18 +691,18 @@ const calculateMonthlyPayroll = async (month, year) => {
         employeeCode: ctv.employeeCode,
       },
       payroll,
-      tasksCount: monthTasks.length,
+      summary,
     });
   }
 
   return payrollResults;
-};
+}
 
 /**
  * Lấy dữ liệu Bảng chấm công chi tiết ma trận (Sheet1)
  * Trả về danh sách CTV, mỗi CTV gồm 3 dòng S-C-T, các ngày 1..daysInMonth và các cột tổng hợp AI-AO.
  */
-const getTimesheetData = async (month, year) => {
+async function getTimesheetData(month, year) {
   const m = parseInt(month, 10);
   const y = parseInt(year, 10);
   const daysCount = getDaysInMonth(m, y);
@@ -625,34 +875,21 @@ const getTimesheetData = async (month, year) => {
 
     // Giờ sự vụ (Giờ SV) = tổng actualHours từ các công việc COMPLETED
     let gioSV = 0;
+    let gioThuong = 0;
     let gioOt = 0;
     let gioSunday = 0;
     let calculatedTaskHours = 0;
 
     for (const task of monthTasks) {
-      const hours = parseFloat(task.actualHours) || 0;
-      gioSV += hours;
-
-      const taskDateStr = task.executionDate || (task.completedAt ? task.completedAt.toISOString().slice(0, 10) : task.createdAt.toISOString().slice(0, 10));
-      const taskDate = new Date(taskDateStr);
-      const isSunday = task.isSunday || taskDate.getDay() === 0;
-
-      // TC-06: Chống nhân chồng hệ số:
-      // Nếu vào Chủ nhật và sau 16:30 -> chỉ áp dụng hệ số 2.0 (không nhân 1.5 x 2.0)
-      if (isSunday) {
-        gioSunday += hours;
-        calculatedTaskHours += hours * 2.0;
-      } else if (task.isOvertime || parseFloat(task.overtimeHours) > 0) {
-        const otH = parseFloat(task.overtimeHours) > 0 ? parseFloat(task.overtimeHours) : hours;
-        const normalH = Math.max(0, hours - otH);
-        gioOt += otH;
-        calculatedTaskHours += normalH * 1.0 + otH * 1.5;
-      } else {
-        calculatedTaskHours += hours * 1.0;
-      }
+      const calc = calculateTaskHoursAndMultiplier(task);
+      gioSV += calc.actualHours;
+      gioThuong += calc.normalHours;
+      gioOt += calc.overtimeHours;
+      gioSunday += calc.sundayHours;
+      calculatedTaskHours += calc.convertedHours;
     }
 
-    const tongGio = gioLV + calculatedTaskHours; // Col AN: Tổng giờ quy đổi sau hệ số
+    const tongGio = Math.round((gioLV + calculatedTaskHours) * 100) / 100; // Col AN: Tổng giờ quy đổi sau hệ số
     const tien = Math.round(tongGio * 20000); // Col AO: Thù lao = Tổng giờ quy đổi * 20.000 đ
     grandTotalAmount += tien;
 
@@ -723,10 +960,11 @@ const getTimesheetData = async (month, year) => {
         sumLv: sumLV,
         gioLV,
         gioLv: gioLV,
-        gioSV,
-        gioSv: gioSV,
-        gioOt,
-        gioSunday,
+        gioSV: Math.round(gioSV * 100) / 100,
+        gioSv: Math.round(gioSV * 100) / 100,
+        gioThuong: Math.round(gioThuong * 100) / 100,
+        gioOt: Math.round(gioOt * 100) / 100,
+        gioSunday: Math.round(gioSunday * 100) / 100,
         tongGio,
         tien,
       },
@@ -769,15 +1007,20 @@ const getTimesheetData = async (month, year) => {
  * Lấy dữ liệu Bảng thống kê công việc tháng (T10.2026 format)
  * Danh sách đầu việc chi tiết nhóm theo CTV: STT, Họ và tên, Ngày, Nội dung, Nhiệm vụ, Thực hiện, Tổng giờ, Ghi chú.
  */
-const getTasksSummaryData = async (month, year) => {
+const getTasksSummaryData = async (month, year, targetUserId = null) => {
   const m = parseInt(month, 10);
   const y = parseInt(year, 10);
   const daysCount = getDaysInMonth(m, y);
   const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
   const endDate = `${y}-${String(m).padStart(2, '0')}-${String(daysCount).padStart(2, '0')}`;
 
+  const whereCollaborator = { role: 'COLLABORATOR' };
+  if (targetUserId) {
+    whereCollaborator.id = targetUserId;
+  }
+
   const collaborators = await User.findAll({
-    where: { role: 'COLLABORATOR' },
+    where: whereCollaborator,
     attributes: ['id', 'fullName', 'email', 'employeeCode'],
     order: [['fullName', 'ASC']],
   });
@@ -802,9 +1045,11 @@ const getTasksSummaryData = async (month, year) => {
     });
 
     let totalHours = 0;
+    let totalConvertedHours = 0;
     const taskItems = monthTasks.map((t) => {
-      const h = parseFloat(t.actualHours) || 0;
-      totalHours += h;
+      const calc = calculateTaskHoursAndMultiplier(t);
+      totalHours += calc.actualHours;
+      totalConvertedHours += calc.convertedHours;
       const rawDate = t.executionDate || (t.completedAt ? t.completedAt.toISOString().slice(0, 10) : t.createdAt.toISOString().slice(0, 10));
       const dateStr = normalizeExecutionDate(rawDate);
 
@@ -814,8 +1059,19 @@ const getTasksSummaryData = async (month, year) => {
         content: t.description || t.title,
         title: t.title,
         taskType: t.taskType === 'Khác' && t.otherTaskType ? `Khác: ${t.otherTaskType}` : t.taskType || 'Sự vụ',
-        hours: h,
-        note: t.note || (t.isOvertime ? 'Làm tối ngoài giờ' : ''),
+        status: t.status,
+        hours: calc.actualHours,
+        normalHours: calc.normalHours,
+        overtimeHours: calc.overtimeHours,
+        sundayHours: calc.sundayHours,
+        multiplier: calc.multiplier,
+        convertedHours: calc.convertedHours,
+        isHighlighted: calc.isHighlighted,
+        multiplierNote: calc.multiplierNote,
+        reason: calc.reason,
+        note: calc.multiplierNote
+          ? (t.note ? `${t.note} | ${calc.multiplierNote}` : calc.multiplierNote)
+          : (t.note || '—'),
       };
     });
 
@@ -827,7 +1083,9 @@ const getTasksSummaryData = async (month, year) => {
         email: ctv.email,
         employeeCode: ctv.employeeCode,
       },
-      totalHours,
+      totalHours: Math.round(totalHours * 100) / 100,
+      totalConvertedHours: Math.round(totalConvertedHours * 100) / 100,
+      totalAmount: Math.round(totalConvertedHours * 20000),
       tasks: taskItems,
     });
   }
@@ -836,6 +1094,163 @@ const getTasksSummaryData = async (month, year) => {
     month: m,
     year: y,
     ctvGroups,
+  };
+};
+
+/**
+ * Lấy dữ liệu Bảng Tổng công việc tháng dành riêng cho CTV (Read-only)
+ * Bảo mật RBAC: CTV chỉ xem danh sách công việc của chính mình, không xem dữ liệu CTV khác.
+ * Hiển thị đầy đủ: STT, ngày thực hiện, nội dung công việc, nhiệm vụ, số giờ thực hiện, trạng thái duyệt và ghi chú.
+ * Bổ sung bộ lọc tháng/năm, mặc định là tháng hiện tại; cho phép xem lại dữ liệu các tháng trước.
+ * Hiển thị tổng số công việc, tổng giờ đã thực hiện và tổng giờ được Nhân sự xác nhận.
+ * Các công việc được nhân hệ số phải có ghi chú và highlight rõ số giờ ngoài giờ/Chủ nhật cùng hệ số áp dụng.
+ */
+const getCollaboratorMonthlySummary = async (month, year, ctvUserId) => {
+  const m = parseInt(month, 10);
+  const y = parseInt(year, 10);
+  const daysCount = getDaysInMonth(m, y);
+  const startDate = `${y}-${String(m).padStart(2, '0')}-01`;
+  const endDate = `${y}-${String(m).padStart(2, '0')}-${String(daysCount).padStart(2, '0')}`;
+
+  const ctv = await User.findOne({
+    where: { id: ctvUserId },
+    attributes: ['id', 'fullName', 'email', 'employeeCode', 'role'],
+  });
+
+  if (!ctv) {
+    const error = new Error('Không tìm thấy thông tin cộng tác viên');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  // Lấy toàn bộ các công việc được giao cho CTV này
+  const tasks = await Task.findAll({
+    where: {
+      assignedToUserId: ctvUserId,
+    },
+    order: [['executionDate', 'ASC'], ['completedAt', 'ASC'], ['createdAt', 'ASC']],
+  });
+
+  // Lọc theo tháng thực hiện dựa trên executionDate, completedAt hoặc createdAt
+  const monthTasks = tasks.filter((t) => {
+    const rawDate = t.executionDate || (t.completedAt ? t.completedAt.toISOString().slice(0, 10) : t.createdAt.toISOString().slice(0, 10));
+    const taskDateStr = normalizeExecutionDate(rawDate);
+    return taskDateStr >= startDate && taskDateStr <= endDate;
+  });
+
+  let totalTasks = monthTasks.length;
+  let completedTasks = 0;
+  let pendingTasks = 0;
+  let inProgressTasks = 0;
+  let revisionRequestedTasks = 0;
+  let notStartedTasks = 0;
+
+  let totalHoursWorked = 0; // Tổng giờ đã thực hiện
+  let confirmedHours = 0;   // Tổng giờ được Nhân sự xác nhận (COMPLETED)
+  let confirmedConvertedHours = 0; // Tổng giờ quy đổi sau hệ số
+
+  const taskItems = monthTasks.map((t, idx) => {
+    const isCompleted = t.status === 'COMPLETED';
+    const isPending = t.status === 'PENDING_APPROVAL';
+    const rawHours = parseFloat(t.actualHours) || 0;
+
+    // Tổng giờ đã thực hiện: Tính theo số giờ thực tế CTV đã làm/nộp
+    totalHoursWorked += rawHours;
+
+    let calc = {
+      actualHours: rawHours,
+      normalHours: rawHours,
+      overtimeHours: 0,
+      sundayHours: 0,
+      multiplier: 1.0,
+      convertedHours: rawHours,
+      isHighlighted: false,
+      multiplierNote: '',
+      reason: '',
+    };
+
+    if (isCompleted) {
+      completedTasks++;
+      // Single Source of Truth cho hệ số nhân
+      calc = calculateTaskHoursAndMultiplier(t);
+      confirmedHours += calc.actualHours;
+      confirmedConvertedHours += calc.convertedHours;
+    } else if (isPending) {
+      pendingTasks++;
+    } else if (t.status === 'REVISION_REQUESTED') {
+      revisionRequestedTasks++;
+    } else if (t.status === 'IN_PROGRESS') {
+      inProgressTasks++;
+    } else {
+      notStartedTasks++;
+    }
+
+    const rawDate = t.executionDate || (t.completedAt ? t.completedAt.toISOString().slice(0, 10) : t.createdAt.toISOString().slice(0, 10));
+    const dateStr = normalizeExecutionDate(rawDate);
+
+    // Ghi chú chuẩn hóa
+    let noteText = t.note || '';
+    if (isCompleted && calc.isHighlighted && calc.multiplierNote) {
+      noteText = noteText ? `${noteText} | ${calc.multiplierNote}` : calc.multiplierNote;
+    } else if (isPending) {
+      noteText = noteText ? `${noteText} (Chờ duyệt tính hệ số)` : 'Chờ Nhân sự duyệt để tính hệ số';
+    } else if (!noteText) {
+      noteText = '—';
+    }
+
+    return {
+      stt: idx + 1,
+      id: t.id,
+      date: dateStr,
+      title: t.title,
+      content: t.description || t.title,
+      taskType: t.taskType === 'Khác' && t.otherTaskType ? `Khác: ${t.otherTaskType}` : t.taskType || 'Sự vụ',
+      status: t.status,
+      hours: calc.actualHours,
+      normalHours: calc.normalHours,
+      overtimeHours: calc.overtimeHours,
+      sundayHours: calc.sundayHours,
+      multiplier: isCompleted ? calc.multiplier : 1.0,
+      convertedHours: isCompleted ? calc.convertedHours : calc.actualHours,
+      isHighlighted: isCompleted && calc.isHighlighted,
+      multiplierNote: isCompleted ? calc.multiplierNote : '',
+      reason: isCompleted ? calc.reason : '',
+      note: noteText,
+      resultLink: t.resultLink || null,
+      proofFile: t.proofFile || null,
+      feedback: t.feedback || null,
+      completedAt: t.completedAt || null,
+    };
+  });
+
+  totalHoursWorked = Math.round(totalHoursWorked * 100) / 100;
+  confirmedHours = Math.round(confirmedHours * 100) / 100;
+  confirmedConvertedHours = Math.round(confirmedConvertedHours * 100) / 100;
+  const estimatedSalary = Math.round(confirmedConvertedHours * 20000);
+
+  return {
+    month: m,
+    year: y,
+    ctv: {
+      id: ctv.id,
+      fullName: ctv.fullName,
+      email: ctv.email,
+      employeeCode: ctv.employeeCode,
+    },
+    summary: {
+      totalTasks,
+      completedTasks,
+      pendingTasks,
+      inProgressTasks,
+      revisionRequestedTasks,
+      notStartedTasks,
+      totalHoursWorked,
+      confirmedHours,
+      confirmedConvertedHours,
+      estimatedSalary,
+      hourlyRate: 20000,
+    },
+    tasks: taskItems,
   };
 };
 
@@ -1194,7 +1609,7 @@ const exportTasksSummaryExcel = async (month, year, res) => {
     sheet.getCell(startR, 2).value = group.ctv.fullName;
     sheet.getCell(startR, 2).alignment = { vertical: 'middle', horizontal: 'left' };
 
-    sheet.getCell(startR, 7).value = group.totalHours;
+    sheet.getCell(startR, 7).value = group.totalConvertedHours !== undefined ? group.totalConvertedHours : group.totalHours;
     sheet.getCell(startR, 7).numFmt = '#,##0.0';
     sheet.getCell(startR, 7).alignment = { vertical: 'middle', horizontal: 'center' };
     sheet.getCell(startR, 7).font = { name: 'Arial', size: 9, bold: true };
@@ -1220,6 +1635,18 @@ const exportTasksSummaryExcel = async (month, year, res) => {
 
       row.getCell(8).value = task.note;
       row.getCell(8).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+
+      // Highlight trực tiếp dòng công việc hoặc vùng thông tin nếu được nhân hệ số (Mục 2 & Mục 3)
+      if (task.isHighlighted) {
+        for (let c = 3; c <= 8; c++) {
+          row.getCell(c).fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFF3CD' }, // Nền vàng hổ phách nhạt
+          };
+        }
+        row.getCell(8).font = { name: 'Arial', size: 9, bold: true, color: { argb: 'FFB45309' } }; // Chữ cam đậm nổi bật
+      }
 
       for (let c = 1; c <= 8; c++) {
         row.getCell(c).border = {
@@ -1344,11 +1771,16 @@ module.exports = {
   getDaysInMonth,
   normalizeExecutionDate,
   getSessionsForDayHours,
+  formatHoursVi,
+  isTechnicalTask,
+  isMultiplierEligibleTask,
+  calculateTaskHoursAndMultiplier,
   syncTaskAttendanceToDatabase,
   syncAllCompletedTasksToAttendance,
   calculateMonthlyPayroll,
   getTimesheetData,
   getTasksSummaryData,
+  getCollaboratorMonthlySummary,
   exportTimesheetExcel,
   exportTasksSummaryExcel,
   updateAttendanceCell,

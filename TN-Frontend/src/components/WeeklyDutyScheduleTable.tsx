@@ -59,6 +59,11 @@ export interface TaskDetail {
   creatorAvatar?: string | null;
   createdAtFormatted?: string;
   executionTimeFormatted?: string;
+  isHighlighted?: boolean;
+  multiplierNote?: string;
+  multiplier?: number;
+  convertedHours?: number;
+  multiplierReason?: string;
   fullDisplay: string;
 }
 
@@ -1572,10 +1577,23 @@ export default function WeeklyDutyScheduleTable({
                         </div>
                       )}
 
+                      {/* Hệ số nhân & Ghi chú nếu có */}
+                      {(task.isHighlighted || task.multiplierNote) && (
+                        <div className="flex items-center space-x-1.5 text-xs text-amber-300 bg-amber-500/15 px-2.5 py-1 rounded-lg border border-amber-500/30">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                          <span>
+                            <strong>Hệ số:</strong> {task.multiplierNote || (task.multiplier ? `×${task.multiplier}` : '')}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Giờ làm thực tế & Trạng thái */}
                       <div className="flex items-center justify-between text-[11px] pt-1 border-t border-white/5">
                         <span className="text-studio-muted">
                           Thời lượng: {task.actualHours ? `${task.actualHours} giờ` : 'Chưa ghi nhận'}
+                          {task.convertedHours !== undefined && task.convertedHours !== task.actualHours && (
+                            <strong className="text-amber-300 ml-1">({task.convertedHours}h quy đổi)</strong>
+                          )}
                         </span>
                         <span
                           className={`font-bold flex items-center space-x-1 ${

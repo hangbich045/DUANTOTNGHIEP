@@ -119,6 +119,29 @@ const StudioBooking = sequelize.define(
       type: DataTypes.TEXT,
       allowNull: true,
     },
+
+    // Thời gian người dùng bấm "Xác nhận đã đến"
+    userCheckInAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'user_check_in_at',
+    },
+
+    // Thời gian Admin bấm "Xác nhận đã sử dụng"
+    adminConfirmedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'admin_confirmed_at',
+    },
+
+    // Trạng thái điểm danh / sử dụng studio:
+    // NOT_ARRIVED | USER_CHECKED_IN | ADMIN_CONFIRMED | ABSENT
+    attendanceStatus: {
+      type: DataTypes.STRING(30),
+      defaultValue: 'NOT_ARRIVED',
+      allowNull: true,
+      field: 'attendance_status',
+    },
   },
   {
     tableName: 'StudioBookings',

@@ -96,7 +96,10 @@ const Equipment = sequelize.define(
       defaultValue: 'AVAILABLE',
       allowNull: false,
       validate: {
-        isIn: { args: [['AVAILABLE', 'BORROWED', 'MAINTENANCE']], msg: 'Trạng thái không hợp lệ' },
+        isIn: {
+          args: [['AVAILABLE', 'BORROWED', 'MAINTENANCE', 'DAMAGED', 'LOST', 'DISPOSED', 'SUSPENDED']],
+          msg: 'Trạng thái không hợp lệ',
+        },
       },
     },
 

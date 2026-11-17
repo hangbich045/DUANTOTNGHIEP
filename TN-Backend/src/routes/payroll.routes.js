@@ -16,6 +16,12 @@ router.get('/timesheet', authenticate, authorize('COLLABORATOR', 'ADMIN'), payro
 // Lấy dữ liệu Bảng thống kê công việc tháng (T10.2026 format)
 router.get('/tasks-summary', authenticate, authorize('COLLABORATOR', 'ADMIN'), payrollController.getTasksSummary);
 
+// Lấy dữ liệu Bảng tổng công việc tháng dành riêng cho CTV (Read-only)
+router.get('/collaborator-summary', authenticate, authorize('COLLABORATOR', 'ADMIN'), payrollController.getCollaboratorSummary);
+
+// Lấy dữ liệu Bảng lương tháng tổng hợp (FR-05)
+router.get('/monthly', authenticate, authorize('ADMIN'), payrollController.getMonthlyPayroll);
+
 // Admin tính toán và tổng hợp thù lao tháng
 router.post('/calculate', authenticate, authorize('ADMIN'), payrollController.calculatePayroll);
 

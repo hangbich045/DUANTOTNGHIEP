@@ -62,14 +62,19 @@ const getAll = async (req, res) => {
     // - thêm fullName (FE dùng booking.fullName)
     const items = result.items.map(item => {
       const raw = item.toJSON ? item.toJSON() : item;
+      const attendanceInfo = studioBookingService.computeAttendanceInfo(raw);
       return {
         ...raw,
         user: raw.booker || raw.user,
         booker: undefined,
-        fullName: raw.booker?.fullName || raw.user?.fullName || '',
+        fullName: raw.booker?.fullName || raw.user?.fullName || raw.fullName || '',
         participants: raw.attendees || 0,
         technicalSupport: raw.technicalSupport || false,
         status: raw.status === 'CONFIRMED' ? 'APPROVED' : raw.status,
+        userCheckInAt: raw.userCheckInAt || raw.user_check_in_at || null,
+        adminConfirmedAt: raw.adminConfirmedAt || raw.admin_confirmed_at || null,
+        attendanceStatus: raw.attendanceStatus || raw.attendance_status || 'NOT_ARRIVED',
+        attendanceInfo,
       };
     });
 
@@ -122,12 +127,45 @@ const getAll = async (req, res) => {
  */
 const create = async (req, res) => {
   try {
-    const booking = await studioBookingService.create(req.body, req.user.id);
+    const booking = await studioBookingService.create(req.body, req.user.id, req.user);
     return res.status(201).json({
       success: true,
       message: 'Đặt phòng thành công! Vui lòng chờ Admin xác nhận.',
       data: booking,
     });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * GET /api/studio-bookings/available-slots
+ * @swagger
+ * /api/studio-bookings/available-slots:
+ *   get:
+ *     summary: Lấy danh sách khung giờ trống gợi ý cho ngày được chọn
+ *     tags: [StudioBooking]
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, format: date }
+ *         example: "2026-11-20"
+ *       - in: query
+ *         name: studioName
+ *         schema: { type: string, default: "Studio LHU" }
+ */
+const getAvailableSlots = async (req, res) => {
+  try {
+    const { date, studioName } = req.query;
+    const result = await studioBookingService.getAvailableSlots(
+      date,
+      studioName || 'Studio LHU',
+      req.user?.role || 'USER'
+    );
+    return res.status(200).json(result);
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
@@ -222,4 +260,112 @@ const cancelByUser = async (req, res) => {
   }
 };
 
-module.exports = { getAll, create, processBooking, cancelByUser };
+/**
+ * PUT/PATCH /api/studio-bookings/:id/reschedule
+ * [FR-03.6] Dời lịch / Chỉnh sửa lịch đặt phòng Studio (kèm kiểm tra xung đột)
+ */
+const reschedule = async (req, res) => {
+  try {
+    const result = await studioBookingService.reschedule(req.params.id, req.body, req.user);
+
+    if (result && result.status === 'warning') {
+      return res.status(200).json(result);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Dời lịch đặt phòng Studio thành công!',
+      data: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PUT /api/studio-bookings/:id/check-in
+ * [USER / CTV] Xác nhận đã đến Studio theo lịch đăng ký
+ */
+const checkIn = async (req, res) => {
+  try {
+    const reqInfo = {
+      ip: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    };
+    const result = await studioBookingService.checkIn(req.params.id, req.user, reqInfo);
+    return res.status(200).json({
+      success: true,
+      message: 'Xác nhận đã đến Studio thành công! Yêu cầu đã chuyển sang trạng thái "Chờ xác nhận có mặt".',
+      data: result.booking,
+      attendanceInfo: result.attendanceInfo,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PUT /api/studio-bookings/:id/confirm-usage
+ * [ADMIN] Xác nhận đã sử dụng phòng Studio hoàn tất
+ */
+const confirmUsage = async (req, res) => {
+  try {
+    const reqInfo = {
+      ip: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    };
+    const result = await studioBookingService.confirmUsage(
+      req.params.id,
+      req.user,
+      { adminNote: req.body.adminNote },
+      reqInfo
+    );
+    return res.status(200).json({
+      success: true,
+      message: 'Xác nhận đã sử dụng phòng Studio thành công!',
+      data: result.booking,
+      attendanceInfo: result.attendanceInfo,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * PUT /api/studio-bookings/:id/mark-absent
+ * [ADMIN] Đánh dấu người dùng không đến sử dụng Studio
+ */
+const markAbsent = async (req, res) => {
+  try {
+    const reqInfo = {
+      ip: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers['user-agent'],
+    };
+    const result = await studioBookingService.markAbsent(
+      req.params.id,
+      req.user,
+      { reason: req.body.reason },
+      reqInfo
+    );
+    return res.status(200).json({
+      success: true,
+      message: 'Đã ghi nhận người dùng không đến sử dụng Studio.',
+      data: result.booking,
+      attendanceInfo: result.attendanceInfo,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = {
+  getAll,
+  create,
+  processBooking,
+  cancelByUser,
+  reschedule,
+  getAvailableSlots,
+  checkIn,
+  confirmUsage,
+  markAbsent,
+};

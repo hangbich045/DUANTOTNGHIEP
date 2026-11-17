@@ -50,6 +50,8 @@ const DutyPeriod = require('./DutyPeriod')(sequelize);
 const ShiftRegistration = require('./ShiftRegistration')(sequelize);
 const Notification = require('./Notification')(sequelize);
 const DutyScheduleHistory = require('./DutyScheduleHistory')(sequelize);
+const AuditLog = require('./AuditLog')(sequelize);
+const EquipmentMaintenance = require('./EquipmentMaintenance')(sequelize);
 
 // ============================================================
 // ĐỊNH NGHĨA ASSOCIATIONS (QUAN HỆ GIỮA CÁC BẢNG)
@@ -298,6 +300,45 @@ DutyScheduleHistory.belongsTo(User, {
   as: 'targetCollaborator',
 });
 
+/**
+ * QUAN HỆ 16: AuditLog (Nhật ký kiểm toán / Lịch sử thao tác FR-09)
+ */
+User.hasMany(AuditLog, {
+  foreignKey: 'user_id',
+  as: 'auditLogs',
+  onDelete: 'SET NULL',
+});
+
+AuditLog.belongsTo(User, {
+  foreignKey: 'user_id',
+  as: 'user',
+});
+
+/**
+ * QUAN HỆ 17: EquipmentMaintenance (Lịch sử bảo trì, sửa chữa, báo mất, thanh lý FR-01.5)
+ */
+Equipment.hasMany(EquipmentMaintenance, {
+  foreignKey: 'equipment_id',
+  as: 'maintenances',
+  onDelete: 'CASCADE',
+});
+
+EquipmentMaintenance.belongsTo(Equipment, {
+  foreignKey: 'equipment_id',
+  as: 'equipment',
+});
+
+User.hasMany(EquipmentMaintenance, {
+  foreignKey: 'performed_by',
+  as: 'performedMaintenances',
+  onDelete: 'SET NULL',
+});
+
+EquipmentMaintenance.belongsTo(User, {
+  foreignKey: 'performed_by',
+  as: 'creator',
+});
+
 // ============================================================
 // ĐỒNG BỘ DATABASE (DATABASE SYNC)
 // ============================================================
@@ -341,4 +382,6 @@ module.exports = {
   ShiftRegistration,
   Notification,
   DutyScheduleHistory,
+  AuditLog,
+  EquipmentMaintenance,
 };

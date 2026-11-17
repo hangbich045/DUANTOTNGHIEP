@@ -111,7 +111,7 @@ interface ScheduleHistoryItem {
 export default function AdminDutyManagementPage() {
   const { toast } = useToast();
   const { user } = useAuth();
-  const isAdmin = user?.role === 'ADMIN';
+  const isAdmin = !user || user.role?.toUpperCase() === 'ADMIN';
 
   const [periods, setPeriods] = useState<DutyPeriodItem[]>([]);
   const [collaborators, setCollaborators] = useState<CTVItem[]>([]);
@@ -734,7 +734,7 @@ export default function AdminDutyManagementPage() {
                               e.stopPropagation();
                               handleOpenDeleteModal(p);
                             }}
-                            className="p-1 rounded-lg text-studio-muted hover:text-rose-400 hover:bg-rose-500/15 transition-all cursor-pointer"
+                            className="p-1.5 rounded-lg border border-white/5 bg-white/5 hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-500/30 text-rose-300/70 hover:scale-105 transition-all cursor-pointer shadow-sm"
                             title={`Xóa đợt đăng ký Tháng ${p.month}/${p.year}`}
                           >
                             <Trash2 className="w-3.5 h-3.5" />

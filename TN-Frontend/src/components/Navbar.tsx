@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Menu, X, LogOut, LayoutDashboard, Calendar, Camera, History, Home, User, CheckSquare } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Calendar, Camera, History, Home, User, CheckSquare, FileSpreadsheet } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
 
 export default function Navbar() {
@@ -24,7 +24,10 @@ export default function Navbar() {
     { href: '/studio', label: 'Đặt phòng Studio', icon: Calendar },
     ...(user ? [{ href: '/history', label: 'Lịch sử của tôi', icon: History }] : []),
     ...(user && (user.role === 'COLLABORATOR' || user.role === 'ADMIN')
-      ? [{ href: '/tasks', label: 'Nhiệm vụ của tôi', icon: CheckSquare }]
+      ? [
+          { href: '/tasks', label: 'Nhiệm vụ của tôi', icon: CheckSquare },
+          { href: '/tasks/summary', label: 'Tổng công việc tháng', icon: FileSpreadsheet },
+        ]
       : []),
   ];
 

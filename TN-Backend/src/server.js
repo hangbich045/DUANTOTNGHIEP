@@ -43,6 +43,9 @@ const taskRoutes = require('./routes/task.routes');
 const dutyRoutes = require('./routes/duty.routes');
 const payrollRoutes = require('./routes/payroll.routes');
 const notificationRoutes = require('./routes/notification.routes');
+const auditLogRoutes = require('./routes/auditLog.routes');
+const maintenanceRoutes = require('./routes/maintenance.routes');
+const auditLogMiddleware = require('./middlewares/auditLog.middleware');
 // Routes tương thích với Frontend hiện tại (NestJS-style paths)
 const compatRoutes = require('./routes/compat.routes');
 const dashboardRoutes = require('./routes/dashboard.routes');
@@ -107,6 +110,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Phục vụ file tĩnh (ảnh fallback, upload local)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
+// Middleware tự động ghi vết các thao tác quan trọng (Audit Logs - FR-09)
+app.use(auditLogMiddleware);
+
 // ============================================================
 // ROUTES (Đăng ký các đường dẫn API)
 // ============================================================
@@ -124,6 +130,9 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/duty', dutyRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/maintenances', maintenanceRoutes);
+app.use('/api/equipment-maintenances', maintenanceRoutes);
 
 // ============================================================
 // COMPATIBILITY ROUTES (khớp với Frontend hiện tại)

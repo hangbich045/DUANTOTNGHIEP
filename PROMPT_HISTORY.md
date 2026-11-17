@@ -777,3 +777,249 @@ khi xoá đợt đăng ký toàn bộ dữ liệu sẽ bị xoá, khi tạo đ�
      - TypeScript Compilation: **0 errors**.
      - Next.js Production Build: **26/26 routes hoàn tất thành công**.
 - **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #28
+- **Thời gian tiếp nhận:** 17/11/2026 - Cập nhật chức năng Đăng ký phòng Studio: Gợi ý khung giờ còn trống & Tự nhập giờ & Đặc quyền ADMIN
+- **Nội dung câu lệnh:**
+```markdown
+Cập nhật chức năng Đăng ký phòng Studio: cho phép người dùng nhập khung giờ mong muốn hoặc chọn từ các khung giờ còn trống được hệ thống gợi ý. Tự động kiểm tra lịch phòng và áp dụng đúng quy tắc đặt phòng hiện tại: thứ Hai–thứ Bảy, 07:30–11:30 và 13:30–16:30, có thời gian đệm 30 phút; không cho USER đặt ngoài khung giờ hoặc vào thời gian không hợp lệ. Riêng tài khoản ADMIN được phép tạo đặt phòng ngoài khung giờ quy định và không bị giới hạn bởi quy tắc này, nhưng vẫn phải kiểm tra xung đột với các lịch đã xác nhận. Đồng bộ giao diện, API và Database; phân quyền đúng vai trò, giữ nguyên quy trình duyệt và các chức năng hiện có. Chỉ bổ sung hoặc sửa phần cần thiết, không ảnh hưởng các nghiệp vụ đã hoạt động đúng.
+```
+- **Mục tiêu chính:**
+  1. **Hai phương thức chọn khung giờ trực quan trên giao diện Đặt phòng Studio (`/studio`):**
+     - **Tab 1 - Gợi ý khung giờ còn trống:** Tự động tính toán các khung giờ trống khả dụng trong Ca sáng (07:30–11:30), Ca chiều (13:30–16:30) và Ca tối (17:30–21:30 dành cho Admin). Tự động loại trừ các lịch đã xác nhận (`CONFIRMED`/`COMPLETED`) và tính khoảng đệm an toàn 30 phút. Người dùng chỉ cần nhấp chuột 1 lần vào khung giờ để chọn.
+     - **Tab 2 - Tự nhập khung giờ:** Cho phép người dùng tự do nhập ngày, giờ bắt đầu và giờ kết thúc tùy ý (`time` picker step 30 phút).
+     - Giữ nguyên FullCalendar và tính năng chọn nhiều dải giờ cách quãng (multi-range).
+  2. **Quy tắc khung giờ nghiêm ngặt cho Người dùng thường (USER / CTV):**
+     - Chỉ được đặt từ Thứ Hai đến Thứ Bảy, trong khung giờ hành chính: Ca sáng 07:30–11:30 hoặc Ca chiều 13:30–16:30.
+     - Studio đóng cửa vào Chủ nhật; chặn đặt ngoài khung giờ hoặc đặt xuyên trưa.
+     - Bắt buộc khoảng đệm 30 phút trước và sau mỗi ca đã duyệt.
+  3. **Đặc quyền tài khoản Quản trị viên (ADMIN):**
+     - Được phép tạo đặt phòng ngoài khung giờ quy định (sáng sớm, buổi tối, Chủ nhật, sự kiện cấp trường).
+     - Bỏ qua ràng buộc giờ hành chính 07:30–11:30 & 13:30–16:30 và cấm Chủ nhật.
+     - Vẫn bắt buộc kiểm tra xung đột lịch và khoảng đệm 30 phút với các lịch đã xác nhận (`CONFIRMED`/`COMPLETED`) để tránh trùng phòng.
+  4. **Backend API mới & Phân quyền bảo mật:**
+     - Endpoint mới: `GET /api/studio-bookings/available-slots?date=YYYY-MM-DD&studioName=...` tính toán các khoảng trống thực tế và trả về danh sách slot khả dụng.
+     - Cập nhật `POST /api/studio-bookings` và `reschedule` nhận diện `req.user.role` từ JWT token để cho phép Admin bypass giờ hành chính, bảo vệ an toàn từ phía server.
+- **Hành động & Kết quả thực hiện:**
+  - `TN-Backend/src/services/studioBooking.service.js`:
+    * Hàm `validateOperatingHours(start, end, role)`: Nhận tham số role; nếu `role === 'ADMIN'` -> cho phép đặt ngoài giờ và Chủ nhật (chỉ yêu cầu cùng ngày và end > start); nếu không phải Admin -> áp dụng nghiêm ngặt giờ hành chính T2–T7.
+    * Hàm `getAvailableSlots(dateString, studioName, role)`: Quét các booking đã duyệt, tính khoảng khóa (kèm đệm 30 phút ở cả 2 đầu), lọc theo ca (Sáng, Chiều, Tối), tự động phát hiện khoảng trống liên tục (gaps >= 30 phút), lọc bỏ các slot quá khứ nếu là hôm nay, trả về danh sách có cấu trúc `{ isOpen, date, shifts: [{ id, name, operatingHours, availableSlots }] }`.
+    * Cập nhật `create` và `reschedule`: Tự động truyền `currentUser.role` vào `validateOperatingHours`.
+  - `TN-Backend/src/controllers/studioBooking.controller.js` & `routes`:
+    * Thêm controller action `getAvailableSlots(req, res)` và đăng ký route `GET /api/studio-bookings/available-slots`.
+  - `TN-Frontend/src/app/studio/page.tsx`:
+    * Bổ sung component "Khung Đăng Ký Đặt Phòng" với 2 tab "Gợi ý khung giờ còn trống" và "Tự nhập khung giờ".
+    * Tích hợp gọi API `/api/studio-bookings/available-slots` tự động nạp slot khi đổi ngày.
+    * Badge "Đặc quyền ADMIN" hiển thị rõ ràng khi Quản trị viên đăng nhập.
+    * Xử lý click chọn slot gợi ý (`handleSelectSuggestedSlot`) và áp dụng giờ tự nhập (`handleApplyCustomTime`).
+    * Cập nhật `validateOperatingHours` client-side cho phép Admin đặt mọi khung giờ.
+  - `TN-Backend/test/unit.test.js`:
+    * Bổ sung Suite 21: Kiểm thử phân quyền User vs Admin, thuật toán `getAvailableSlots`, kiểm tra xung đột lịch và khoảng đệm 30 phút.
+    * Đạt **122/122 Unit Tests PASS 100%** (21 suites).
+  - TypeScript Compilation: `tsc --noEmit` đạt **0 lỗi (0 errors)**.
+  - Cả hai daemon server Backend (5000) và Frontend (3000) hoạt động ổn định.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #29
+- **Thời gian tiếp nhận:** 17/11/2026 - Ràng buộc tuyệt đối: Gợi ý khung giờ không được trùng với khung giờ đã có lịch
+- **Nội dung câu lệnh:**
+```markdown
+khi gợi ý khung giờ phải ràng buộc không được để trùng với khung giờ đã có lịch
+```
+- **Mục tiêu & Nguyên nhân:**
+  1. **Nguyên nhân cốt lõi (Root Cause):**
+     - Trước đó, `getAvailableSlots` chỉ truy vấn các đơn có trạng thái `['CONFIRMED', 'COMPLETED']`, bỏ sót các đơn `PENDING` (chờ duyệt). Do đó, khi một người dùng đã đặt phòng và đơn đang chờ duyệt, hệ thống vẫn tiếp tục gợi ý khung giờ đó cho người khác.
+     - Ngoài ra, trên FullCalendar của Frontend, các đơn `CANCELLED` trước đây bị gán mặc định nhãn `✓ Đã Duyệt` màu xanh (do điều kiện kiểm tra chỉ check `isApproved` và `REJECTED`, bỏ sót trạng thái `CANCELLED`), dẫn đến việc trên giao diện lịch có ô "✓ Đã Duyệt" nhưng hệ thống vẫn gợi ý khung giờ đó.
+     - Ở chế độ `calendar=true`, người dùng thông thường trước đây chỉ lấy về booking của chính mình do phân quyền `where.userId = currentUser.id`, khiến họ không thấy được các ca đã duyệt của người khác trên lịch Studio dùng chung.
+  2. **Giải pháp khắc phục toàn diện:**
+     - **Backend (`studioBooking.service.js`):**
+       + Mở rộng điều kiện khóa lịch: Truy vấn tất cả các đơn `status IN ('CONFIRMED', 'COMPLETED', 'PENDING', 'APPROVED')` kèm khoảng đệm 30 phút ở cả 2 đầu.
+       + Chuẩn hóa múi giờ Việt Nam UTC+7 cho biên ngày (`vnStartOfDay` và `vnEndOfDay`).
+       + Bổ sung bước hậu kiểm lọc (`verifiedSlots`) bằng `isSlotAvailable(sMin, eMin)` cho 100% các slot trước khi trả về client.
+       + Cập nhật `findAll`: Khi `query.calendar === 'true'`, cho phép tất cả người dùng xem toàn bộ lịch `CONFIRMED`/`COMPLETED`/`PENDING` trên phòng Studio để thấy được thời gian bận.
+     - **Frontend (`TN-Frontend/src/app/studio/page.tsx`):**
+       + Mở rộng type `status: 'PENDING' | 'CONFIRMED' | 'APPROVED' | 'COMPLETED' | 'CANCELLED' | 'REJECTED'`.
+       + Sửa hiển thị `calendarEvents`: Nhận diện chuẩn xác `CONFIRMED`/`APPROVED` (xanh), `PENDING` (vàng chờ duyệt), `CANCELLED`/`REJECTED` (đỏ đã hủy).
+       + Cập nhật `isOverlappingOrBufferViolation`: Xem tất cả các lịch chưa hủy (`!= CANCELLED` và `!= REJECTED`) là đang chiếm dụng phòng và có khoảng đệm 30 phút.
+       + Thêm bộ lọc `validAvailableSlots` trực tiếp trên UI trước khi render danh sách nút slot gợi ý: Chỉ hiển thị các slot vượt qua kiểm tra `!isOverlappingOrBufferViolation(s, e)`.
+       + Bổ sung kiểm tra trùng với danh sách dải giờ đã chọn (`confirmedRanges`) trong chế độ multi-range.
+  3. **Kiểm thử tự động:**
+     - Bổ sung Test case 21.5 trong `TN-Backend/test/unit.test.js`: Kiểm thử ràng buộc tuyệt đối loại bỏ trùng lặp với cả lịch `CONFIRMED` và `PENDING`.
+     - Đạt **123/123 Unit Tests PASS 100%** (21 suites).
+     - TypeScript Compilation: `tsc --noEmit` đạt **0 lỗi**.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #30
+- **Thời gian tiếp nhận:** 17/11/2026 - Kiểm tra và sửa lỗi giao diện tại mục Lịch sử thao tác (FR-09) & NotificationBell
+- **Nội dung câu lệnh:**
+```markdown
+Kiểm tra và sửa lỗi giao diện tại mục Lịch sử thao tác (FR-09) theo ảnh đính kèm:
+- Khắc phục tình trạng các thành phần bị chồng lấn, đặc biệt giữa khung thông báo, thẻ thống kê, thanh tìm kiếm và bộ lọc.
+- Điều chỉnh vị trí, kích thước, z-index và cơ chế hiển thị của popup thông báo để không che khuất hoặc làm vỡ bố cục trang.
+- Đảm bảo popup có thể cuộn nội dung độc lập, không tràn khỏi màn hình và đóng/mở đúng cách.
+- Sắp xếp lại các thẻ thống kê, bộ lọc, bảng lịch sử thao tác theo bố cục rõ ràng, cân đối; đảm bảo bảng không bị cắt nội dung.
+- Kiểm tra hiển thị trên các kích thước màn hình khác nhau, đặc biệt ở độ phân giải desktop.
+
+Lưu ý: Kiểm tra nguyên nhân từ CSS, positioning, overflow, stacking context và responsive layout. Chỉ sửa giao diện và lỗi bố cục liên quan, không thay đổi API, dữ liệu, logic thông báo hoặc chức năng ghi nhận lịch sử thao tác đang hoạt động đúng. Sau khi sửa, kiểm tra thực tế cả khi popup thông báo mở và đóng.
+```
+- **Mục tiêu & Phân tích nguyên nhân gốc (Root Cause):**
+  1. **Nguyên nhân cốt lõi gây chồng lấn (CSS Stacking Context Issue):**
+     - Trong `TN-Frontend/src/components/AdminLayout.tsx`, thanh bên `<aside>` chứa `<NotificationBell align="left" />` sử dụng class `backdrop-blur-xl`. Theo quy chuẩn CSS, các bộ lọc (filter/backdrop-filter) tự động tạo một Stacking Context mới.
+     - Tuy nhiên, `<aside>` không có `z-index` (mang giá trị `auto`), và container nội dung chính `<div className="flex-1">` nằm sau `<aside>` trong cấu trúc DOM.
+     - Bên trong trang `audit-logs/page.tsx`, các thẻ KPI có thuộc tính `relative backdrop-blur-md` và ô tìm kiếm có thuộc tính `relative md:col-span-2`.
+     - Theo thứ tự vẽ của CSS Stacking Context: Các phần tử `relative` trong DOM node con của sibling phía sau (`flex-1`) được vẽ SAU và ĐÈ LÊN các phần tử con của `<aside>`. Do đó, khi popup thông báo mở rộng sang phải, thẻ "Tổng số thao tác (7)" và ô tìm kiếm bị vẽ xuyên thấu và nổi đè lên trên popup thông báo.
+  2. **Vấn đề kích thước, cuộn và đóng mở popup thông báo (`NotificationBell.tsx`):**
+     - Thiếu nút đóng trực tiếp `[X]` trong header popup.
+     - Thiếu sự kiện bắt phím `Escape` để người dùng tiện đóng bằng bàn phím.
+     - Chiều cao popup chưa giới hạn theo viewport `max-h-[min(580px,85vh)]` dẫn đến nguy cơ tràn màn hình trên các màn hình laptop độ phân giải dọc thấp.
+  3. **Bố cục trang Lịch sử thao tác (`/admin/audit-logs/page.tsx`):**
+     - Bảng dữ liệu chưa có `min-w-[1020px]`, dẫn đến khi mở trên màn hình desktop chuẩn hoặc khi sidebar mở, các cột bị co cụm và có thể cắt chữ.
+     - Bộ lọc ngày `Từ ngày: [input]` bị bóp méo do chia grid 4 cột với nhãn inline.
+- **Hành động & Kết quả thực hiện:**
+  - `TN-Frontend/src/components/AdminLayout.tsx`:
+    * Thêm `relative z-40` vào thẻ `<aside className="... relative z-40">` giúp toàn bộ thanh bên và popup con luôn có Stacking Context cao hơn nội dung trang chính `flex-1`.
+    * Thêm `relative z-30` vào mobile `<header>` để bảo vệ popup thông báo trên giao diện di động.
+  - `TN-Frontend/src/components/NotificationBell.tsx`:
+    * Đặt z-index của container popup lên `z-[100]`, kết hợp `max-h-[min(580px,85vh)] flex flex-col`.
+    * Thêm nút đóng `[X]` trực tiếp ở góc phải header popup bên cạnh nút "Đã đọc tất cả".
+    * Thêm sự kiện bàn phím lắng nghe phím `Escape` để lập tức đóng popup khi người dùng bấm phím Esc.
+    * Tăng cường vùng cuộn danh sách thông báo: `overscroll-contain overflow-y-auto max-h-[380px]`, các phần Header và Footer được gắn `shrink-0` đảm bảo không bị méo.
+  - `TN-Frontend/src/app/admin/audit-logs/page.tsx`:
+    * Thẻ thống kê KPI: Tối ưu grid responsive `grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4` với padding chuẩn `p-5`, giúp các thẻ cân đối, không bị chèn ép chữ.
+    * Khung bộ lọc tra cứu nâng cao: Thiết kế lại theo lưới `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5` với nhãn `label` phía trên rõ ràng, hỗ trợ `[color-scheme:dark]` cho 2 ô chọn ngày `Từ ngày` và `Đến ngày`, tránh tình trạng co giật hay cắt chữ trên các độ phân giải desktop.
+    * Bảng lịch sử thao tác: Bổ sung `min-w-[1020px]` trong thẻ `overflow-x-auto` và định nghĩa độ rộng chuẩn cho từng cột (`Thời gian 170px`, `Người thực hiện 190px`, `Hành động 150px`, `Nội dung min-w-[320px]`, `Địa chỉ IP 120px`, `Trạng thái 120px`, `Chi tiết 80px`). Bảng hiển thị thông thoáng, không bao giờ bị cắt nội dung.
+    * Modal xem chi tiết Audit Log: Nâng z-index lên `z-[100]` và bổ sung sự kiện phím `Escape` để đóng modal tiện lợi.
+  - **Kiểm tra và xác nhận:**
+    * TypeScript: `npx tsc --noEmit` đạt **0 lỗi (0 errors)**.
+    * Unit Tests: `npm test` đạt **123/123 tests PASS 100%** (21 suites).
+    * Hai tiến trình Backend và Frontend đang hoạt động bình thường.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #31
+- **Thời gian tiếp nhận:** 17/11/2026 - Tạo mục “Tổng công việc tháng” dành cho CTV (Read-only & Đồng bộ Bảng thống kê ADMIN)
+- **Nội dung câu lệnh:**
+```markdown
+Tạo mục “Tổng công việc tháng” dành cho CTV, với giao diện bảng thống kê tương tự mục Bảng thống kê công việc của ADMIN.
+
+- CTV chỉ được xem danh sách công việc của chính mình, không được xem dữ liệu của CTV khác.
+- Hiển thị đầy đủ: STT, ngày thực hiện, nội dung công việc, nhiệm vụ, số giờ thực hiện, trạng thái duyệt và ghi chú.
+- Bổ sung bộ lọc tháng/năm, mặc định là tháng hiện tại; cho phép xem lại dữ liệu các tháng trước.
+- Hiển thị tổng số công việc, tổng giờ đã thực hiện và tổng giờ được Nhân sự xác nhận.
+- Các công việc được nhân hệ số phải có ghi chú và highlight rõ số giờ ngoài giờ/Chủ nhật cùng hệ số áp dụng.
+- Đồng bộ dữ liệu trực tiếp với Bảng thống kê công việc của ADMIN; khi ADMIN cập nhật hoặc xác nhận công việc, trang CTV phải cập nhật tương ứng.
+- Chỉ cho phép CTV xem, không được tự ý chỉnh sửa hoặc xác nhận dữ liệu thống kê.
+
+Kiểm tra API phân quyền và Database trước khi triển khai. Tận dụng dữ liệu và giao diện hiện có, không tạo nguồn dữ liệu trùng lặp, không ảnh hưởng chức năng của ADMIN và các nghiệp vụ tính công, tính lương đã hoàn thiện.
+```
+- **Mục tiêu & Thiết kế giải pháp:**
+  1. **Bảo mật & Phân quyền RBAC Backend:**
+     - Endpoint mới: `GET /api/payroll/collaborator-summary?month=M&year=Y` với quyền `authenticate, authorize('COLLABORATOR', 'ADMIN')`.
+     - Chặn tuyệt đối rò rỉ dữ liệu giữa các CTV: Nếu người gọi là `COLLABORATOR`, controller tự động khóa cứng `ctvUserId = req.user.id`, ngăn chặn hoàn toàn việc CTV giả mạo query parameter để xem dữ liệu của CTV khác.
+     - Cập nhật cả `GET /api/payroll/tasks-summary`: Bổ sung tham số `targetUserId`, nếu role là `COLLABORATOR` thì chỉ lấy nhóm của chính mình.
+  2. **Dữ liệu & Logic Thống kê (Single Source of Truth):**
+     - Hàm `getCollaboratorMonthlySummary(month, year, ctvUserId)` trong `payroll.service.js`:
+       * Trích xuất toàn bộ nhiệm vụ của CTV trong tháng (theo `executionDate`, `completedAt`, `createdAt`).
+       * Tính toán 4 chỉ số thống kê:
+         - `totalTasks`: Tổng số công việc trong tháng.
+         - `totalHoursWorked`: Tổng số giờ thực tế đã làm/nộp.
+         - `confirmedHours`: Tổng số giờ được Nhân sự xác nhận nghiệm thu (`COMPLETED`).
+         - `confirmedConvertedHours`: Tổng số giờ quy đổi sau hệ số (áp dụng cùng hàm `calculateTaskHoursAndMultiplier` như ADMIN).
+         - `estimatedSalary`: `confirmedConvertedHours * 20.000 VNĐ`.
+       * Chuẩn hóa từng dòng công việc: `stt`, `date`, `title`, `content`, `taskType`, `hours`, `convertedHours`, `status`, `multiplier`, `isHighlighted`, `multiplierNote`, `note`.
+       * Công việc đủ điều kiện nhân hệ số (và đã duyệt hoàn thành): Được gắn `isHighlighted = true` và ghi chú chi tiết (`Ngoài giờ: X giờ × 1,5`, `Chủ nhật: Y giờ × 2`...).
+       * Công việc chưa hoàn thành (`PENDING_APPROVAL`): Thể hiện rõ `Chờ Nhân sự duyệt để tính hệ số`, không cộng vào quỹ giờ xác nhận.
+  3. **Giao diện Frontend (`/tasks/summary` & Điều hướng):**
+     - Tạo trang chuyên biệt `TN-Frontend/src/app/tasks/summary/page.tsx`:
+       * Read-only 100%: CTV chỉ xem dữ liệu, không có nút sửa/xóa/xác nhận.
+       * Bộ lọc Tháng (1..12) và Năm (2025, 2026, 2027) kèm nút chuyển nhanh Tháng trước / Tháng sau và Về tháng hiện tại.
+       * 4 Thẻ KPI: Tổng số công việc, Tổng giờ đã thực hiện, Tổng giờ được Nhân sự xác nhận, Giờ quy đổi & Thù lao dự tính.
+       * Bảng thống kê chi tiết chuẩn mẫu: STT, Ngày thực hiện, Nội dung công việc, Nhiệm vụ, Số giờ thực hiện (kèm giờ quy đổi), Trạng thái duyệt (badge trực quan), Ghi chú & Hệ số (highlight vàng hổ phách), Nút xem chi tiết (modal).
+       * Hàng tổng kết chân bảng (Footer row) hiển thị đầy đủ tổng giờ và tổng thù lao.
+     - Cập nhật Điều hướng hệ thống:
+       * `Navbar.tsx`: Bổ sung mục "Tổng công việc tháng" (`/tasks/summary`) với icon `FileSpreadsheet` cho CTV và Admin trên thanh điều hướng chính.
+       * `tasks/page.tsx`: Bổ sung nút liên kết "Tổng công việc tháng" trong Mode Switcher đầu trang.
+  4. **Kiểm thử tự động:**
+     - Bổ sung Unit Test Suite 22 vào `TN-Backend/test/unit.test.js`:
+       * 22.1. Trích xuất chính xác danh sách nhiệm vụ của CTV trong tháng và hệ số quy đổi.
+       * 22.2. Phân biệt rõ Tổng giờ đã thực hiện (10.5h) và Giờ được Nhân sự xác nhận (7.0h).
+       * 22.3. Ràng buộc bảo mật RBAC: Chặn rò rỉ dữ liệu chéo giữa các CTV.
+       * 22.4. Xử lý an toàn khi không tìm thấy CTV.
+     - Đạt **127/127 Unit Tests PASS 100%** (22 test suites).
+     - TypeScript Compilation: `tsc --noEmit` đạt **0 lỗi**.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #32
+- **Thời gian tiếp nhận:** 17/11/2026 - Bổ sung chức năng xác nhận đến sử dụng Studio tại mục Phê duyệt yêu cầu đặt Studio
+- **Nội dung câu lệnh:**
+```markdown
+Bổ sung chức năng **xác nhận đến sử dụng Studio** tại mục **Phê duyệt yêu cầu đặt Studio**:
+
+- Khi đến ngày đặt phòng, người dùng được phép nhấn nút **“Xác nhận đã đến”** để thông báo đã có mặt và sử dụng Studio theo lịch đăng ký.
+- Sau khi người dùng xác nhận, hệ thống gửi thông báo đến ADMIN và chuyển yêu cầu sang trạng thái **“Chờ xác nhận có mặt”**.
+- ADMIN có thể kiểm tra và nhấn **“Xác nhận đã sử dụng”** để hoàn tất bước xác nhận.
+- Hiển thị rõ trạng thái: Chưa đến ngày đặt, Chờ xác nhận người dùng, Chờ ADMIN xác nhận, Đã xác nhận sử dụng.
+- Lưu thời gian người dùng xác nhận và thời gian ADMIN xác nhận để phục vụ tra cứu, thống kê và truy vết.
+- Chỉ cho phép người dùng xác nhận trong ngày đặt phòng; ADMIN có quyền xử lý và xác nhận theo nghiệp vụ.
+- Không cho phép xác nhận trùng lặp; xử lý trường hợp người dùng không đến hoặc ADMIN chưa xác nhận.
+
+Kiểm tra và đồng bộ Frontend, Backend, Database, phân quyền và hệ thống thông báo. Tận dụng quy trình đặt phòng hiện có, không làm thay đổi trạng thái duyệt đặt phòng ban đầu, không tự động đánh dấu đã sử dụng khi yêu cầu mới được phê duyệt. Chỉ bổ sung phần còn thiếu, bảo toàn dữ liệu và chức năng đang hoạt động đúng.
+```
+- **Mục tiêu & Thiết kế giải pháp:**
+  1. **Nâng cấp CSDL (Database Schema):**
+     - Bổ sung 3 trường mới vào bảng `StudioBookings` trên SQL Server:
+       * `user_check_in_at` (`DATETIMEOFFSET NULL`): Thời điểm người dùng nhấn "Xác nhận đã đến".
+       * `admin_confirmed_at` (`DATETIMEOFFSET NULL`): Thời điểm Quản trị viên nhấn "Xác nhận đã sử dụng".
+       * `attendance_status` (`NVARCHAR(30) NULL DEFAULT 'NOT_ARRIVED'`): Trạng thái điểm danh (`NOT_ARRIVED` | `USER_CHECKED_IN` | `ADMIN_CONFIRMED` | `ABSENT`).
+     - Khai báo 3 trường tương ứng trong Sequelize Model `TN-Backend/src/models/StudioBooking.js`.
+  2. **Trạng thái 4 cấp độ & Quy tắc nghiệp vụ (State Machine):**
+     - Hàm `computeAttendanceInfo(booking)` trong `studioBooking.service.js`:
+       * 1. **Chưa đến ngày đặt (`FUTURE_BOOKING`)**: Ngày đặt ở tương lai (`bookingDate > todayVN`).
+       * 2. **Chờ xác nhận người dùng (`WAITING_USER_CHECKIN`)**: Đúng ngày đặt (`bookingDate === todayVN`), chưa check-in.
+       * 3. **Chờ ADMIN xác nhận (`WAITING_ADMIN_CONFIRM`)**: Người dùng đã check-in (`userCheckInAt != null`), chờ Admin hoàn tất bước sử dụng.
+       * 4. **Đã xác nhận sử dụng (`USAGE_CONFIRMED`)**: Admin đã xác nhận (`adminConfirmedAt != null` hoặc `status === 'COMPLETED'`).
+       * *(Vắng mặt / Quá hạn - `ABSENT`)*: Quá hạn ngày đặt hoặc Admin đánh dấu vắng mặt.
+  3. **Backend API & Nghiệp vụ:**
+     - `PUT /api/studio-bookings/:id/check-in`:
+       * Người đặt phòng xác nhận có mặt vào đúng ngày đặt phòng.
+       * Chặn nếu chưa duyệt (`PENDING`), chặn nếu khác ngày (`bookingDate !== todayVN`).
+       * Chống xác nhận trùng lặp: Báo lỗi nếu đã check-in.
+       * Cập nhật `userCheckInAt = new Date()`, `attendanceStatus = 'USER_CHECKED_IN'`.
+       * Gửi thông báo in-app đến toàn bộ ADMIN (`STUDIO_USER_CHECKED_IN`).
+       * Ghi AuditLog thao tác `CHECK_IN`.
+     - `PUT /api/studio-bookings/:id/confirm-usage`:
+       * Quản trị viên (ADMIN) hoàn tất xác nhận sử dụng.
+       * Cập nhật `adminConfirmedAt = new Date()`, `status = 'COMPLETED'`, `attendanceStatus = 'ADMIN_CONFIRMED'`.
+       * Lưu vết lịch sử vào trường `notes`.
+       * Gửi thông báo hoàn tất đến người đặt phòng (`STUDIO_USAGE_CONFIRMED`).
+       * Ghi AuditLog thao tác `CONFIRM_USAGE`.
+     - `PUT /api/studio-bookings/:id/mark-absent`:
+       * Quản trị viên xử lý trường hợp người dùng không đến sử dụng (`attendanceStatus = 'ABSENT'`).
+       * Ghi AuditLog thao tác `MARK_ABSENT`.
+  4. **Giao diện Quản trị viên (`TN-Frontend/src/app/admin/requests/page.tsx`):**
+     - Bổ sung cột **“Xác nhận sử dụng”** hiển thị badge 4 cấp độ kèm thời gian check-in/xác nhận.
+     - Nút **“Xác nhận đã sử dụng”** hiển thị trực tiếp trên dòng danh sách khi yêu cầu ở trạng thái `Chờ ADMIN xác nhận`.
+     - Modal chi tiết hiển thị đầy đủ thông tin: Người dùng xác nhận đến (HH:mm dd/MM/yyyy), Admin xác nhận sử dụng (HH:mm dd/MM/yyyy), nút "Xác nhận đã sử dụng" và nút "Đánh dấu vắng mặt".
+  5. **Giao diện Người dùng (`TN-Frontend/src/app/history/page.tsx`):**
+     - Bổ sung cột **“Xác nhận sử dụng”** hiển thị rõ ràng tiến trình sử dụng.
+     - Nút **“Xác nhận đã đến”** tự động sáng lên vào đúng ngày đặt phòng.
+     - Khi đã bấm, hiển thị badge "Chờ ADMIN xác nhận" kèm thời gian có mặt; khi Admin hoàn tất, hiển thị badge "Đã xác nhận sử dụng".
+  6. **Kiểm thử tự động & Xác nhận chất lượng:**
+     - Bổ sung Unit Test Suite 23 vào `TN-Backend/test/unit.test.js` với 6 kịch bản toàn diện (computeAttendanceInfo 4 cấp độ, check-in đúng ngày, chặn trước/sau ngày, chống trùng lặp, Admin xác nhận, đánh dấu vắng mặt).
+     - Kết quả kiểm thử: **133/133 tests PASS 100%** (23 suites).
+     - Frontend TypeScript: `tsc --noEmit` đạt **0 lỗi (0 errors)**.
+- **Trạng thái:** `COMPLETED`

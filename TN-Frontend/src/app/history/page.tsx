@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
-import { Loader2, Calendar, Camera, Clock, CheckCircle2, XCircle, RefreshCcw, AlertTriangle, PackageCheck, Undo } from 'lucide-react';
+import { Loader2, Calendar, Camera, Clock, CheckCircle2, XCircle, RefreshCcw, AlertTriangle, PackageCheck, Undo, CalendarClock, X, MapPin, Check } from 'lucide-react';
 
 interface EquipmentItem {
   equipmentId: string;
@@ -39,15 +39,31 @@ interface BorrowRequest {
 interface StudioBooking {
   id: string;
   fullName: string;
+  studioName?: string;
   participants: number;
   purpose: string;
   technicalSupport: boolean;
   startTime: string;
   endTime: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'APPROVED' | 'CONFIRMED' | 'REJECTED' | 'CANCELLED' | 'COMPLETED';
   rejectReason?: string;
   adminNote?: string;
+  notes?: string;
   createdAt: string;
+  userCheckInAt?: string;
+  adminConfirmedAt?: string;
+  attendanceStatus?: string;
+  attendanceInfo?: {
+    code: 'FUTURE_BOOKING' | 'WAITING_USER_CHECKIN' | 'WAITING_ADMIN_CONFIRM' | 'USAGE_CONFIRMED' | 'ABSENT' | 'PENDING_APPROVAL' | string;
+    label: string;
+    subLabel?: string;
+    color: string;
+    canUserCheckIn: boolean;
+    canAdminConfirm: boolean;
+    bookingDate?: string;
+    userCheckInAt?: string | null;
+    adminConfirmedAt?: string | null;
+  };
 }
 
 export default function UserHistoryPage() {
@@ -59,6 +75,20 @@ export default function UserHistoryPage() {
   const [borrows, setBorrows] = useState<BorrowRequest[]>([]);
   const [bookings, setBookings] = useState<StudioBooking[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Reschedule Studio Booking states (FR-03.6)
+  const [rescheduleModalOpen, setRescheduleModalOpen] = useState(false);
+  const [selectedBookingReschedule, setSelectedBookingReschedule] = useState<StudioBooking | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleStartTime, setRescheduleStartTime] = useState('08:00');
+  const [rescheduleEndTime, setRescheduleEndTime] = useState('11:00');
+  const [rescheduleReason, setRescheduleReason] = useState('');
+  const [rescheduleSubmitting, setRescheduleSubmitting] = useState(false);
+
+  // Cancel Studio Booking states
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [selectedBookingCancel, setSelectedBookingCancel] = useState<StudioBooking | null>(null);
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -88,6 +118,218 @@ export default function UserHistoryPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openReschedule = (booking: StudioBooking) => {
+    setSelectedBookingReschedule(booking);
+    try {
+      const s = new Date(booking.startTime);
+      const e = new Date(booking.endTime);
+      setRescheduleDate(format(s, 'yyyy-MM-dd'));
+      setRescheduleStartTime(format(s, 'HH:mm'));
+      setRescheduleEndTime(format(e, 'HH:mm'));
+    } catch {
+      setRescheduleDate(format(new Date(), 'yyyy-MM-dd'));
+      setRescheduleStartTime('08:00');
+      setRescheduleEndTime('11:00');
+    }
+    setRescheduleReason('');
+    setRescheduleModalOpen(true);
+  };
+
+  const handleRescheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedBookingReschedule) return;
+    if (!rescheduleDate || !rescheduleStartTime || !rescheduleEndTime) {
+      toast('Vui lòng chọn ngày và khung giờ mới', 'warning');
+      return;
+    }
+
+    setRescheduleSubmitting(true);
+    try {
+      const startIso = new Date(`${rescheduleDate}T${rescheduleStartTime}:00`).toISOString();
+      const endIso = new Date(`${rescheduleDate}T${rescheduleEndTime}:00`).toISOString();
+
+      await api.put(`/studio-bookings/${selectedBookingReschedule.id}/reschedule`, {
+        startTime: startIso,
+        endTime: endIso,
+        rescheduleReason: rescheduleReason.trim() || undefined,
+      });
+
+      toast('Yêu cầu dời lịch đặt phòng Studio đã được gửi thành công!', 'success');
+      setRescheduleModalOpen(false);
+      setSelectedBookingReschedule(null);
+      fetchHistory();
+    } catch (err: any) {
+      toast(err.message || 'Lỗi dời lịch đặt phòng Studio', 'error');
+    } finally {
+      setRescheduleSubmitting(false);
+    }
+  };
+
+  const openCancel = (booking: StudioBooking) => {
+    setSelectedBookingCancel(booking);
+    setCancelModalOpen(true);
+  };
+
+  const handleCancelBooking = async () => {
+    if (!selectedBookingCancel) return;
+    setCancelSubmitting(true);
+    try {
+      await api.patch(`/studio-bookings/${selectedBookingCancel.id}/cancel`);
+      toast('Đã hủy đặt phòng thành công!', 'success');
+      setCancelModalOpen(false);
+      setSelectedBookingCancel(null);
+      fetchHistory();
+    } catch (err: any) {
+      toast(err.message || 'Lỗi hủy đặt phòng', 'error');
+    } finally {
+      setCancelSubmitting(false);
+    }
+  };
+
+  const [checkingInId, setCheckingInId] = useState<string | null>(null);
+
+  const handleUserCheckIn = async (bookingId: string) => {
+    setCheckingInId(bookingId);
+    try {
+      await api.put(`/studio-bookings/${bookingId}/check-in`);
+      toast('Xác nhận đã đến Studio thành công! Hệ thống đã gửi thông báo đến Quản trị viên.', 'success');
+      fetchHistory();
+    } catch (err: any) {
+      toast(err.message || 'Xác nhận đã đến thất bại', 'error');
+    } finally {
+      setCheckingInId(null);
+    }
+  };
+
+  const getStudioApprovalBadge = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return (
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-accent/15 text-brand-accent border border-brand-accent/20">
+            <Clock className="w-3.5 h-3.5" />
+            <span>Chờ duyệt</span>
+          </span>
+        );
+      case 'APPROVED':
+      case 'CONFIRMED':
+        return (
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-success/15 text-brand-success border border-brand-success/20">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Đã duyệt</span>
+          </span>
+        );
+      case 'COMPLETED':
+        return (
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+            <CheckCircle2 className="w-3.5 h-3.5" />
+            <span>Hoàn thành</span>
+          </span>
+        );
+      case 'REJECTED':
+        return (
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-error/15 text-brand-error border border-brand-error/20">
+            <XCircle className="w-3.5 h-3.5" />
+            <span>Từ chối</span>
+          </span>
+        );
+      case 'CANCELLED':
+        return (
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 text-studio-muted border border-white/10">
+            <XCircle className="w-3.5 h-3.5" />
+            <span>Đã hủy</span>
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const getStudioAttendanceBadge = (booking: StudioBooking) => {
+    if (booking.status === 'PENDING' || booking.status === 'REJECTED' || booking.status === 'CANCELLED') {
+      return <span className="text-xs text-studio-muted">—</span>;
+    }
+
+    const info = booking.attendanceInfo;
+    const code = info?.code;
+
+    // 4. Đã xác nhận sử dụng
+    if (code === 'USAGE_CONFIRMED' || booking.adminConfirmedAt || booking.status === 'COMPLETED') {
+      return (
+        <div className="flex flex-col items-center">
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-xs">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span>Đã xác nhận sử dụng</span>
+          </span>
+          {booking.adminConfirmedAt && (
+            <span className="text-[10px] text-studio-muted mt-0.5">
+              Admin: {format(new Date(booking.adminConfirmedAt), 'HH:mm dd/MM')}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    // 3. Chờ ADMIN xác nhận (Chờ xác nhận có mặt)
+    if (code === 'WAITING_ADMIN_CONFIRM' || (booking.userCheckInAt && !booking.adminConfirmedAt)) {
+      return (
+        <div className="flex flex-col items-center">
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-blue-500/20 text-blue-300 border border-blue-500/40 animate-pulse shadow-xs">
+            <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <span>Chờ ADMIN xác nhận</span>
+          </span>
+          {booking.userCheckInAt && (
+            <span className="text-[10px] text-blue-300/90 mt-0.5 font-medium">
+              Đã báo có mặt: {format(new Date(booking.userCheckInAt), 'HH:mm dd/MM')}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    // 2. Chờ xác nhận người dùng (Đúng ngày hôm nay)
+    if (code === 'WAITING_USER_CHECKIN') {
+      return (
+        <div className="flex flex-col items-center">
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+            <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>Chờ bạn xác nhận có mặt</span>
+          </span>
+          <span className="text-[10px] text-amber-300/80 mt-0.5 font-medium">Hôm nay</span>
+        </div>
+      );
+    }
+
+    // 1. Chưa đến ngày đặt
+    if (code === 'FUTURE_BOOKING') {
+      return (
+        <div className="flex flex-col items-center">
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/5 text-studio-muted border border-white/10">
+            <Calendar className="w-3.5 h-3.5 text-studio-muted shrink-0" />
+            <span>Chưa đến ngày đặt</span>
+          </span>
+          <span className="text-[10px] text-studio-muted mt-0.5">
+            {format(new Date(booking.startTime), 'dd/MM/yyyy')}
+          </span>
+        </div>
+      );
+    }
+
+    // Không đến sử dụng
+    if (code === 'ABSENT' || booking.attendanceStatus === 'ABSENT') {
+      return (
+        <div className="flex flex-col items-center">
+          <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-300 border border-rose-500/30">
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span>Không đến sử dụng</span>
+          </span>
+          <span className="text-[10px] text-rose-400/80 mt-0.5">Vắng mặt / Quá hạn</span>
+        </div>
+      );
+    }
+
+    return <span className="text-xs text-studio-muted">—</span>;
   };
 
   const getStatusBadge = (status: string) => {
@@ -215,7 +457,9 @@ export default function UserHistoryPage() {
                       <th className="py-4 px-6 text-left">Mục đích</th>
                       <th className="py-4 px-6 text-center">Người tham gia</th>
                       <th className="py-4 px-6 text-center">Hỗ trợ kỹ thuật</th>
-                      <th className="py-4 px-6 text-center">Trạng thái</th>
+                      <th className="py-4 px-6 text-center">Duyệt yêu cầu</th>
+                      <th className="py-4 px-6 text-center">Xác nhận sử dụng</th>
+                      <th className="py-4 px-6 text-center">Hành động</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
@@ -256,7 +500,57 @@ export default function UserHistoryPage() {
                             {booking.technicalSupport ? 'Cần hỗ trợ' : 'Không'}
                           </span>
                         </td>
-                        <td className="py-4 px-6 text-center">{getStatusBadge(booking.status)}</td>
+                        <td className="py-4 px-6 text-center">{getStudioApprovalBadge(booking.status)}</td>
+                        <td className="py-4 px-6 text-center">{getStudioAttendanceBadge(booking)}</td>
+                        <td className="py-4 px-6 text-center">
+                          <div className="flex items-center justify-center space-x-2">
+                            {/* Nút "Xác nhận đã đến" cho Người dùng vào đúng ngày đặt phòng */}
+                            {(booking.status === 'APPROVED' || booking.status === 'CONFIRMED') &&
+                              !booking.userCheckInAt &&
+                              booking.attendanceInfo?.canUserCheckIn && (
+                                <button
+                                  onClick={() => handleUserCheckIn(booking.id)}
+                                  disabled={checkingInId === booking.id}
+                                  className="py-1 px-3 rounded-lg border border-blue-500/40 bg-blue-600/30 hover:bg-blue-600 hover:text-white text-blue-300 text-xs font-bold cursor-pointer transition-all flex items-center space-x-1.5 shadow-md shadow-blue-500/20 disabled:opacity-50"
+                                  title="Nhấn để thông báo bạn đã có mặt và sử dụng Studio theo lịch"
+                                >
+                                  {checkingInId === booking.id ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <MapPin className="w-3.5 h-3.5 text-blue-400" />
+                                  )}
+                                  <span>Xác nhận đã đến</span>
+                                </button>
+                              )}
+
+                            {/* Cho phép dời lịch hoặc hủy nếu chưa hoàn tất sử dụng */}
+                            {(booking.status === 'PENDING' || (booking.status === 'APPROVED' && !booking.userCheckInAt)) && (
+                              <>
+                                <button
+                                  onClick={() => openReschedule(booking)}
+                                  className="py-1 px-2.5 rounded-lg border border-brand-primary/30 bg-brand-primary/10 hover:bg-brand-primary hover:text-white text-brand-primary text-xs font-semibold cursor-pointer transition-all flex items-center space-x-1"
+                                  title="Dời lịch đặt phòng Studio"
+                                >
+                                  <CalendarClock className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Dời lịch</span>
+                                </button>
+                                <button
+                                  onClick={() => openCancel(booking)}
+                                  className="py-1 px-2.5 rounded-lg border border-brand-error/20 bg-brand-error/5 hover:bg-brand-error/15 text-brand-error text-xs font-semibold cursor-pointer transition-all flex items-center space-x-1"
+                                  title="Hủy đặt phòng"
+                                >
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  <span className="hidden sm:inline">Hủy</span>
+                                </button>
+                              </>
+                            )}
+
+                            {/* Nếu đã xác nhận đến hoặc đã sử dụng xong và không có nút dời lịch */}
+                            {((booking.status === 'APPROVED' && booking.userCheckInAt) || booking.status === 'COMPLETED') && (
+                              <span className="text-xs text-studio-muted italic">Đã ghi nhận</span>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -365,6 +659,180 @@ export default function UserHistoryPage() {
               ))}
             </div>
           )
+        )}
+
+        {/* User Reschedule Studio Modal (FR-03.6) */}
+        {rescheduleModalOpen && selectedBookingReschedule && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => setRescheduleModalOpen(false)}
+            />
+
+            <div className="glass-panel max-w-lg w-full rounded-3xl border border-white/5 overflow-hidden shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/2">
+                <div className="flex items-center space-x-2 text-brand-primary">
+                  <CalendarClock className="w-5 h-5" />
+                  <h3 className="text-lg font-bold text-white">Dời Lịch Đặt Phòng Studio</h3>
+                </div>
+                <button
+                  onClick={() => setRescheduleModalOpen(false)}
+                  className="p-2 rounded-xl text-studio-muted hover:text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleRescheduleSubmit} className="p-6 space-y-4 text-left">
+                {/* Lịch hiện tại */}
+                <div className="p-3.5 bg-white/5 rounded-2xl border border-white/5 space-y-1">
+                  <span className="text-[10px] text-studio-muted font-bold uppercase block">Lịch hiện tại</span>
+                  <div className="text-xs text-white font-medium flex items-center space-x-2">
+                    <Clock className="w-3.5 h-3.5 text-brand-primary" />
+                    <span>
+                      {format(new Date(selectedBookingReschedule.startTime), 'HH:mm')} – {format(new Date(selectedBookingReschedule.endTime), 'HH:mm')} • {format(new Date(selectedBookingReschedule.startTime), 'dd/MM/yyyy')}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-studio-muted mt-1 truncate">
+                    Mục đích: {selectedBookingReschedule.purpose}
+                  </div>
+                </div>
+
+                {/* Chọn ngày mới */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-studio-muted uppercase block">
+                    Ngày dời sang (Thứ 2 – Thứ 7)
+                  </label>
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
+                    required
+                  />
+                </div>
+
+                {/* Chọn giờ mới */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-studio-muted uppercase block">
+                      Giờ bắt đầu
+                    </label>
+                    <input
+                      type="time"
+                      value={rescheduleStartTime}
+                      onChange={(e) => setRescheduleStartTime(e.target.value)}
+                      className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-studio-muted uppercase block">
+                      Giờ kết thúc
+                    </label>
+                    <input
+                      type="time"
+                      value={rescheduleEndTime}
+                      onChange={(e) => setRescheduleEndTime(e.target.value)}
+                      className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
+                      required
+                    />
+                  </div>
+                </div>
+
+                {/* Gợi ý khung giờ */}
+                <div className="p-3 bg-brand-primary/5 border border-brand-primary/20 rounded-xl text-[11px] text-brand-primary">
+                  Khung giờ mở cửa: <strong>Sáng 07:30–11:30 | Chiều 13:30–16:30</strong> (Nghỉ Chủ nhật, đệm 30 phút).
+                </div>
+
+                {/* Lý do dời lịch */}
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-studio-muted uppercase block">
+                    Lý do xin dời lịch
+                  </label>
+                  <textarea
+                    placeholder="Mô tả ngắn lý do dời lịch (ví dụ: Trùng lịch thi, Diễn giả dời thời gian...)"
+                    value={rescheduleReason}
+                    onChange={(e) => setRescheduleReason(e.target.value)}
+                    className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 h-20 resize-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-white/5">
+                  <button
+                    type="button"
+                    onClick={() => setRescheduleModalOpen(false)}
+                    className="py-3 px-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 text-white font-semibold transition-all cursor-pointer text-center text-xs"
+                    disabled={rescheduleSubmitting}
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={rescheduleSubmitting}
+                    className="py-3 px-4 rounded-xl bg-brand-primary hover:bg-brand-primary/90 text-white font-bold transition-all cursor-pointer text-center text-xs disabled:opacity-50 flex items-center justify-center space-x-1.5 shadow-lg shadow-brand-primary/20"
+                  >
+                    {rescheduleSubmitting ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <CalendarClock className="w-4 h-4" />
+                        <span>Gửi yêu cầu dời lịch</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* User Cancel Studio Booking Modal */}
+        {cancelModalOpen && selectedBookingCancel && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div
+              className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+              onClick={() => setCancelModalOpen(false)}
+            />
+
+            <div className="glass-panel max-w-md w-full rounded-3xl border border-white/5 overflow-hidden shadow-2xl relative z-10 animate-in fade-in zoom-in-95 duration-200 p-6 text-center space-y-5">
+              <div className="w-14 h-14 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
+                <AlertTriangle className="w-7 h-7" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-lg font-bold text-white">Xác nhận hủy đặt phòng?</h3>
+                <p className="text-xs text-studio-muted leading-relaxed">
+                  Bạn có chắc chắn muốn hủy đơn đặt phòng Studio vào ngày{' '}
+                  <strong className="text-white">
+                    {format(new Date(selectedBookingCancel.startTime), 'dd/MM/yyyy (HH:mm')} – {format(new Date(selectedBookingCancel.endTime), 'HH:mm)')}
+                  </strong>{' '}
+                  không? Khung giờ này sẽ được giải phóng cho người khác đặt.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCancelModalOpen(false)}
+                  className="py-2.5 px-4 rounded-xl border border-white/5 bg-white/5 hover:bg-white/10 text-white font-semibold transition-all cursor-pointer text-xs"
+                  disabled={cancelSubmitting}
+                >
+                  Không, quay lại
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelBooking}
+                  disabled={cancelSubmitting}
+                  className="py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold transition-all cursor-pointer text-xs disabled:opacity-50 flex items-center justify-center space-x-1.5 shadow-lg shadow-rose-600/20"
+                >
+                  {cancelSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span>Xác nhận hủy</span>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

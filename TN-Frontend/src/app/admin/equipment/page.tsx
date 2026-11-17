@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
-import { Search, Plus, Edit2, Trash2, Loader2, Upload, X, AlertTriangle } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Loader2, Upload, X, AlertTriangle, Wrench } from 'lucide-react';
 
 interface Equipment {
   id: string;
@@ -239,9 +240,13 @@ export default function AdminEquipmentPage() {
       case 'BORROWED':
         return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-primary/20 text-brand-primary border border-brand-primary/30">Đang mượn</span>;
       case 'MAINTENANCE':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-error/20 text-brand-error border border-brand-error/30">Bảo trì</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">Bảo trì</span>;
+      case 'LOST':
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-500/20 text-rose-400 border border-rose-500/30">Báo mất</span>;
+      case 'DISPOSED':
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-400 border border-purple-500/30">Đã thanh lý</span>;
       default:
-        return null;
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-white/10 text-white border border-white/20">{s}</span>;
     }
   };
 
@@ -254,13 +259,22 @@ export default function AdminEquipmentPage() {
             <h1 className="text-3xl font-extrabold text-white tracking-tight">Quản Lý Thiết Bị</h1>
             <p className="text-sm text-studio-muted mt-1">Danh sách thiết bị studio, cập nhật số lượng và kiểm tra bảo trì.</p>
           </div>
-          <button
-            onClick={handleOpenCreate}
-            className="flex items-center justify-center space-x-2 bg-brand-primary hover:bg-brand-primary/95 text-white px-5 py-3 rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5 cursor-pointer self-start sm:self-auto"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Thêm thiết bị</span>
-          </button>
+          <div className="flex items-center space-x-3 self-start sm:self-auto">
+            <Link
+              href="/admin/equipment/maintenance"
+              className="flex items-center space-x-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer shadow-md"
+            >
+              <Wrench className="w-4 h-4 text-amber-400" />
+              <span>Bảo trì &amp; Thanh lý</span>
+            </Link>
+            <button
+              onClick={handleOpenCreate}
+              className="flex items-center justify-center space-x-2 bg-brand-primary hover:bg-brand-primary/95 text-white px-5 py-3 rounded-2xl shadow-lg transition-all transform hover:-translate-y-0.5 cursor-pointer"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Thêm thiết bị</span>
+            </button>
+          </div>
         </div>
 
         {/* Filters */}
@@ -348,6 +362,13 @@ export default function AdminEquipmentPage() {
                       <td className="py-4 px-6 text-center">{getStatusBadge(item.status)}</td>
                       <td className="py-4 px-6">
                         <div className="flex items-center justify-center space-x-2">
+                          <Link
+                            href={`/admin/equipment/maintenance?equipmentId=${item.id}`}
+                            className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 hover:bg-amber-500 hover:text-white transition-all cursor-pointer"
+                            title="Lịch sử bảo trì & sửa chữa"
+                          >
+                            <Wrench className="w-4 h-4" />
+                          </Link>
                           <button
                             onClick={() => handleOpenEdit(item)}
                             className="p-2 rounded-xl bg-brand-primary/10 border border-brand-primary/20 text-brand-primary hover:bg-brand-primary hover:text-white transition-all cursor-pointer"

@@ -8,7 +8,25 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
-import { Loader2, Calendar, Users, HelpCircle, Send, X, Clock, HelpCircle as SupportIcon, Plus, Trash2, Edit2, Check } from 'lucide-react';
+import {
+  Loader2,
+  Calendar,
+  Users,
+  HelpCircle,
+  Send,
+  X,
+  Clock,
+  HelpCircle as SupportIcon,
+  Plus,
+  Trash2,
+  Edit2,
+  Check,
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  ShieldCheck,
+  Info,
+} from 'lucide-react';
 
 // Load FullCalendar dynamically to avoid SSR errors
 const StudioCalendar = dynamic(() => import('@/components/StudioCalendar'), {
@@ -32,7 +50,7 @@ interface Booking {
   technicalSupport: boolean;
   startTime: string;
   endTime: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'CONFIRMED' | 'APPROVED' | 'COMPLETED' | 'CANCELLED' | 'REJECTED';
   rejectReason?: string;
 }
 
@@ -43,6 +61,26 @@ export default function StudioBookingPage() {
 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Chế độ chọn khung giờ: 'SUGGESTED' (Gợi ý khung giờ còn trống) | 'CUSTOM' (Tự nhập khung giờ)
+  const [bookingMode, setBookingMode] = useState<'SUGGESTED' | 'CUSTOM'>('SUGGESTED');
+
+  // Ngày chọn đặt phòng (mặc định ngày mai hoặc ngày làm việc tiếp theo)
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+
+  // Dữ liệu slot trống gợi ý
+  const [availableSlotsData, setAvailableSlotsData] = useState<any>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+
+  // Dữ liệu tự nhập giờ
+  const [customStartTime, setCustomStartTime] = useState('07:30');
+  const [customEndTime, setCustomEndTime] = useState('09:30');
 
   // Booking Modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -79,11 +117,34 @@ export default function StudioBookingPage() {
     }
   }, [user]);
 
+  // Load Available Slots for selected date
+  const fetchAvailableSlots = async (dateStr: string) => {
+    if (!dateStr) return;
+    setLoadingSlots(true);
+    try {
+      const res = await api.get(`/studio-bookings/available-slots?date=${dateStr}`);
+      setAvailableSlotsData(res);
+    } catch (err: any) {
+      setAvailableSlotsData(null);
+    } finally {
+      setLoadingSlots(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user && selectedDate) {
+      fetchAvailableSlots(selectedDate);
+    }
+  }, [user, selectedDate]);
+
   const fetchBookings = async () => {
     setLoading(true);
     try {
       const data = await api.get('/studio-bookings?calendar=true');
       setBookings(data);
+      if (selectedDate) {
+        fetchAvailableSlots(selectedDate);
+      }
     } catch (err: any) {
       toast(err.message || 'Lỗi tải danh sách đặt phòng', 'error');
     } finally {
@@ -94,21 +155,22 @@ export default function StudioBookingPage() {
   // Convert bookings and selections to FullCalendar events
   const calendarEvents = [
     ...bookings.map((b) => {
-      const isApproved = b.status === 'APPROVED';
+      const isConfirmed = b.status === 'CONFIRMED' || b.status === 'APPROVED' || b.status === 'COMPLETED';
       const isPending = b.status === 'PENDING';
+      const isCancelled = b.status === 'CANCELLED' || b.status === 'REJECTED';
       
       let border = '#284F9E';
-      let bg = 'rgba(40, 79, 158, 0.15)';
+      let bg = 'rgba(40, 79, 158, 0.2)';
       let statusText = '✓ Đã Duyệt';
 
       if (isPending) {
         border = '#ECC354';
-        bg = 'rgba(236, 195, 84, 0.15)';
-        statusText = '? Chờ Duyệt';
-      } else if (b.status === 'REJECTED') {
+        bg = 'rgba(236, 195, 84, 0.2)';
+        statusText = '⏳ Chờ Duyệt';
+      } else if (isCancelled) {
         border = '#ef4444';
-        bg = 'rgba(239, 68, 68, 0.1)';
-        statusText = '✕ Từ Chiếu';
+        bg = 'rgba(239, 68, 68, 0.15)';
+        statusText = '✕ Đã Hủy';
       }
 
       return {
@@ -168,6 +230,11 @@ export default function StudioBookingPage() {
       return 'Lịch đặt Studio phải bắt đầu và kết thúc trong cùng một ngày.';
     }
 
+    // ADMIN ĐẶC QUYỀN: Cho phép đặt ngoài giờ hành chính và Chủ nhật
+    if (user?.role === 'ADMIN') {
+      return null;
+    }
+
     // 0 = Chủ nhật
     if (start.getDay() === 0) {
       return 'Phòng Studio không hoạt động vào Chủ nhật. Vui lòng chọn lịch từ Thứ Hai đến Thứ Bảy.';
@@ -189,7 +256,8 @@ export default function StudioBookingPage() {
 
   const isOverlappingOrBufferViolation = (s: Date, e: Date) => {
     return bookings.some((b) => {
-      if (b.status !== 'APPROVED') return false;
+      // Chỉ bỏ qua các lịch đã hủy hoặc từ chối
+      if (b.status === 'CANCELLED' || b.status === 'REJECTED') return false;
       const existingStart = new Date(b.startTime);
       const existingEnd = new Date(b.endTime);
       const bufferedStart = new Date(existingStart.getTime() - BUFFER_MS);
@@ -202,6 +270,11 @@ export default function StudioBookingPage() {
     if (start < new Date()) {
       toast('Không thể đặt lịch ở thời gian trong quá khứ', 'warning');
       return;
+    }
+
+    const clickedDateStr = format(start, 'yyyy-MM-dd');
+    if (clickedDateStr !== selectedDate) {
+      setSelectedDate(clickedDateStr);
     }
 
     const errorMsg = validateOperatingHours(start, end);
@@ -261,6 +334,86 @@ export default function StudioBookingPage() {
       setCurrentSelection({ start: finalStart, end: finalEnd });
       setFirstClickDate(null);
     }
+  };
+
+  // Chọn khung giờ được hệ thống gợi ý
+  const handleSelectSuggestedSlot = (slot: any) => {
+    setSelectedSlotId(slot.id);
+    const start = new Date(slot.startIso);
+    const end = new Date(slot.endIso);
+
+    if (start < new Date()) {
+      toast('Khung giờ này đã ở trong quá khứ, vui lòng chọn ngày/khung giờ khác.', 'warning');
+      return;
+    }
+
+    if (isOverlappingOrBufferViolation(start, end)) {
+      toast('Khung giờ này đã có lịch đặt hoặc vi phạm khoảng đệm 30 phút với lịch phòng hiện có.', 'error');
+      return;
+    }
+
+    const overlapsConfirmed = confirmedRanges.some((r) => {
+      const bufStart = new Date(r.start.getTime() - BUFFER_MS);
+      const bufEnd = new Date(r.end.getTime() + BUFFER_MS);
+      return start < bufEnd && end > bufStart;
+    });
+
+    if (overlapsConfirmed) {
+      toast('Khung giờ này bị trùng hoặc vi phạm khoảng đệm 30 phút với dải giờ bạn đã chọn trước đó.', 'error');
+      return;
+    }
+
+    setCurrentSelection({ start, end });
+    setFirstClickDate(null);
+    toast(`Đã chọn khung giờ: ${slot.label} (${slot.duration})`, 'info');
+  };
+
+  // Áp dụng khung giờ tự nhập
+  const handleApplyCustomTime = () => {
+    if (!selectedDate || !customStartTime || !customEndTime) {
+      toast('Vui lòng chọn ngày, giờ bắt đầu và giờ kết thúc', 'warning');
+      return;
+    }
+
+    const start = new Date(`${selectedDate}T${customStartTime}:00+07:00`);
+    const end = new Date(`${selectedDate}T${customEndTime}:00+07:00`);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      toast('Thời gian đã chọn không hợp lệ', 'error');
+      return;
+    }
+
+    if (start < new Date()) {
+      toast('Không thể đặt lịch ở thời gian trong quá khứ', 'warning');
+      return;
+    }
+
+    const err = validateOperatingHours(start, end);
+    if (err) {
+      toast(err, 'warning');
+      return;
+    }
+
+    if (isOverlappingOrBufferViolation(start, end)) {
+      toast('Khung giờ bạn nhập đã bị trùng hoặc vi phạm khoảng đệm 30 phút với lịch đã có.', 'error');
+      return;
+    }
+
+    const overlapsConfirmed = confirmedRanges.some((r) => {
+      const bufStart = new Date(r.start.getTime() - BUFFER_MS);
+      const bufEnd = new Date(r.end.getTime() + BUFFER_MS);
+      return start < bufEnd && end > bufStart;
+    });
+
+    if (overlapsConfirmed) {
+      toast('Khung giờ bạn nhập bị trùng hoặc vi phạm khoảng đệm 30 phút với dải giờ bạn đã chọn trước đó.', 'error');
+      return;
+    }
+
+    setSelectedSlotId(null);
+    setCurrentSelection({ start, end });
+    setFirstClickDate(null);
+    toast(`Đã chọn khung giờ: ${customStartTime} – ${customEndTime} ngày ${format(start, 'dd/MM/yyyy')}`, 'success');
   };
 
   const getRangesToSubmit = () => {
@@ -352,8 +505,219 @@ export default function StudioBookingPage() {
         <div>
           <h1 className="text-3xl font-extrabold text-white tracking-tight">Đặt Phòng Studio</h1>
           <p className="text-sm text-studio-muted mt-1">
-            Chọn giờ bắt đầu, sau đó chọn giờ kết thúc. Hệ thống tự động chọn toàn bộ các ô ở giữa.
+            Chọn giờ bắt đầu, sau đó chọn giờ kết thúc hoặc chọn từ khung giờ còn trống được hệ thống gợi ý.
           </p>
+        </div>
+
+        {/* KHUNG ĐĂNG KÝ ĐẶT PHÒNG: GỢI Ý KHUNG GIỜ HOẶC TỰ NHẬP */}
+        <div className="glass-panel p-6 rounded-3xl border border-white/10 bg-[#121216] shadow-xl space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-2xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary shrink-0">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-white flex items-center gap-2">
+                  <span>Chọn Khung Giờ Đặt Phòng</span>
+                  {user?.role === 'ADMIN' && (
+                    <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                      <ShieldCheck className="w-3 h-3 text-amber-400" />
+                      <span>Đặc quyền ADMIN</span>
+                    </span>
+                  )}
+                </h2>
+                <p className="text-xs text-studio-muted mt-0.5">
+                  Chọn khung giờ trống gợi ý sẵn hoặc tự nhập khoảng giờ bạn muốn sử dụng phòng
+                </p>
+              </div>
+            </div>
+
+            {/* Mode Selector Tabs */}
+            <div className="flex items-center p-1 bg-white/5 rounded-2xl border border-white/5 w-fit">
+              <button
+                type="button"
+                onClick={() => setBookingMode('SUGGESTED')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  bookingMode === 'SUGGESTED'
+                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                    : 'text-studio-muted hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Gợi ý khung giờ còn trống</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBookingMode('CUSTOM')}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  bookingMode === 'CUSTOM'
+                    ? 'bg-brand-primary text-white shadow-lg shadow-brand-primary/25'
+                    : 'text-studio-muted hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Tự nhập khung giờ</span>
+              </button>
+            </div>
+          </div>
+
+          {/* TAB 1: GỢI Ý KHUNG GIỜ CÒN TRỐNG */}
+          {bookingMode === 'SUGGESTED' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center space-x-3">
+                  <label className="text-xs font-bold text-white shrink-0">Chọn ngày:</label>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-brand-primary cursor-pointer"
+                  />
+                  {loadingSlots && (
+                    <span className="text-xs text-studio-muted animate-pulse">Đang nạp khung giờ trống...</span>
+                  )}
+                </div>
+                <div className="text-[11px] text-studio-muted flex items-center space-x-1.5">
+                  <Info className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                  <span>Tự động loại bỏ giờ đã duyệt và tính khoảng đệm 30 phút giữa các ca</span>
+                </div>
+              </div>
+
+              {availableSlotsData && !availableSlotsData.isOpen && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-center space-x-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>{availableSlotsData.message || 'Studio không hoạt động vào ngày này.'}</span>
+                </div>
+              )}
+
+              {availableSlotsData && availableSlotsData.shifts && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-1">
+                  {availableSlotsData.shifts.map((shift: any) => (
+                    <div
+                      key={shift.id}
+                      className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-3"
+                    >
+                      <div className="flex items-center justify-between border-b border-white/5 pb-2">
+                        <span className="text-xs font-bold text-white">{shift.name}</span>
+                        <span className="text-[10px] text-studio-muted font-medium">
+                          {shift.operatingHours}
+                        </span>
+                      </div>
+
+                      {(() => {
+                        const validAvailableSlots = (shift.availableSlots || []).filter((slot: any) => {
+                          const s = new Date(slot.startIso);
+                          const e = new Date(slot.endIso);
+                          return !isOverlappingOrBufferViolation(s, e);
+                        });
+
+                        return validAvailableSlots.length > 0 ? (
+                          <div className="flex flex-wrap gap-2">
+                            {validAvailableSlots.map((slot: any) => {
+                              const isSelected = selectedSlotId === slot.id;
+                              return (
+                                <button
+                                  key={slot.id}
+                                  type="button"
+                                  onClick={() => handleSelectSuggestedSlot(slot)}
+                                  className={`px-3 py-2 rounded-xl text-xs font-bold transition-all text-left border cursor-pointer ${
+                                    isSelected
+                                      ? 'bg-brand-primary text-white border-brand-primary shadow-md shadow-brand-primary/30'
+                                      : 'bg-white/5 text-white/90 border-white/10 hover:border-brand-primary/50 hover:bg-white/10'
+                                  }`}
+                                >
+                                  <div className="flex items-center space-x-1.5">
+                                    <Clock className="w-3 h-3 text-brand-primary" />
+                                    <span>{slot.label}</span>
+                                  </div>
+                                  <span className="block text-[10px] text-studio-muted mt-0.5 font-normal">
+                                    {slot.duration}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-studio-muted italic py-2">
+                            Đã kín lịch hoặc không còn khung giờ trống
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 2: TỰ NHẬP KHUNG GIỜ */}
+          {bookingMode === 'CUSTOM' && (
+            <div className="p-4 rounded-2xl bg-white/2 border border-white/5 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-studio-muted mb-1 uppercase">
+                    Ngày đặt phòng
+                  </label>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-brand-primary cursor-pointer"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-studio-muted mb-1 uppercase">
+                    Giờ bắt đầu
+                  </label>
+                  <input
+                    type="time"
+                    step="1800"
+                    value={customStartTime}
+                    onChange={(e) => setCustomStartTime(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-brand-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-studio-muted mb-1 uppercase">
+                    Giờ kết thúc
+                  </label>
+                  <input
+                    type="time"
+                    step="1800"
+                    value={customEndTime}
+                    onChange={(e) => setCustomEndTime(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-brand-primary"
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-white/5">
+                <div className="text-[11px] text-studio-muted space-y-0.5">
+                  <p>
+                    {user?.role === 'ADMIN' ? (
+                      <span className="text-amber-300 font-medium">
+                        * Tài khoản ADMIN được phép chọn mọi khung giờ (bao gồm ngoài giờ hành chính &amp; Chủ nhật).
+                      </span>
+                    ) : (
+                      <span>
+                        * Quy tắc: Thứ Hai – Thứ Bảy (Sáng 07:30–11:30, Chiều 13:30–16:30). Không đặt xuyên trưa hoặc Chủ nhật.
+                      </span>
+                    )}
+                  </p>
+                  <p>* Hệ thống tự động kiểm tra đệm 30 phút giữa các lịch đặt đã xác nhận.</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleApplyCustomTime}
+                  className="px-5 py-2.5 rounded-xl bg-brand-primary text-white font-bold text-xs hover:bg-brand-primary/90 transition-all cursor-pointer shadow-lg shadow-brand-primary/20 shrink-0 flex items-center justify-center space-x-1.5"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Áp dụng khung giờ này</span>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Mode Toggle Switch & Indicators */}

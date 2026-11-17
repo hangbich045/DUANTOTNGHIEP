@@ -34,7 +34,10 @@ const getTasksSummary = async (req, res) => {
     const m = parseInt(month, 10) || now.getMonth() + 1;
     const y = parseInt(year, 10) || now.getFullYear();
 
-    const data = await payrollService.getTasksSummaryData(m, y);
+    // Bảo mật RBAC: CTV chỉ được xem dữ liệu của chính mình
+    const targetUserId = req.user.role === 'COLLABORATOR' ? req.user.id : (req.query.userId || null);
+
+    const data = await payrollService.getTasksSummaryData(m, y, targetUserId);
     return res.status(200).json({
       success: true,
       data,
@@ -43,6 +46,49 @@ const getTasksSummary = async (req, res) => {
     return res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || 'Lỗi khi lấy dữ liệu thống kê công việc',
+    });
+  }
+};
+
+const getCollaboratorSummary = async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const now = new Date();
+    const m = parseInt(month, 10) || now.getMonth() + 1;
+    const y = parseInt(year, 10) || now.getFullYear();
+
+    // Bảo mật RBAC: CTV chỉ được xem danh sách của chính mình; Admin có thể chỉ định userId
+    const ctvUserId = req.user.role === 'COLLABORATOR' ? req.user.id : (req.query.userId || req.user.id);
+
+    const data = await payrollService.getCollaboratorMonthlySummary(m, y, ctvUserId);
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Lỗi khi lấy dữ liệu tổng công việc tháng của CTV',
+    });
+  }
+};
+
+const getMonthlyPayroll = async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const now = new Date();
+    const m = parseInt(month, 10) || now.getMonth() + 1;
+    const y = parseInt(year, 10) || now.getFullYear();
+
+    const data = await payrollService.calculateMonthlyPayroll(m, y);
+    return res.status(200).json({
+      success: true,
+      data,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Lỗi khi lấy dữ liệu bảng lương tháng',
     });
   }
 };
@@ -123,6 +169,8 @@ const exportTasksSummary = async (req, res) => {
 module.exports = {
   getTimesheet,
   getTasksSummary,
+  getCollaboratorSummary,
+  getMonthlyPayroll,
   calculatePayroll,
   updateAttendanceCell,
   exportTimesheet,

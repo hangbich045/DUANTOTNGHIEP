@@ -22,16 +22,20 @@ import {
   CheckSquare,
   Calculator,
   Calendar,
+  History,
+  Wrench,
 } from 'lucide-react';
 
 const sidebarLinks = [
   { href: '/admin/dashboard', label: 'Thống kê tổng quan', icon: LayoutDashboard },
   { href: '/admin/equipment', label: 'Quản lý Thiết bị', icon: Camera },
+  { href: '/admin/equipment/maintenance', label: 'Bảo trì & Thanh lý', icon: Wrench },
   { href: '/admin/requests', label: 'Duyệt yêu cầu', icon: ClipboardList },
   { href: '/admin/tasks', label: 'Quản lý Công việc', icon: CheckSquare },
   { href: '/admin/duty', label: 'Quản lý Ca trực', icon: Calendar },
   { href: '/admin/payroll', label: 'Chấm công & Thù lao', icon: Calculator },
   { href: '/admin/users', label: 'Quản lý Thành viên', icon: Users },
+  { href: '/admin/audit-logs', label: 'Lịch sử thao tác', icon: History },
 ];
 
 const contentManagementLinks = [
@@ -115,7 +119,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen flex bg-studio-dark">
-      <aside className="w-72 border-r border-white/5 bg-black/40 backdrop-blur-xl flex flex-col justify-between p-6 shrink-0 hidden md:flex">
+      <aside className="w-72 border-r border-white/5 bg-black/40 backdrop-blur-xl flex flex-col justify-between p-6 shrink-0 hidden md:flex relative z-40">
         <div className="space-y-8">
           <div className="flex items-center justify-between pl-1">
             <Link href="/" className="flex items-center space-x-2">
@@ -197,7 +201,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0">
-        <header className="border-b border-white/5 py-4 px-6 md:px-12 flex justify-between items-center bg-black/20 md:hidden">
+        <header className="border-b border-white/5 py-4 px-6 md:px-12 flex justify-between items-center bg-black/20 md:hidden relative z-30">
           <Link href="/" className="flex items-center space-x-2">
             <div className="w-11 h-11 flex items-center justify-center">
               <Image

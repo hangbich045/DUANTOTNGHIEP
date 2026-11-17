@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import { useAuth } from '@/context/AuthContext';
@@ -20,6 +21,7 @@ import {
   ExternalLink,
   PlusCircle,
   FileText,
+  FileSpreadsheet,
   Link as LinkIcon,
   X,
   Calendar,
@@ -63,6 +65,16 @@ interface TaskItem {
   otherTaskType?: string;
   executionDate?: string;
   actualHours?: number;
+  normalHours?: number;
+  overtimeHours?: number;
+  sundayHours?: number;
+  multiplier?: number;
+  convertedHours?: number;
+  isHighlighted?: boolean;
+  multiplierNote?: string;
+  multiplierReason?: string;
+  isSunday?: boolean;
+  isOvertime?: boolean;
   shiftSession?: string;
   campus?: string;
   room?: string;
@@ -174,6 +186,7 @@ export default function MyTasksPage() {
   const [selectedTaskToSubmit, setSelectedTaskToSubmit] = useState<TaskItem | null>(null);
   const [resultLink, setResultLink] = useState('');
   const [proofFile, setProofFile] = useState('');
+  const [submitActualHours, setSubmitActualHours] = useState<number | string>(2);
   const [submittingResult, setSubmittingResult] = useState(false);
 
   // External Task Declaration Modal
@@ -515,6 +528,8 @@ export default function MyTasksPage() {
     setSelectedTaskToSubmit(task);
     setResultLink(task.resultLink || '');
     setProofFile(task.proofFile || '');
+    const defaultHours = task.actualHours && Number(task.actualHours) > 0 ? Number(task.actualHours) : 2;
+    setSubmitActualHours(defaultHours);
     setSubmitModalOpen(true);
   };
 
@@ -528,12 +543,19 @@ export default function MyTasksPage() {
       return;
     }
 
+    const hours = parseFloat(String(submitActualHours));
+    if (isNaN(hours) || hours <= 0) {
+      toast('Vui lòng nhập số giờ thực hiện hợp lệ lớn hơn 0', 'warning');
+      return;
+    }
+
     setSubmittingResult(true);
     try {
       await api.put(`/tasks/${selectedTaskToSubmit.id}/progress`, {
         status: 'PENDING_APPROVAL',
         resultLink: resultLink.trim() || undefined,
         proofFile: proofFile.trim() || undefined,
+        actualHours: hours,
       });
 
       toast('Đã nộp kết quả công việc thành công! Vui lòng chờ Nhân sự nghiệm thu.', 'success');
@@ -748,7 +770,7 @@ export default function MyTasksPage() {
           </div>
 
           {/* Mode Switcher */}
-          <div className="flex items-center bg-black/40 p-1.5 rounded-2xl border border-white/10 shrink-0">
+          <div className="flex items-center bg-black/40 p-1.5 rounded-2xl border border-white/10 shrink-0 flex-wrap gap-1">
             <button
               onClick={() => setViewMode('TASKS')}
               className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -760,6 +782,13 @@ export default function MyTasksPage() {
               <CheckSquare className="w-4 h-4" />
               <span>Nhiệm vụ &amp; Sự vụ</span>
             </button>
+            <Link
+              href="/tasks/summary"
+              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-studio-muted hover:text-white hover:bg-white/5 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+              <span>Tổng công việc tháng</span>
+            </Link>
             <button
               onClick={() => setViewMode('DUTY')}
               className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -965,7 +994,13 @@ export default function MyTasksPage() {
                             </span>
                           </div>
 
-                          <div className="text-right">
+                          <div className="text-right flex items-center justify-end space-x-2">
+                            {task.actualHours && Number(task.actualHours) > 0 ? (
+                              <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-md bg-amber-500/10 border border-amber-500/25 text-amber-300 font-bold text-[10px]">
+                                <Clock className="w-3 h-3 text-amber-400" />
+                                <span>{task.actualHours}h</span>
+                              </span>
+                            ) : null}
                             {task.isExternal ? (
                               <span className="text-purple-300">Tự khai báo</span>
                             ) : (
@@ -1576,7 +1611,7 @@ export default function MyTasksPage() {
               <div className="flex items-center justify-between border-b border-white/5 pb-3">
                 <div className="flex items-center space-x-2">
                   <Send className="w-5 h-5 text-brand-primary" />
-                  <h3 className="font-bold text-white text-base">Nộp Kết Quả Nhiệm Vụ</h3>
+                  <h3 className="font-bold text-white text-base">Nộp Kết Quả Làm Việc</h3>
                 </div>
                 <button
                   onClick={() => setSubmitModalOpen(false)}
@@ -1592,6 +1627,64 @@ export default function MyTasksPage() {
               </div>
 
               <form onSubmit={handleSubmitTaskResult} className="space-y-4 text-xs">
+                {/* 1. SỐ GIỜ THỰC HIỆN (BẮT BUỘC) */}
+                <div className="p-4 bg-brand-primary/10 rounded-2xl border border-brand-primary/30 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-white font-bold text-xs flex items-center space-x-2">
+                      <Clock className="w-4 h-4 text-brand-primary shrink-0" />
+                      <span>Số giờ thực hiện thực tế</span>
+                    </label>
+                    <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                      Bắt buộc
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-studio-muted leading-relaxed">
+                    Nhập tổng thời lượng thực tế bạn đã dành để hoàn thành công việc này (ví dụ: 2 giờ, 3.5 giờ, 4 giờ).
+                  </p>
+
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      max="24"
+                      required
+                      value={submitActualHours}
+                      onChange={(e) => setSubmitActualHours(e.target.value)}
+                      placeholder="Nhập số giờ (VD: 2 hoặc 3.5)"
+                      className="w-full bg-black/60 border border-brand-primary/40 rounded-xl pl-4 pr-20 py-2.5 text-white font-bold text-sm placeholder-studio-muted focus:outline-none focus:border-brand-primary"
+                    />
+                    <span className="absolute right-3.5 top-2.5 text-xs text-brand-primary font-bold">
+                      tiếng / giờ
+                    </span>
+                  </div>
+
+                  {/* Nút chọn nhanh giờ */}
+                  <div className="flex items-center flex-wrap gap-1.5 pt-1">
+                    <span className="text-[10px] text-studio-muted mr-1 font-medium">Chọn nhanh:</span>
+                    {[1, 1.5, 2, 2.5, 3, 3.5, 4, 5].map((h) => (
+                      <button
+                        key={h}
+                        type="button"
+                        onClick={() => setSubmitActualHours(h)}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          Number(submitActualHours) === h
+                            ? 'bg-brand-primary text-white shadow-md shadow-brand-primary/30'
+                            : 'bg-white/5 text-studio-muted hover:text-white hover:bg-white/10'
+                        }`}
+                      >
+                        {h}h
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="text-[10px] text-amber-300/80 italic pt-0.5">
+                    * Lưu ý: Số giờ này sẽ được gửi đến Nhân sự Studio kiểm tra và nghiệm thu trước khi ghi nhận vào Bảng thống kê công việc và tính thù lao.
+                  </p>
+                </div>
+
+                {/* 2. LINK SẢN PHẨM */}
                 <div>
                   <label className="block text-studio-muted mb-1 font-medium">
                     Link sản phẩm (Google Drive, YouTube, Figma, Canva, OneDrive, TikTok...)
@@ -1608,6 +1701,7 @@ export default function MyTasksPage() {
                   </div>
                 </div>
 
+                {/* 3. FILE MINH CHỨNG */}
                 <div>
                   <label className="block text-studio-muted mb-1 font-medium">
                     File minh chứng / Tên file đính kèm
@@ -1892,6 +1986,87 @@ export default function MyTasksPage() {
                     {selectedTaskForDetail.description || 'Không có mô tả chi tiết kèm theo.'}
                   </div>
                 </div>
+
+                {(selectedTaskForDetail.resultLink || selectedTaskForDetail.proofFile) && (
+                  <div className="p-3 bg-white/2 rounded-2xl border border-white/5 space-y-2">
+                    <span className="text-[10px] uppercase font-bold text-studio-muted block">Kết quả / Minh chứng đã gửi</span>
+                    {selectedTaskForDetail.resultLink && (
+                      <div className="flex items-center space-x-2 text-xs">
+                        <LinkIcon className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                        <a
+                          href={selectedTaskForDetail.resultLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-brand-primary hover:underline truncate"
+                        >
+                          {selectedTaskForDetail.resultLink}
+                        </a>
+                      </div>
+                    )}
+                    {selectedTaskForDetail.proofFile && (
+                      <div className="flex items-center space-x-2 text-xs text-white/80">
+                        <FileText className="w-3.5 h-3.5 text-studio-muted shrink-0" />
+                        <span className="truncate">{selectedTaskForDetail.proofFile}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {selectedTaskForDetail.status === 'PENDING_APPROVAL' && (
+                  <div className="p-3.5 bg-amber-500/10 rounded-2xl border border-amber-500/25 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] uppercase font-bold text-amber-300 flex items-center space-x-1">
+                        <Clock className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Thời lượng thực hiện đã nộp</span>
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                        Chờ Nhân sự nghiệm thu
+                      </span>
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-studio-muted block text-[10px]">Số giờ thực tế đã gửi:</span>
+                      <strong className="text-white text-sm">{selectedTaskForDetail.actualHours || 0} giờ</strong>
+                    </div>
+                    <p className="text-[11px] text-amber-200/80 italic">
+                      * Số giờ này sẽ được Nhân sự kiểm tra và xác nhận. Chỉ sau khi được duyệt hoàn thành, giờ làm mới được ghi nhận vào Bảng thống kê công việc và tính thù lao.
+                    </p>
+                  </div>
+                )}
+
+                {selectedTaskForDetail.status === 'COMPLETED' && (
+                  <div className="p-3.5 bg-white/5 rounded-2xl border border-white/5 space-y-2">
+                    <span className="text-[10px] uppercase font-bold text-studio-muted block">Nghiệm thu &amp; Thù lao</span>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-studio-muted block text-[10px]">Thời lượng thực tế:</span>
+                        <strong className="text-white text-sm">{selectedTaskForDetail.actualHours || 0} giờ</strong>
+                      </div>
+                      <div>
+                        <span className="text-studio-muted block text-[10px]">Giờ quy đổi tính lương:</span>
+                        <strong className="text-amber-300 text-sm">
+                          {selectedTaskForDetail.convertedHours !== undefined ? selectedTaskForDetail.convertedHours : (selectedTaskForDetail.actualHours || 0)} giờ
+                        </strong>
+                      </div>
+                    </div>
+                    {selectedTaskForDetail.multiplierNote && (
+                      <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-xl bg-amber-500/15 border border-amber-500/25 text-amber-300 font-bold text-xs mt-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>Hệ số: {selectedTaskForDetail.multiplierNote}</span>
+                      </div>
+                    )}
+                    {selectedTaskForDetail.multiplierReason && (
+                      <p className="text-[11px] text-studio-muted italic">
+                        Lý do: {selectedTaskForDetail.multiplierReason}
+                      </p>
+                    )}
+                    {selectedTaskForDetail.completedAt && (
+                      <div className="text-[11px] text-brand-success font-medium flex items-center space-x-1.5 pt-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Nghiệm thu vào lúc: {format(new Date(selectedTaskForDetail.completedAt), 'dd/MM/yyyy HH:mm')}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {selectedTaskForDetail.feedback && (
                   <div className="space-y-1.5">

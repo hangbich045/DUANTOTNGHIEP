@@ -88,13 +88,24 @@
 ## 7. Quy tắc tính tiền công và thù lao CTV
 1. Mức tiền công cơ bản: **20.000 đồng/giờ**.
 2. Một ca trực Studio tiêu chuẩn: **4 giờ** (tương đương 80.000 đồng/ca).
-3. Công việc kỹ thuật chụp ảnh/quay phim sự vụ sau 16:30 từ Thứ Hai đến Thứ Bảy: áp dụng hệ số **1,5** (tính cho số giờ làm sau 16:30).
-4. Công việc kỹ thuật sự kiện vào Chủ nhật: áp dụng hệ số **2,0** cho toàn bộ thời gian thực hiện trong ngày Chủ nhật.
-5. Nếu công việc vào Chủ nhật đồng thời diễn ra sau 16:30, **chỉ áp dụng hệ số 2,0**, không nhân chồng hệ số (1.5 x 2.0 = 3.0 là vi phạm).
-6. Thời lượng công việc kỹ thuật sự kiện được tính theo thời gian thực tế ghi nhận trên phiếu nhiệm vụ đã nghiệm thu.
-7. Không tính trùng thời gian đã được tính trong ca trực Studio (nếu một buổi vừa trực Studio vừa làm sự vụ, chỉ tính giờ trực Studio hoặc tính giờ sự vụ không trùng lặp).
-8. Chỉ công việc hoàn thành được Nhân sự xác nhận (COMPLETED) mới được đưa vào dữ liệu lương (Quy tắc TC-03).
-9. Công việc chưa hoàn thành, đang thực hiện, chờ duyệt hoặc cần chỉnh sửa tuyệt đối không được đưa vào dữ liệu thù lao (Quy tắc TC-03).
+3. **Danh sách các công việc được nhân hệ số giờ (sau 16:30 từ T2-T7 nhân 1,5; Chủ nhật nhân 2,0):**
+   - **Chụp & xử lý hình** (Chụp & xử lý hình sự kiện, chụp ảnh)
+   - **Quay phim**
+   - **Quay highlight**
+   - **Quay clip TikTok**
+   - **MC bản tin**
+   - **Thư ký trường quay**
+   - **Diễn viên**
+4. **Các công việc còn lại không được nhân giờ (luôn áp dụng hệ số 1,0):**
+   - Viết content, Viết kịch bản, Thiết kế
+   - Dựng clip highlight, Dựng clip TikTok, Dựng phim
+5. Công việc thuộc 7 nhóm trên sau 16:30 từ Thứ Hai đến Thứ Bảy: áp dụng hệ số **1,5** (tách rõ: số giờ trước 16:30 tính hệ số 1,0; số giờ sau 16:30 tính hệ số 1,5).
+6. Công việc thuộc 7 nhóm trên vào Chủ nhật: áp dụng hệ số **2,0** cho toàn bộ thời gian thực hiện trong ngày Chủ nhật.
+7. Nếu công việc vào Chủ nhật đồng thời diễn ra sau 16:30, **chỉ áp dụng hệ số 2,0**, không nhân chồng hệ số (Quy tắc TC-06: 1.5 x 2.0 = 3.0 là vi phạm; ưu tiên hệ số Chủ nhật).
+8. Thời lượng công việc được tính theo số giờ thực tế ghi nhận trên phiếu nhiệm vụ đã nghiệm thu (`actualHours` của task `COMPLETED`).
+9. Không tính trùng thời gian đã được tính trong ca trực Studio (nếu một buổi vừa trực Studio vừa làm sự vụ, chỉ tính giờ trực Studio hoặc tính giờ sự vụ không trùng lặp - Quy tắc TC-05).
+10. Chỉ công việc hoàn thành được Nhân sự xác nhận (COMPLETED) mới được đưa vào dữ liệu lương (Quy tắc TC-03).
+11. Công việc chưa hoàn thành, đang thực hiện, chờ duyệt hoặc cần chỉnh sửa tuyệt đối không được đưa vào dữ liệu thù lao (Quy tắc TC-03).
 
 ## 8. Quy tắc Biểu mẫu Excel xuất báo cáo (Chuẩn BPTT ĐH Lạc Hồng)
 1. **Bảng thống kê công việc tháng (Sheet chuẩn `T10.2026`)**:

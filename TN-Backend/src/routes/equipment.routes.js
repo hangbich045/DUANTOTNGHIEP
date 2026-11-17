@@ -18,6 +18,7 @@
 
 const { Router } = require('express');
 const equipmentController = require('../controllers/equipment.controller');
+const maintenanceController = require('../controllers/maintenance.controller');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 const { validateCreateEquipment } = require('../middlewares/validate.middleware');
 
@@ -28,6 +29,9 @@ const router = Router();
 
 // GET - Xem danh sách: Cả User và Admin đều xem được
 router.get('/', authenticate, equipmentController.getAll);
+
+// GET - Xem lịch sử bảo trì / sửa chữa của 1 thiết bị
+router.get('/:equipmentId/maintenances', authenticate, maintenanceController.getMaintenancesByEquipment);
 
 // GET - Xem chi tiết: Cả User và Admin
 router.get('/:id', authenticate, equipmentController.getById);

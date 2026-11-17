@@ -295,10 +295,99 @@ Mỗi khi người dùng giao một nhiệm vụ:
     * Tuân thủ nghiêm ngặt QUY_TAC.md 10.4: Tuyệt đối không tạo thông báo phê duyệt bảng lương.
     * Giao diện Frontend: Nút "Quét nợ quá hạn" trên `/admin/requests`; Icon chuông `NotificationBell.tsx` trên Navbar hỗ trợ đếm badge chưa đọc, popup danh sách, đánh dấu đã đọc và điều hướng link chi tiết.
     * Kiểm thử tự động: Bổ sung Suite 13 -> **83/83 Backend Unit Tests PASS 100%**; Kịch bản kiểm thử Task 4.1 `test_task4_1_notifications.js` đạt **23/23 tiêu chí PASS 100%**.
-- [ ] **Task 4.2 (FR-09):** Tạo bảng `AuditLogs`, middleware tự động ghi vết các thao tác quan trọng (thêm/sửa/xóa, duyệt/từ chối, cấp quyền) lưu `userId`, `action`, `resource`, `details` JSON, `ip`, `timestamp`. Trang tra cứu `/admin/audit-logs`.
-- [ ] **Task 4.3 (FR-01.5):** Tạo bảng `EquipmentMaintenances`, API và giao diện quản lý lịch sử bảo trì, sửa chữa theo hóa đơn chứng từ, báo mất và thanh lý thiết bị.
-- [ ] **Task 4.4 (FR-08):** Mở rộng Dashboard Admin: Bổ sung thẻ thống kê công việc (tiến độ, trễ hạn) và thống kê thù lao CTV theo tháng.
-- [ ] **Task 4.5 (FR-03.6):** Bổ sung chức năng Dời lịch / Thay đổi lịch đặt phòng Studio (kèm check xung đột).
+- [x] **Task 4.2 (FR-09):** Tạo bảng `AuditLogs`, middleware tự động ghi vết các thao tác quan trọng (thêm/sửa/xóa, duyệt/từ chối, cấp quyền) lưu `userId`, `action`, `resource`, `details` JSON, `ip`, `timestamp`. Trang tra cứu `/admin/audit-logs`.
+  - *Kết quả thực hiện:*
+    * Xây dựng model `AuditLog.js` và đồng bộ CSDL MSSQL: Lưu `userId`, `action`, `resource`, `resourceId`, `details` JSON, `ip`, `userAgent`, `status` (`SUCCESS`/`FAILED`), `timestamp`.
+    * Xây dựng `auditLog.service.js`:
+      - Hàm `sanitizeDetails`: Tự động nhận diện và che mờ 100% dữ liệu nhạy cảm (`password`, `token`, `otp`, `secret`, `authorization`, `cookie`...) thành `[PROTECTED]`, tuân thủ nghiêm ngặt QUY_TAC.md 11.4.
+      - Hàm `getClientIp`: Chuẩn hóa địa chỉ IP client sạch (bỏ tiền tố IPv6 `::ffff:`, trích xuất IP đầu từ x-forwarded-for).
+      - Hàm `recordAudit`: Ghi vết bất đồng bộ an toàn, non-blocking.
+      - Hàm `getAuditLogs`: Tra cứu phân trang, tìm kiếm từ khóa tổng hợp, lọc đa tiêu chí (Action, Resource, User, Status, Date range).
+      - Hàm `getAuditLogStats` & `getAuditLogById`: Thống kê tổng quan và xem chi tiết JSON format.
+    * Xây dựng middleware `auditLog.middleware.js`: Tự động bắt vết 100% các request thay đổi dữ liệu (POST, PUT, PATCH, DELETE, LOGIN, APPROVE, REJECT, ASSIGN_ROLE, HANDOVER, RETURN...), tự động ánh xạ Action & Resource, lấy IP và User-Agent khi response hoàn tất (`res.on('finish')`).
+    * Backend API & Routes: `GET /api/audit-logs`, `GET /api/audit-logs/stats`, `GET /api/audit-logs/:id`, bảo vệ phân quyền nghiêm ngặt bằng middleware `authenticate` và `authorize('ADMIN')` (CTV/User bị chặn 403 Forbidden).
+    * Giao diện Quản trị `/admin/audit-logs`:
+      - Thẻ tóm tắt KPIs thời gian thực: Tổng số thao tác, thao tác hôm nay, phê duyệt/nghiệm thu, thêm/sửa/phân quyền.
+      - Bộ lọc nâng cao: Tìm kiếm từ khóa, lọc theo Action (11 loại), lọc theo Resource (10 đối tượng), lọc Status, lọc khoảng ngày.
+      - Bảng dữ liệu trực quan: Thời gian chuẩn Việt Nam, người thực hiện kèm role badge, action badge màu sắc, đối tượng & ID, IP, trạng thái.
+      - Modal JSON Viewer cao cấp: Hiển thị đầy đủ metadata, syntax highlighted JSON, nút sao chép JSON vào clipboard chỉ với 1 click.
+      - Tích hợp link điều hướng "Lịch sử thao tác" với icon `History` vào thanh Sidebar của `AdminLayout.tsx`.
+    * Kiểm thử tự động:
+      - Bổ sung Suite 15 vào `TN-Backend/test/unit.test.js`: **93/93 Unit Tests PASS 100%** (15 suites).
+      - Script kiểm thử tích hợp `test_audit_logs.js`: **PASS 100%**.
+      - Kiểm thử trực tiếp HTTP API thực tế: 401 unauthenticated, 403 CTV, 200 Admin -> **PASS 100%**.
+      - TypeScript Compilation: **0 errors**.
+      - Next.js Production Build: **27/27 routes hoàn tất thành công**.
+- [x] **Task 4.3 (FR-01.5):** Tạo bảng `EquipmentMaintenances`, API và giao diện quản lý lịch sử bảo trì, sửa chữa theo hóa đơn chứng từ, báo mất và thanh lý thiết bị.
+    * Model `EquipmentMaintenance.js` & đồng bộ CSDL MSSQL: Lưu `id`, `equipment_id`, `type` (`MAINTENANCE`, `REPAIR`, `LOST`, `DISPOSAL`), `title`, `description`, `start_date`, `end_date`, `status` (`IN_PROGRESS`, `COMPLETED`, `CANCELLED`), `cost`, `invoice_number`, `invoice_date`, `invoice_url`, `service_provider`, `performed_by`, `notes`.
+    * Service `maintenance.service.js` & Controller `maintenance.controller.js`:
+      - Tạo mới phiếu bảo trì, sửa chữa, báo mất, thanh lý; tự động chuyển trạng thái thiết bị sang `MAINTENANCE`, `LOST`, `DISPOSED`.
+      - Nghiệm thu hoàn tất (`status: 'COMPLETED'`) -> Tự động khôi phục thiết bị về `AVAILABLE`.
+      - Quản lý hóa đơn chứng từ, chi phí sửa chữa, đơn vị bảo dưỡng, hỗ trợ upload ảnh/file chứng từ.
+      - Thống kê tổng quan (`getMaintenanceStats`): Tổng số, chi phí lũy kế, đang sửa, đã thanh lý, báo mất.
+      - Tự động ghi vết vào `AuditLogs` (FR-09) bằng văn bản tiếng Việt chi tiết (kèm mã máy, tên máy, số hóa đơn, chi phí).
+    * API Routes `maintenance.routes.js`: `POST /api/maintenances`, `GET /api/maintenances`, `GET /api/maintenances/stats`, `GET /api/maintenances/:id`, `PUT /api/maintenances/:id`, `DELETE /api/maintenances/:id`, `GET /api/equipments/:equipmentId/maintenances`. Bảo vệ phân quyền chặt chẽ bằng `authenticate` và `authorize('ADMIN')`.
+    * Giao diện Quản trị `/admin/equipment/maintenance`:
+      - Thẻ tóm tắt KPIs: Tổng chi phí sửa chữa, Đang bảo dưỡng, Đã thanh lý, Báo mất thiết bị.
+      - Bộ lọc nâng cao: Tìm kiếm theo tên/mã máy/số HĐ/đơn vị sửa, lọc theo Loại, lọc theo Trạng thái, lọc theo thiết bị cụ thể, chọn khoảng ngày.
+      - Bảng dữ liệu trực quan: Thông tin thiết bị kèm ảnh thumbnail, badge loại phiếu, thông tin hóa đơn chứng từ, chi phí VNĐ, đơn vị thực hiện, thời gian, trạng thái.
+      - Modal Lập/Sửa phiếu: Hỗ trợ upload ảnh hóa đơn/chứng từ thực tế.
+      - Modal Xem chi tiết & Hóa đơn chứng từ phóng to.
+      - Modal Nghiệm thu hoàn tất: Đưa thiết bị về trạng thái Sẵn sàng 1-click.
+      - Nút điều hướng nhanh "Bảo trì & Thanh lý" trên trang `/admin/equipment` và trên từng dòng thiết bị; cập nhật Sidebar `AdminLayout.tsx`.
+    * Kiểm thử tự động:
+      - Bổ sung Suite 16 vào `TN-Backend/test/unit.test.js`: **98/98 Unit Tests PASS 100%** (16 suites).
+      - Script kiểm thử tích hợp `test_equipment_maintenance.js`: **PASS 100%** (6/6 kịch bản).
+      - TypeScript Compilation: `tsc --noEmit` -> **0 errors**.
+      - Next.js Production Build: **28/28 routes hoàn tất thành công**.
+- [x] **Task 4.4 (FR-08):** Mở rộng Dashboard Admin: Bổ sung thẻ thống kê công việc (tiến độ, trễ hạn) và thống kê thù lao CTV theo tháng.
+  - *Kết quả thực hiện:*
+    * Backend API `TN-Backend/src/routes/dashboard.routes.js`:
+      - Mở rộng endpoint `GET /api/dashboard/stats`: Thống kê tổng số công việc (`total`), chưa làm (`notStarted`), đang làm (`inProgress`), chờ nghiệm thu (`pendingApproval`), cần sửa (`revisionRequested`), đã hoàn thành (`completed`), công việc trễ hạn (`overdue`: `deadline < NOW` và chưa hoàn thành).
+      - Thống kê thù lao tháng hiện tại (`MonthlyPayroll`): Tổng thù lao tạm tính/đã chốt (VNĐ), tổng giờ công quy đổi, số lượng CTV có phát sinh công việc, phân bổ trạng thái (`DRAFT`, `CONFIRMED`, `PAID`). Tự động tính toán fallback nếu tháng hiện tại chưa chạy chốt lương.
+      - Trích xuất danh sách công việc khẩn cấp / trễ hạn (`urgentTasks`): Top 5 nhiệm vụ xếp theo hạn chót (`deadline ASC`) kèm cờ `isOverdue`, tiêu đề, thông tin CTV phụ trách (`id`, `fullName`, `email`, `avatarUrl`).
+      - Mở rộng endpoint `GET /api/dashboard/reports`: Bổ sung thống kê công việc trong kỳ (`tasksCount`, `tasksCompletedCount`, `tasksInProgressCount`, `tasksPendingApprovalCount`, `tasksOverdueCount`); bổ sung cột công việc CTV vào biểu đồ thời gian (`chartData` gồm 3 chỉ số: Mượn máy, Đặt phòng, Công việc); trả về xu hướng chi trả thù lao qua các tháng (`payrollTrend`).
+    * Giao diện Quản trị Frontend `TN-Frontend/src/app/admin/dashboard/page.tsx`:
+      - Khu vực KPI Thống kê Công việc & Thù lao CTV (FR-08):
+        + Thẻ Tiến độ công việc: Tổng số nhiệm vụ, phân loại chi tiết đang làm/chờ nghiệm thu, link nhanh sang `/admin/tasks`.
+        + Thẻ Cảnh báo trễ hạn: Đổi màu đỏ cảnh báo (`rose-500/10`) kèm icon `Flame` nhấp nháy khi có việc trễ hạn; hiển thị xanh `CheckCircle2` "Đúng tiến độ" khi 0 việc trễ.
+        + Thẻ Thù lao Tháng M/YYYY: Tổng số tiền (VNĐ format), số giờ công quy đổi, số lượng CTV tham gia, link nhanh sang `/admin/payroll`.
+        + Thẻ Tỷ lệ hoàn thành: Hiển thị phần trăm nghiệm thu thành công kèm thanh progress bar sinh động.
+      - Biểu đồ Hoạt động theo thời gian: Hiển thị thanh 3 cột (Mượn thiết bị - xanh dương, Đặt Studio - tím, Nhiệm vụ CTV - vàng hổ phách) kèm tooltip số lượng chi tiết.
+      - Widget Công việc cần chú ý & Trễ hạn: Hiển thị top 5 công việc trễ hạn hoặc sắp tới hạn, avatar/tên CTV, deadline ngày giờ Việt Nam, badge trạng thái / cảnh báo Quá hạn, nút 1-click mở chi tiết nhiệm vụ tại `/admin/tasks`.
+      - Widget Xu hướng Thù lao CTV theo tháng: Biểu đồ thanh ngang thể hiện tổng tiền thù lao, số giờ công, số CTV qua các tháng gần nhất.
+    * Kiểm thử tự động:
+      - Bổ sung Suite 17 vào `TN-Backend/test/unit.test.js`: **102/102 Unit Tests PASS 100%** (17 suites).
+      - Kịch bản kiểm thử API thực tế: Đạt **100% PASS** với đầy đủ dữ liệu CSDL SQL Server.
+      - TypeScript Compilation: `tsc --noEmit` -> **0 errors**.
+      - Next.js Production Build: **28/28 routes hoàn tất thành công**.
+- [x] **Task 4.5 (FR-03.6):** Bổ sung chức năng Dời lịch / Thay đổi lịch đặt phòng Studio (kèm check xung đột).
+  - *Kết quả thực hiện:*
+    * Backend `studioBooking.service.js` & `studioBooking.controller.js` & `studioBooking.routes.js`:
+      - Xây dựng hàm `reschedule(bookingId, data, currentUser)`:
+        + Hỗ trợ dời lịch (`startTime`, `endTime`), đổi phòng Studio (`studioName`), đổi mục đích (`purpose`), số người (`attendees`), kèm lý do dời lịch (`rescheduleReason`).
+        + Ràng buộc phân quyền RBAC: Admin dời được mọi booking; User/CTV chỉ được dời booking của chính mình (`booking.userId === currentUser.id`), chặn người khác dời lịch (403 Forbidden).
+        + Ràng buộc trạng thái: Chặn dời lịch booking đã hoàn thành (`COMPLETED`) hoặc đã hủy (`CANCELLED`) (400 Bad Request).
+        + Ràng buộc thời gian & khung giờ hoạt động: Cấm dời về quá khứ; tuân thủ nghiêm ngặt giờ mở cửa Studio LHU (Thứ Hai đến Thứ Bảy, Ca sáng 07:30–11:30, Ca chiều 13:30–16:30, đóng cửa Chủ nhật, cùng ngày).
+        + Kiểm tra xung đột & đệm 30 phút (`checkStudioConflict`): Tự động loại trừ chính booking đang dời (`excludeBookingId`); cảnh báo xung đột (warning) cho Admin với tùy chọn duyệt đè ưu tiên cấp trường (`force: true`); chặn 409 Conflict đối với User thường nếu bị trùng.
+        + Tự động lưu vết lịch sử dời lịch vào `notes` (ghi rõ thời gian dời, người thực hiện, lịch cũ ➔ lịch mới, lý do).
+        + Quy tắc chuyển trạng thái: Nếu User dời lịch khi booking đang `CONFIRMED`, tự động chuyển trạng thái về `PENDING` để Admin phê duyệt lại khung giờ mới. Nếu Admin dời lịch, bảo toàn trạng thái `CONFIRMED`.
+        + Tự động gửi thông báo in-app & email giao dịch (FR-07): Gửi `STUDIO_BOOKING_RESCHEDULED` kèm bảng chi tiết cho người đặt khi Admin dời lịch; thông báo `STUDIO_BOOKING_REQUEST` cho Admin khi User xin dời lịch.
+        + Tự động ghi vết vào `AuditLogs` (FR-09) với mô tả tiếng Việt chi tiết (kèm mã booking, lý do dời).
+      - Đăng ký endpoints: `PUT /api/studio-bookings/:id/reschedule`, `PATCH /api/studio-bookings/:id/reschedule`, `PUT /api/studio-bookings/:id`.
+    * Giao diện Quản trị Frontend (`TN-Frontend/src/app/admin/requests/page.tsx`):
+      - Bổ sung nút "Dời lịch" (icon `CalendarClock`) trực tiếp trên từng dòng đặt phòng và trong Modal xem xét chi tiết.
+      - Xây dựng Modal "Dời Lịch Đặt Phòng Studio": Hiển thị thông tin booking hiện tại, date picker chọn ngày mới (T2–T7), time picker chọn giờ bắt đầu/kết thúc (gợi ý ca sáng 07:30–11:30 & chiều 13:30–16:30), đổi phòng Studio, số người tham gia, ô nhập lý do dời lịch.
+      - Hỗ trợ hộp thoại Overlap Warning Override: Cảnh báo khi khung giờ mới có xung đột, cho phép Admin xác nhận dời đè lịch ưu tiên cấp trường (`force: true`).
+    * Giao diện Người dùng Frontend (`TN-Frontend/src/app/history/page.tsx`):
+      - Bổ sung cột "Hành động" trong bảng lịch sử đặt Studio: Hiển thị nút "Dời lịch" (`CalendarClock`) và "Hủy lịch" (`XCircle`) cho các đơn `PENDING` và `APPROVED`.
+      - Modal Dời lịch cho User: Cho phép chọn ngày và giờ mới hợp lệ, nhập lý do xin dời lịch, gửi yêu cầu dời lịch chuyển về trạng thái `PENDING` chờ duyệt.
+      - Modal Xác nhận hủy đặt phòng an toàn với cảnh báo giải phóng khung giờ.
+    * Kiểm thử tự động:
+      - Bổ sung Suite 18 vào `TN-Backend/test/unit.test.js`: **107/107 Unit Tests PASS 100%** (18 suites).
+      - Kịch bản kiểm thử E2E API thực tế `test_reschedule_studio_booking.js`: Đạt **100% PASS** bao quát tạo booking, chặn dời sang Chủ nhật (400), dời lịch hợp lệ (200), chặn user khác (403), Admin duyệt và dời lịch ưu tiên force (200).
+      - Next.js Production Build: **28/28 routes hoàn tất thành công 100%**.
+    * **KẾT LUẬN GIAI ĐOẠN 4:** Đã hoàn thành 100% tất cả 5 task của Giai đoạn 4 (Task 4.1, 4.2, 4.3, 4.4, 4.5), sẵn sàng bước vào Giai đoạn 5 (Kiểm thử tích hợp toàn diện, hồi quy & đóng gói bàn giao).
 
 ### GIAI ĐOẠN 5 (23/11 – 25/11/2026): KIỂM THỬ TÍCH HỢP TOÀN DIỆN, HỒI QUY & ĐÓNG GÓI BÀN GIAO
 - [ ] **Task 5.1:** Kiểm thử phân quyền chặt chẽ trên 3 vai trò: Nhân sự, CTV, Người dùng (kiểm tra toàn bộ API endpoints).
@@ -579,19 +668,146 @@ Mỗi module khi hoàn thành bắt buộc phải pass 100% các testcase sau:
     * Các endpoint `GET /periods/:id/deletion-check` và `DELETE /periods/:id` được bảo vệ nghiêm ngặt bởi middleware `authenticate` và `authorize('ADMIN')`.
     * CTV (`COLLABORATOR`) gọi API bị từ chối ngay lập tức với mã lỗi `403 Forbidden`.
   - **6. Kiểm thử tự động:**
-    * Script kiểm thử tích hợp `TN-Backend/scripts/test_delete_duty_period_feature.js`: **PASS 6/6 kịch bản (100%)**:
-      - Chặn CTV (403 Forbidden).
-      - Xóa sạch đợt trống.
-      - Xóa sạch đợt có CTV đăng ký nguyện vọng.
-      - Xóa sạch đợt có ca trực nháp.
-      - Xóa an toàn đợt tương lai đã xác nhận.
-      - Bảo vệ dữ liệu lịch sử Tháng 11/2026: Chặn xóa vật lý, lưu trữ thành công, bảo toàn 100% 59 bản ghi chấm công và 7 bảng thù lao.
+    * Script kiểm thử tích hợp `TN-Backend/scripts/test_delete_duty_period_feature.js`: **PASS 6/6 kịch bản (100%)**.
     * Backend Unit Tests: **89/89 tests PASS 100%**.
     * TypeScript Compilation: **0 lỗi (0 errors)**.
     * Next.js Production Build: **26/26 routes hoàn tất thành công**.
+- [x] **TC-20 (Kiểm Tra & Chuẩn Hóa Tính Lương, Hệ Số Nhân Giờ Và Ghi Chú Thống Kê Công Việc - Single Source of Truth):**
+  - **1. Chuẩn hóa công thức tính lương và hệ số nhân:**
+    * Mức đơn giá cơ bản: **20.000 VNĐ / giờ**.
+    * Danh sách chính xác 7 nhóm công việc được nhân giờ: **Chụp & xử lý hình**, **Quay phim**, **Quay highlight**, **Quay clip TikTok**, **MC bản tin**, **Thư ký trường quay**, **Diễn viên**.
+    * Các công việc thuộc 7 nhóm trên thực hiện sau 16:30 từ thứ Hai đến thứ Bảy: **nhân 1,5**. Tách rõ số giờ trong giờ (x1.0) và số giờ ngoài giờ (x1.5).
+    * Các công việc thuộc 7 nhóm trên thực hiện vào Chủ nhật: **nhân 2,0**.
+    * Nếu làm vào Chủ nhật kéo dài qua 16:30: chỉ nhân **2,0**, ưu tiên hệ số Chủ nhật, không cộng dồn hệ số (TC-06).
+    * Các công việc còn lại (Viết content, Viết kịch bản, Dựng clip highlight, Dựng clip TikTok, Dựng phim, Thiết kế...): luôn áp dụng **hệ số 1,0** chuẩn, không nhân hệ số ngoài giờ hay Chủ nhật.
+    * Tiền công tính theo số giờ thực tế được Nhân sự nghiệm thu hoàn thành (`actualHours` của task `COMPLETED`), không tính theo số dòng.
+    * Loại trừ 100% công việc chưa duyệt (`NOT_STARTED`, `IN_PROGRESS`, `PENDING_APPROVAL`, `REVISION_REQUESTED`).
+    * Khử trùng tuyệt đối giữa ca trực Studio và công việc sự vụ (TC-05).
+  - **2. Bắt buộc ghi chú và highlight công việc được nhân hệ số:**
+    * Bảng thống kê công việc (`/admin/payroll` - Tab 2): Highlight trực tiếp dòng công việc đủ điều kiện nhân hệ số (nền vàng hổ phách `bg-amber-500/10`, viền trái nổi bật `border-l-4 border-l-amber-400`, badge `Hệ số x...`).
+    * Hiển thị ghi chú chuẩn hóa tiếng Việt:
+      - `Ngoài giờ: 2,5 giờ × 1,5`
+      - `Chủ nhật: 4 giờ × 2`
+      - `Chủ nhật (ưu tiên hệ số Chủ nhật): 3 giờ × 2`
+      - Tách rõ từng khoảng giờ khi có cả trong và ngoài giờ: `Trong giờ: 2,5 giờ × 1,0; Ngoài giờ: 2 giờ × 1,5`.
+    * Cột Thực hiện (giờ): Hiển thị giờ thực tế và số giờ quy đổi (`➔ ...h quy đổi`).
+    * Cột Tổng (giờ): Hiển thị tổng giờ quy đổi của CTV kèm tổng giờ thực tế và thành tiền dự tính.
+    * File Excel xuất ra (`exportTasksSummaryExcel`): Áp dụng chuẩn xác màu nền pastel vàng hổ phách (`FFFFF3CD`), chữ cam đậm nổi bật (`FFB45309`), cột Thực hiện (Col 6), Tổng giờ quy đổi (Col 7) và Ghi chú (Col 8).
+  - **3. Đồng bộ hiển thị toàn hệ thống:**
+    * **Bảng chấm công (Tab 1):** Cột Giờ SV hiển thị chi tiết số giờ thường, giờ ngoài giờ x1.5 và giờ Chủ nhật x2.0.
+    * **Bảng lương tháng (Tab 3):** Bổ sung tab quản trị chuyên sâu với 4 thẻ KPI (Tổng ngân sách, Tổng giờ quy đổi, Tổng giờ thực tế, Số CTV nhận lương) và bảng chi tiết thù lao từng CTV đối chiếu rõ ràng số ca trực Studio, giờ sự vụ từng hệ số, tổng giờ quy đổi, đơn giá và tổng thực nhận.
+    * **Modal Chi tiết công việc (`/admin/tasks` & `/tasks`):** Hiển thị khối "Nghiệm thu & Thù lao" với thời lượng thực tế, giờ quy đổi, badge hệ số và lý do áp dụng.
+    * **Lịch trực Studio (`WeeklyDutyScheduleTable`):** Popover ký hiệu `SV` hiển thị badge hệ số nhân kèm thời lượng quy đổi.
+  - **4. Single Source of Truth & Kiểm thử tự động:**
+    * Backend tự xác định hệ số từ loại việc, ngày, thứ và thời gian thực hiện trong CSDL; không phụ thuộc vào dữ liệu Frontend gửi lên.
+    * Thống nhất 100% dữ liệu tính toán giữa Bảng thống kê công việc, Bảng chấm công, Bảng lương tháng và 2 file Excel xuất ra.
+    * Bổ sung Suite 19 vào `TN-Backend/test/unit.test.js`: **113/113 Unit Tests PASS 100%** (19 suites).
+    * Next.js Production Build: **28/28 routes hoàn tất thành công 100%**.
+- [x] **TC-21 (Bổ Sung Trường "Số Giờ Thực Hiện" Khi CTV Nộp Kết Quả Nhiệm Vụ & Đồng Bộ Nghiệm Thu):**
+  - **1. Phía CTV nộp kết quả công việc (`/tasks`):**
+    * Thêm trường nhập **"Số giờ thực hiện"** (`actualHours`) vào Modal Nộp kết quả nhiệm vụ (`submitModalOpen`).
+    * Hỗ trợ số giờ thực tế dạng số thập phân linh hoạt (step: 0.5h, min: 0.5h, max: 24h), tự động khởi tạo mặc định theo giờ của task hoặc 2 giờ.
+    * Validate dữ liệu nghiêm ngặt phía giao diện: Bắt buộc số giờ hợp lệ lớn hơn 0 trước khi gửi request.
+    * Payload gửi lên `PUT /api/tasks/:id/progress` bao gồm đầy đủ `{ status: 'PENDING_APPROVAL', resultLink, proofFile, actualHours }`.
+    * Modal Chi tiết nhiệm vụ phía CTV (`detailModalOpen`): Hiển thị khối thông tin thời lượng đã nộp kèm trạng thái *"Chờ Nhân sự nghiệm thu"*.
+  - **2. Phía Backend (`task.service.js` & CSDL MSSQL):**
+    * Hàm `updateProgress`: Trích xuất, validate và chuẩn hóa `actualHours` (kiểm tra `parsedHours > 0`, làm tròn 2 chữ số thập phân).
+    * Lưu trực tiếp vào cột `actual_hours` của bảng `Tasks` trong cơ sở dữ liệu MSSQL.
+    * Gửi thông báo in-app cho Nhân sự (Admin) với chi tiết nhiệm vụ, tên CTV nộp bài, link kết quả và số giờ CTV đề xuất.
+  - **3. Tuân thủ nghiêm ngặt quy tắc tính thù lao TC-03:**
+    * Khi ở trạng thái `PENDING_APPROVAL`, số giờ đề xuất tuyệt đối **CHƯA** được ghi nhận vào Bảng thống kê công việc (`getTasksSummaryData`), Bảng chấm công (`getTimesheetData`) hay Bảng lương tháng (`calculateMonthlyPayroll`).
+    * Chỉ sau khi Nhân sự bấm duyệt nghiệm thu thành công (`status === 'COMPLETED'`), số giờ thực tế mới chính thức được ghi nhận và áp dụng hệ số nhân giờ theo đúng quy định BPTT LHU Media.
+  - **4. Phía Nhân sự nghiệm thu (`/admin/tasks`):**
+    * Modal "Chi tiết công việc" (`detailModalOpen`): Hiển thị nổi bật khối *"Số giờ thực hiện do CTV đề xuất"* kèm thời lượng cụ thể và ghi chú hướng dẫn khi task ở trạng thái `PENDING_APPROVAL`.
+    * Modal "Nghiệm thu công việc" (`reviewModalOpen`): Tự động điền số giờ mà CTV vừa nộp vào trường "Số giờ thực tế" để Nhân sự đối chiếu, cho phép Nhân sự giữ nguyên hoặc điều chỉnh trước khi hoàn tất nghiệm thu (`COMPLETED`).
+  - **5. Kiểm thử tự động:**
+    * Bổ sung Suite 20 trong `TN-Backend/test/unit.test.js`: **PASS 5/5 kịch bản (100%)**.
+    * Toàn bộ Unit Test Backend: **118/118 tests PASS 100% (20 suites)**.
+    * Kiểm tra TypeScript Frontend: `tsc --noEmit` đạt **0 lỗi (0 errors)**.
 
 ---
 
 > [!NOTE]
 > File kế hoạch này được lưu giữ cố định tại thư mục dự án. Mọi bước triển khai tiếp theo đều phải tuân thủ nghiêm ngặt lộ trình và các nguyên tắc nêu trên.
 
+
+- [x] **TC-22 (Nâng Cấp Đăng Ký Phòng Studio - Gợi Ý Khung Giờ Còn Trống & Đặc Quyền ADMIN):**
+  - **1. Phân quyền và Quy tắc hoạt động:**
+    * USER: Tuân thủ nghiêm ngặt giờ hành chính T2–T7 (07:30–11:30 và 13:30–16:30), cấm Chủ nhật, cấm buổi tối, cấm giờ nghỉ trưa, kiểm tra đệm 30 phút.
+    * ADMIN: Được đặc quyền tạo đặt phòng ngoài khung giờ quy định (buổi tối, Chủ nhật, ngoài giờ), phục vụ các sự kiện quan trọng cấp trường. Vẫn bắt buộc kiểm tra xung đột với lịch đã có (`CONFIRMED`/`COMPLETED`/`PENDING`) kèm khoảng đệm 30 phút.
+  - **2. Thuật toán Gợi ý khung giờ còn trống (`getAvailableSlots`):**
+    * Quét toàn bộ lịch bận bao gồm cả `CONFIRMED`, `COMPLETED`, `PENDING`, `APPROVED` kèm khoảng đệm 30 phút ở cả 2 đầu.
+    * Chuẩn hóa múi giờ Việt Nam UTC+7 cho biên ngày (`vnStartOfDay` và `vnEndOfDay`).
+    * Hậu kiểm `verifiedSlots` bằng thuật toán kiểm tra tính khả dụng của slot.
+    * Ràng buộc tuyệt đối: Không gợi ý khung giờ trùng với lịch đã có.
+  - **3. Giao diện Đăng ký phòng Studio (`/studio`):**
+    * Tích hợp 2 tab "Gợi ý khung giờ còn trống" và "Tự nhập khung giờ".
+    * Badge "Đặc quyền ADMIN" cho phép Quản trị viên dễ dàng nhận biết tính năng.
+    * Calendar hiển thị đúng trạng thái: Đã duyệt (xanh), Chờ duyệt (vàng), Đã hủy (đỏ).
+  - **4. Kiểm thử tự động:**
+    * Bổ sung Suite 21 trong `unit.test.js`: Đạt **123/123 tests PASS 100%** (21 suites).
+    * TypeScript: `tsc --noEmit` đạt 0 lỗi.
+
+- [x] **TC-23 (Kiểm Tra Và Sửa Lỗi Giao Diện Tại Mục Lịch Sử Thao Tác FR-09 & NotificationBell):**
+  - **1. Khắc phục triệt để lỗi chồng lấn giao diện (CSS Stacking Context):**
+    * Nguyên nhân: `<aside>` trong `AdminLayout.tsx` có `backdrop-blur-xl` tạo Stacking Context nhưng thiếu `z-index`, khiến các phần tử `relative backdrop-blur-md` của container nội dung chính `flex-1` (thẻ "Tổng số thao tác", ô tìm kiếm) được vẽ đè lên popup thông báo.
+    * Khắc phục: Gán `relative z-40` cho `<aside>` và `relative z-30` cho mobile header, đồng thời nâng container popup lên `z-[100]`. Popup thông báo giờ đây nổi hoàn toàn và che phủ sắc nét trên mọi thành phần giao diện.
+  - **2. Tối ưu popup thông báo (`NotificationBell.tsx`):**
+    * Thêm nút đóng `[X]` trực quan ở góc phải header popup.
+    * Thêm lắng nghe sự kiện phím `Escape` để lập tức đóng popup khi người dùng nhấn Esc.
+    * Thêm giới hạn chiều cao `max-h-[min(580px,85vh)] flex flex-col` và `overscroll-contain` cho vùng danh sách, giúp cuộn độc lập mượt mà và không bao giờ tràn khỏi màn hình.
+  - **3. Chuẩn hóa bố cục trang Lịch sử thao tác (`/admin/audit-logs`):**
+    * Thẻ thống kê KPI: Responsive dạng `grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4` với padding chuẩn `p-5`, cân đối và đẹp mắt.
+    * Bộ lọc tra cứu nâng cao: Sắp xếp lại lưới `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5` với nhãn `label` phía trên rõ ràng, áp dụng `[color-scheme:dark]` cho 2 ô chọn ngày `Từ ngày` / `Đến ngày`.
+    * Bảng lịch sử thao tác: Bọc trong `overflow-x-auto` với `min-w-[1020px]`, quy định độ rộng chuẩn cho từng cột (Thời gian, Người thực hiện, Hành động, Nội dung, IP, Trạng thái, Chi tiết), đảm bảo bảng không bị co cụm hay cắt chữ.
+    * Modal xem chi tiết Audit Log: Nâng `z-[100]` và hỗ trợ đóng bằng phím `Escape`.
+  - **4. Kiểm thử:**
+    * TypeScript: `tsc --noEmit` đạt **0 lỗi (0 errors)**.
+    * Backend Tests: **123/123 tests PASS 100%**.
+
+- [x] **TC-24 (Xây Dựng Mục “Tổng Công Việc Tháng” Dành Cho CTV - Read-Only & Đồng Bộ Bảng Thống Kê ADMIN):**
+  - **1. Phân quyền và Bảo mật RBAC Backend:**
+    * Endpoint `GET /api/payroll/collaborator-summary`: Phân quyền `COLLABORATOR, ADMIN`. Tự động gán cứng `ctvUserId = req.user.id` nếu người gọi là `COLLABORATOR`, chặn tuyệt đối việc xem dữ liệu của CTV khác.
+    * Cập nhật `GET /api/payroll/tasks-summary`: Thêm tham số `targetUserId`, đảm bảo CTV chỉ lấy nhóm dữ liệu của chính mình.
+  - **2. Logic Thống kê và Hệ số (Single Source of Truth):**
+    * Dùng chung hàm `calculateTaskHoursAndMultiplier` trong `payroll.service.js`.
+    * Phân biệt rõ ràng:
+      - `Tổng giờ đã thực hiện`: Tổng số giờ thực tế đã làm cho toàn bộ công việc trong tháng.
+      - `Tổng giờ được Nhân sự xác nhận`: Tổng số giờ thực tế của các công việc đã được nghiệm thu hoàn thành (`COMPLETED`).
+      - `Tổng giờ quy đổi`: Số giờ sau khi áp dụng hệ số nhân (1.5 sau 16:30 T2-T7, 2.0 Chủ nhật).
+      - `Thù lao dự tính`: `Tổng giờ quy đổi * 20.000 VNĐ`.
+    * Highlight nổi bật (vàng hổ phách) kèm ghi chú hệ số cho công việc hoàn thành đủ điều kiện.
+    * Công việc `PENDING_APPROVAL`: Ghi chú `Chờ Nhân sự duyệt để tính hệ số`, không tính vào giờ xác nhận cho đến khi hoàn tất nghiệm thu.
+  - **3. Giao diện Frontend (`/tasks/summary`):**
+    * Trang chuyên biệt [page.tsx](file:///c:/STUDY/1.%20TOT_NGHIEP/CODE/TN-Frontend/src/app/tasks/summary/page.tsx) hoàn toàn Read-only.
+    * Bộ lọc Tháng (1..12), Năm (2025..2027) kèm nút chuyển nhanh Tháng trước/Tháng sau và Về tháng hiện tại.
+    * 4 Thẻ KPI: Tổng số công việc, Tổng giờ đã thực hiện, Tổng giờ được xác nhận, Giờ quy đổi & Thù lao dự tính.
+    * Bảng thống kê chi tiết chuẩn mẫu: STT, Ngày thực hiện, Nội dung công việc, Nhiệm vụ, Số giờ thực hiện (kèm giờ quy đổi), Trạng thái duyệt, Ghi chú & Hệ số, Nút xem chi tiết (modal).
+    * Hàng tổng kết chân bảng hiển thị tổng giờ thực tế, tổng giờ quy đổi và tổng tiền thù lao.
+    * Tích hợp điều hướng tại [Navbar.tsx](file:///c:/STUDY/1.%20TOT_NGHIEP/CODE/TN-Frontend/src/components/Navbar.tsx) và [page.tsx](file:///c:/STUDY/1.%20TOT_NGHIEP/CODE/TN-Frontend/src/app/tasks/page.tsx).
+  - **4. Kiểm thử tự động:**
+    * Bổ sung Suite 22 trong `unit.test.js`: Đạt **127/127 tests PASS 100%** (22 suites).
+    * TypeScript: `tsc --noEmit` đạt **0 lỗi (0 errors)**.
+
+
+- [x] **TC-25 (Bổ Sung Chức Năng Xác Nhận Đến Sử Dụng Studio Tại Mục Phê Duyệt Yêu Cầu Đặt Studio):**
+  - **1. CSDL & Model:**
+    * Bổ sung 3 trường `user_check_in_at` (DATETIMEOFFSET), `admin_confirmed_at` (DATETIMEOFFSET), `attendance_status` (NVARCHAR(30) DEFAULT 'NOT_ARRIVED') vào bảng `StudioBookings`.
+    * Cập nhật Model Sequelize `StudioBooking.js`.
+  - **2. Trạng thái 4 cấp độ (State Machine):**
+    * `Chưa đến ngày đặt` (FUTURE_BOOKING)
+    * `Chờ xác nhận người dùng` (WAITING_USER_CHECKIN)
+    * `Chờ ADMIN xác nhận` / `Chờ xác nhận có mặt` (WAITING_ADMIN_CONFIRM)
+    * `Đã xác nhận sử dụng` (USAGE_CONFIRMED)
+    * Kèm trường hợp: `Không đến sử dụng` / `Quá hạn` (ABSENT)
+  - **3. Backend API & Ràng buộc nghiệp vụ:**
+    * `PUT /api/studio-bookings/:id/check-in`: Người dùng xác nhận đã đến trong ngày đặt, chống trùng lặp, chuyển trạng thái "Chờ xác nhận có mặt", gửi thông báo Admin, ghi AuditLog.
+    * `PUT /api/studio-bookings/:id/confirm-usage`: Admin xác nhận đã sử dụng, chuyển `status = COMPLETED` và `attendanceStatus = ADMIN_CONFIRMED`, lưu vết ghi chú, gửi thông báo người dùng, ghi AuditLog.
+    * `PUT /api/studio-bookings/:id/mark-absent`: Admin đánh dấu người dùng vắng mặt / không đến.
+    * `computeAttendanceInfo(booking)`: Tự động tính toán trạng thái và quyền hạn check-in/xác nhận gửi kèm trong `getAll`.
+  - **4. Giao diện Frontend Admin & User:**
+    * Admin ([admin/requests/page.tsx](file:///c:/STUDY/1.%20TOT_NGHIEP/CODE/TN-Frontend/src/app/admin/requests/page.tsx)): Cột "Xác nhận sử dụng" hiển thị 4 cấp độ, nút "Xác nhận đã sử dụng" trực tiếp trên dòng danh sách và trong modal chi tiết, hiển thị mốc thời gian người dùng check-in và Admin xác nhận.
+    * User ([history/page.tsx](file:///c:/STUDY/1.%20TOT_NGHIEP/CODE/TN-Frontend/src/app/history/page.tsx)): Cột "Xác nhận sử dụng", nút "Xác nhận đã đến" tự động sáng vào đúng ngày đặt phòng.
+  - **5. Kiểm thử tự động:**
+    * Bổ sung Unit Test Suite 23 trong `unit.test.js`: Đạt **133/133 tests PASS 100%** (23 suites).
+    * TypeScript: `tsc --noEmit` đạt **0 lỗi (0 errors)**.
