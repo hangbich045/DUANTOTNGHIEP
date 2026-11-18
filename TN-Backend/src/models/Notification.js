@@ -44,6 +44,48 @@ module.exports = (sequelize) => {
         defaultValue: false,
         field: 'is_read',
       },
+      senderName: {
+        type: DataTypes.STRING(150),
+        allowNull: true,
+        field: 'sender_name',
+      },
+      recipientEmail: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        field: 'recipient_email',
+      },
+      emailStatus: {
+        type: DataTypes.STRING(20),
+        allowNull: false,
+        defaultValue: 'PENDING',
+        field: 'email_status',
+      },
+      emailSentAt: {
+        type: DataTypes.DATE,
+        allowNull: true,
+        field: 'email_sent_at',
+      },
+      emailError: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        field: 'email_error',
+      },
+      emailRetryCount: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 0,
+        field: 'email_retry_count',
+      },
+      emailMessageId: {
+        type: DataTypes.STRING(255),
+        allowNull: true,
+        field: 'email_message_id',
+      },
+      emailMetadata: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        field: 'email_metadata',
+      },
     },
     {
       tableName: 'Notifications',
@@ -55,6 +97,9 @@ module.exports = (sequelize) => {
         },
         {
           fields: ['created_at'],
+        },
+        {
+          fields: ['email_status'],
         },
       ],
     }

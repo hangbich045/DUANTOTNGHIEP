@@ -357,7 +357,47 @@ const syncDatabase = async () => {
      * alter:true trên MSSQL sinh cú pháp ALTER TABLE không hợp lệ.
      * Khi thêm cột mới: tự DROP bảng trong SSMS rồi restart server.
      */
+    // Đảm bảo các cột theo dõi trạng thái gửi email tồn tại TRƯỚC khi sequelize.sync tạo index trên bảng Notifications cũ
+    try {
+      await sequelize.query(`
+        IF OBJECT_ID('Notifications', 'U') IS NOT NULL
+        BEGIN
+          IF COL_LENGTH('Notifications', 'sender_name') IS NULL
+            ALTER TABLE Notifications ADD sender_name NVARCHAR(150) NULL;
+          IF COL_LENGTH('Notifications', 'recipient_email') IS NULL
+            ALTER TABLE Notifications ADD recipient_email NVARCHAR(255) NULL;
+          IF COL_LENGTH('Notifications', 'email_status') IS NULL
+            ALTER TABLE Notifications ADD email_status NVARCHAR(20) NOT NULL CONSTRAINT DF_Notifications_EmailStatus DEFAULT 'SKIPPED';
+          IF COL_LENGTH('Notifications', 'email_sent_at') IS NULL
+            ALTER TABLE Notifications ADD email_sent_at DATETIMEOFFSET NULL;
+          IF COL_LENGTH('Notifications', 'email_error') IS NULL
+            ALTER TABLE Notifications ADD email_error NVARCHAR(MAX) NULL;
+          IF COL_LENGTH('Notifications', 'email_retry_count') IS NULL
+            ALTER TABLE Notifications ADD email_retry_count INT NOT NULL CONSTRAINT DF_Notifications_EmailRetry DEFAULT 0;
+          IF COL_LENGTH('Notifications', 'email_message_id') IS NULL
+            ALTER TABLE Notifications ADD email_message_id NVARCHAR(255) NULL;
+          IF COL_LENGTH('Notifications', 'email_metadata') IS NULL
+            ALTER TABLE Notifications ADD email_metadata NVARCHAR(MAX) NULL;
+        END
+      `);
+    } catch (notifColErr) {
+      console.warn('Lưu ý kiểm tra cột email tracking trên Notifications:', notifColErr.message);
+    }
+
     await sequelize.sync({ force: false });
+
+    // Đảm bảo cột theme_preference tồn tại trên bảng Users (idempotent migration, không làm mất dữ liệu cũ)
+    try {
+      await sequelize.query(`
+        IF COL_LENGTH('Users', 'theme_preference') IS NULL
+        BEGIN
+          ALTER TABLE Users ADD theme_preference NVARCHAR(10) NOT NULL CONSTRAINT DF_Users_ThemePreference DEFAULT 'dark';
+        END
+      `);
+    } catch (colErr) {
+      console.warn('Lưu ý kiểm tra cột theme_preference trên Users:', colErr.message);
+    }
+
     console.log('✅ Database đã được đồng bộ thành công!');
   } catch (error) {
     console.error('❌ Lỗi khi đồng bộ database:', error.message);

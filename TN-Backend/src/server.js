@@ -69,11 +69,17 @@ const PORT = parseInt(process.env.PORT) || 5000;
  * Cho phép Next.js (chạy trên localhost:3000) gọi API sang localhost:5000
  * Trong production: thay '*' bằng URL thực của frontend
  */
+const extraOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
   'http://localhost:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3000',
+  ...extraOrigins,
 ];
 
 // Cho phép Private Network Access cho cả OPTIONS preflight và direct requests
@@ -87,7 +93,8 @@ app.use(cors({
     // Cho phép request không có origin (Postman, curl, server-to-server)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(null, true); // Dev mode: cho phép tất cả
+    if (process.env.NODE_ENV !== 'production') return callback(null, true);
+    return callback(new Error(`Origin không được phép bởi CORS: ${origin}`));
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,

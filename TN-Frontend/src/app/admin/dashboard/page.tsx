@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import {
@@ -26,7 +27,6 @@ import {
   Flame,
   ShieldAlert,
 } from 'lucide-react';
-import Cookies from 'js-cookie';
 
 interface UrgentTaskItem {
   id: string;
@@ -133,12 +133,21 @@ export default function AdminDashboardPage() {
 
   // Excel Export Dialog states
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportRange, setExportRange] = useState<'month' | 'year' | 'month-year' | 'custom'>('month');
+  const [exportRange, setExportRange] = useState<'week' | 'month' | 'year' | 'month-year' | 'custom'>('month');
   const [exportStartDate, setExportStartDate] = useState('');
   const [exportEndDate, setExportEndDate] = useState('');
   const [exportMonth, setExportMonth] = useState(new Date().getMonth() + 1);
   const [exportYear, setExportYear] = useState(new Date().getFullYear());
   const [exporting, setExporting] = useState(false);
+
+  const openExportDialog = () => {
+    setExportRange(range);
+    if (range === 'custom') {
+      setExportStartDate(startDate);
+      setExportEndDate(endDate);
+    }
+    setExportDialogOpen(true);
+  };
 
   // Report data states
   const [reports, setReports] = useState<ReportData | null>(null);
@@ -197,29 +206,10 @@ export default function AdminDashboardPage() {
         query += `&month=${exportMonth}&year=${exportYear}`;
       }
 
-      const token = Cookies.get('token');
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-
-      const response = await fetch(`${BASE_URL}/reports/export-excel${query}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Không thể tải file báo cáo. Vui lòng thử lại.');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `bao-cao-tong-hop-${exportRange}-${Date.now()}.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
+      await api.download(
+        `/reports/export-excel${query}`,
+        `LHU_Media_Bao_Cao_Tong_Hop_${exportRange}.xlsx`
+      );
 
       toast('Xuất báo cáo Excel thành công!', 'success');
       setExportDialogOpen(false);
@@ -323,11 +313,11 @@ export default function AdminDashboardPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">Thống Kê & Báo Cáo</h1>
             <p className="text-sm text-studio-muted mt-1">
-              Trung tâm giám sát toàn diện thiết bị, công việc CTV và thù lao theo thời gian thực.
+              Tổng quan tình hình thiết bị, công việc CTV và thù lao.
             </p>
           </div>
           <button
-            onClick={() => setExportDialogOpen(true)}
+            onClick={openExportDialog}
             className="flex items-center justify-center space-x-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:opacity-95 text-white font-bold px-5 py-3 rounded-2xl shadow-lg shadow-emerald-500/10 transition-all transform hover:-translate-y-0.5 cursor-pointer self-start sm:self-auto text-sm"
           >
             <ClipboardList className="w-5 h-5" />
@@ -345,7 +335,7 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wider text-studio-muted flex items-center space-x-2">
                 <Briefcase className="w-4 h-4 text-brand-primary" />
-                <span>Thống kê Công việc & Thù lao CTV (FR-08)</span>
+                <span>Thống kê Công việc & Thù lao CTV</span>
               </h2>
               <div className="flex items-center space-x-3 text-xs">
                 <Link
@@ -628,19 +618,15 @@ export default function AdminDashboardPage() {
           </div>
 
           {range === 'custom' && (
-            <div className="flex items-center space-x-2 self-start md:self-auto">
-              <input
-                type="date"
+            <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+              <DatePickerVN
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="bg-black/45 border border-white/5 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-primary/50"
+                onChange={setStartDate}
               />
               <span className="text-xs text-studio-muted">đến</span>
-              <input
-                type="date"
+              <DatePickerVN
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="bg-black/45 border border-white/5 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-primary/50"
+                onChange={setEndDate}
               />
             </div>
           )}
@@ -1021,11 +1007,25 @@ export default function AdminDashboardPage() {
                     className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
                     disabled={exporting}
                   >
+                    <option value="week">Tuần này</option>
                     <option value="month">Tháng này</option>
                     <option value="year">Năm này</option>
                     <option value="month-year">Chọn cụ thể Tháng/Năm</option>
                     <option value="custom">Khoảng thời gian tùy chọn</option>
                   </select>
+                </div>
+
+                {/* Danh sách 6 sheet có trong file xuất */}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 space-y-1.5 text-[11px] text-studio-muted">
+                  <p className="font-bold text-white/90">Nội dung file Excel bao gồm 6 sheet đồng bộ:</p>
+                  <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-1 list-disc list-inside">
+                    <li>Tổng quan chỉ số toàn hệ thống</li>
+                    <li>Công việc trễ hạn &amp; Thù lao CTV</li>
+                    <li>Lượt hoạt động &amp; Top thiết bị</li>
+                    <li>Đơn mượn / trả thiết bị</li>
+                    <li>Đặt phòng Studio (4 cấp độ)</li>
+                    <li>Danh sách thiết bị &amp; tồn kho</li>
+                  </ul>
                 </div>
 
                 {/* Specific Month/Year inputs */}
@@ -1069,27 +1069,25 @@ export default function AdminDashboardPage() {
 
                 {/* Custom date range inputs */}
                 {exportRange === 'custom' && (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-studio-muted uppercase">Từ ngày</label>
-                      <input
-                        type="date"
+                      <label className="text-[11px] font-bold text-studio-muted uppercase block">Từ ngày</label>
+                      <DatePickerVN
                         value={exportStartDate}
-                        onChange={(e) => setExportStartDate(e.target.value)}
-                        className="w-full bg-black/35 border border-white/5 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:border-brand-primary/50"
+                        onChange={setExportStartDate}
                         disabled={exporting}
                         required
+                        className="w-full"
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[11px] font-bold text-studio-muted uppercase">Đến ngày</label>
-                      <input
-                        type="date"
+                      <label className="text-[11px] font-bold text-studio-muted uppercase block">Đến ngày</label>
+                      <DatePickerVN
                         value={exportEndDate}
-                        onChange={(e) => setExportEndDate(e.target.value)}
-                        className="w-full bg-black/35 border border-white/5 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:border-brand-primary/50"
+                        onChange={setExportEndDate}
                         disabled={exporting}
                         required
+                        className="w-full"
                       />
                     </div>
                   </div>

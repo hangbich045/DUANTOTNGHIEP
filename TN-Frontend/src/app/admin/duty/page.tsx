@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/context/AuthContext';
 import api from '@/lib/api';
@@ -17,10 +18,7 @@ import {
   X,
   Loader2,
   Sparkles,
-  Info,
-  ArrowRight,
   RefreshCcw,
-  UserCheck,
   Check,
   AlertTriangle,
   Lock,
@@ -28,7 +26,6 @@ import {
   ShieldCheck,
   CalendarDays,
   Send,
-  Eye,
   Trash2,
   Filter,
   Search,
@@ -360,7 +357,7 @@ export default function AdminDutyManagementPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi tạo đợt đăng ký', 'error');
@@ -433,7 +430,7 @@ export default function AdminDutyManagementPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi xóa đợt đăng ký', 'error');
@@ -501,7 +498,7 @@ export default function AdminDutyManagementPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi lưu phân công ca trực', 'error');
@@ -537,7 +534,7 @@ export default function AdminDutyManagementPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi xóa ca trực', 'error');
@@ -576,7 +573,7 @@ export default function AdminDutyManagementPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi xác nhận lịch trực', 'error');
@@ -643,10 +640,6 @@ export default function AdminDutyManagementPage() {
         {/* Top Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-xs font-semibold mb-2">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Quy trình Quản lý Ca trực Studio CTV (FR-05)</span>
-            </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Quản lý ca trực</h1>
             <p className="text-xs sm:text-sm text-studio-muted mt-1 max-w-2xl leading-relaxed">
               Khởi tạo đợt đăng ký ca trực tháng mới, tiếp nhận thời gian có thể trực của CTV, sắp xếp phân công, điều chỉnh và chốt lịch trực chính thức.
@@ -1389,14 +1382,13 @@ export default function AdminDutyManagementPage() {
                       Mặc định: Ngày tạo + 2 ngày
                     </span>
                   </div>
-                  <input
-                    type="date"
+                  <DatePickerVN
                     value={newDeadline}
-                    onChange={(e) => {
-                      setNewDeadline(e.target.value);
+                    onChange={(val) => {
+                      setNewDeadline(val);
                       setIsDeadlineUserModified(true);
                     }}
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
+                    className="w-full"
                   />
                   <p className="text-[10px] text-studio-muted mt-1 leading-normal">
                     Mặc định hạn chót: ngày {new Date().getDate() + 2}/{newMonth}/{newYear} (2 ngày sau ngày tạo bảng theo tháng/năm lịch trực). Bạn có thể chủ động chỉnh sửa ngày khác.
@@ -1664,7 +1656,7 @@ export default function AdminDutyManagementPage() {
                         : 'Xác Nhận Xóa Đợt Đăng Ký'}
                     </h3>
                     <p className="text-xs text-studio-muted mt-0.5">
-                      Tháng {deletingPeriod.month}/{deletingPeriod.year} &bull; Phân hệ Quản lý ca trực
+                      Tháng {deletingPeriod.month}/{deletingPeriod.year} &bull; Đợt đăng ký ca trực
                     </p>
                   </div>
                 </div>

@@ -181,7 +181,7 @@ export default function AdminHomepageGalleryPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-white tracking-tight">Thư viện ảnh Trang chủ</h1>
             <p className="text-sm text-studio-muted mt-1">
-              Quản lý hình ảnh studio hiển thị trong phần gallery.
+              Quản lý hình ảnh studio hiển thị trên trang chủ.
             </p>
           </div>
           <button

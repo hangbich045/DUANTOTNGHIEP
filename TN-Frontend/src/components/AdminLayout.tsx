@@ -1,12 +1,13 @@
 'use client';
 
 import Image from "next/image";
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import Link from 'next/link';
 import NotificationBell from '@/components/NotificationBell';
+import ThemeToggle from '@/components/common/ThemeToggle';
 import {
   LayoutDashboard,
   Camera,
@@ -24,31 +25,101 @@ import {
   Calendar,
   History,
   Wrench,
+  FolderTree,
+  Briefcase,
+  Settings,
+  ChevronDown,
 } from 'lucide-react';
 
-const sidebarLinks = [
-  { href: '/admin/dashboard', label: 'Thống kê tổng quan', icon: LayoutDashboard },
-  { href: '/admin/equipment', label: 'Quản lý Thiết bị', icon: Camera },
-  { href: '/admin/equipment/maintenance', label: 'Bảo trì & Thanh lý', icon: Wrench },
-  { href: '/admin/requests', label: 'Duyệt yêu cầu', icon: ClipboardList },
-  { href: '/admin/tasks', label: 'Quản lý Công việc', icon: CheckSquare },
-  { href: '/admin/duty', label: 'Quản lý Ca trực', icon: Calendar },
-  { href: '/admin/payroll', label: 'Chấm công & Thù lao', icon: Calculator },
-  { href: '/admin/users', label: 'Quản lý Thành viên', icon: Users },
-  { href: '/admin/audit-logs', label: 'Lịch sử thao tác', icon: History },
+interface NavLinkItem {
+  href: string;
+  label: string;
+  icon: React.ElementType;
+  exact?: boolean;
+}
+
+type SidebarMenuItem =
+  | ({ type: 'link'; id: string } & NavLinkItem)
+  | {
+      type: 'group';
+      id: string;
+      label: string;
+      icon: React.ElementType;
+      children: NavLinkItem[];
+    };
+
+const sidebarMenu: SidebarMenuItem[] = [
+  {
+    type: 'link',
+    id: 'dashboard',
+    href: '/admin/dashboard',
+    label: 'Thống kê tổng quan',
+    icon: LayoutDashboard,
+    exact: true,
+  },
+  {
+    type: 'link',
+    id: 'requests',
+    href: '/admin/requests',
+    label: 'Duyệt yêu cầu',
+    icon: ClipboardList,
+  },
+  {
+    type: 'group',
+    id: 'equipment',
+    label: 'Quản lý Thiết bị',
+    icon: Camera,
+    children: [
+      { href: '/admin/equipment', label: 'Danh sách thiết bị', icon: Camera, exact: true },
+      { href: '/admin/categories', label: 'Danh mục thiết bị', icon: FolderTree },
+      { href: '/admin/equipment/maintenance', label: 'Bảo trì & Thanh lý', icon: Wrench },
+    ],
+  },
+  {
+    type: 'group',
+    id: 'operations',
+    label: 'Công việc & Ca trực',
+    icon: Briefcase,
+    children: [
+      { href: '/admin/tasks', label: 'Quản lý Công việc', icon: CheckSquare },
+      { href: '/admin/duty', label: 'Quản lý Ca trực', icon: Calendar },
+      { href: '/admin/payroll', label: 'Chấm công & Thù lao', icon: Calculator },
+    ],
+  },
+  {
+    type: 'group',
+    id: 'cms',
+    label: 'Quản lý Nội dung',
+    icon: Globe,
+    children: [
+      { href: '/admin/cms', label: 'Nội dung Trang chủ', icon: Globe, exact: true },
+      { href: '/admin/cms/services', label: 'Dịch vụ Trang chủ', icon: LayoutGrid },
+      { href: '/admin/cms/gallery', label: 'Thư viện ảnh', icon: Images },
+    ],
+  },
+  {
+    type: 'group',
+    id: 'system',
+    label: 'Quản trị Hệ thống',
+    icon: Settings,
+    children: [
+      { href: '/admin/users', label: 'Quản lý Thành viên', icon: Users },
+      { href: '/admin/audit-logs', label: 'Lịch sử thao tác', icon: History },
+    ],
+  },
 ];
 
-const contentManagementLinks = [
-  { href: '/admin/cms', label: 'Nội dung Trang chủ', icon: Globe },
-  { href: '/admin/cms/services', label: 'Dịch vụ Trang chủ', icon: LayoutGrid },
-  { href: '/admin/cms/gallery', label: 'Thư viện ảnh', icon: Images },
-];
+const allMobileLinks: NavLinkItem[] = sidebarMenu.flatMap((item) =>
+  item.type === 'link' ? [item] : item.children
+);
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
   const { toast } = useToast();
+  const [manualOpenGroups, setManualOpenGroups] = useState<Record<string, boolean>>({});
+  const [pathOverrides, setPathOverrides] = useState<Record<string, { path: string; open: boolean }>>({});
 
   useEffect(() => {
     if (!loading) {
@@ -62,12 +133,31 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [user, loading, router, toast]);
 
-  const isActive = (href: string) =>
-    href === '/admin/cms'
-      ? pathname === href
-      : pathname === href || pathname.startsWith(`${href}/`);
+  const isLinkActive = (link: NavLinkItem) =>
+    link.exact
+      ? pathname === link.href
+      : pathname === link.href || pathname.startsWith(`${link.href}/`);
 
-  const isContentActive = contentManagementLinks.some((link) => isActive(link.href));
+  const isGroupActive = (children: NavLinkItem[]) =>
+    children.some((child) => isLinkActive(child));
+
+  const isGroupExpanded = (groupId: string, children: NavLinkItem[]) => {
+    const override = pathOverrides[groupId];
+    if (override && override.path === pathname) {
+      return override.open;
+    }
+    if (isGroupActive(children)) {
+      return true;
+    }
+    return Boolean(manualOpenGroups[groupId]);
+  };
+
+  const toggleGroup = (groupId: string, children: NavLinkItem[]) => {
+    const currentlyOpen = isGroupExpanded(groupId, children);
+    const nextOpen = !currentlyOpen;
+    setManualOpenGroups((prev) => ({ ...prev, [groupId]: nextOpen }));
+    setPathOverrides((prev) => ({ ...prev, [groupId]: { path: pathname, open: nextOpen } }));
+  };
 
   if (loading) {
     return (
@@ -96,32 +186,51 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  const renderNavLink = (link: { href: string; label: string; icon: React.ElementType }) => {
+  const renderTopLink = (link: NavLinkItem) => {
     const Icon = link.icon;
-    const active = isActive(link.href);
+    const active = isLinkActive(link);
 
     return (
       <Link
         key={link.href}
         href={link.href}
-        className={`flex items-center space-x-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all ${active
-          ? 'bg-brand-primary/15 text-brand-primary border border-brand-primary/20 shadow-md shadow-brand-primary/5'
-          : 'text-studio-muted hover:bg-white/5 hover:text-white border border-transparent'
-          }`}
+        className={`flex items-center space-x-3 px-4 py-3 rounded-2xl text-sm font-semibold transition-all ${
+          active
+            ? 'bg-brand-primary/15 text-brand-primary border border-brand-primary/20 shadow-md shadow-brand-primary/5'
+            : 'text-studio-muted hover:bg-white/5 hover:text-white border border-transparent'
+        }`}
       >
-        <Icon className="w-4.5 h-4.5" />
-        <span>{link.label}</span>
+        <Icon className="w-4.5 h-4.5 shrink-0" />
+        <span className="truncate">{link.label}</span>
       </Link>
     );
   };
 
-  const allMobileLinks = [...sidebarLinks, ...contentManagementLinks];
+  const renderSubLink = (link: NavLinkItem) => {
+    const Icon = link.icon;
+    const active = isLinkActive(link);
+
+    return (
+      <Link
+        key={link.href}
+        href={link.href}
+        className={`flex items-center space-x-2.5 px-3.5 py-2.5 rounded-xl text-[13px] font-semibold transition-all ${
+          active
+            ? 'bg-brand-primary/15 text-brand-primary border border-brand-primary/20 shadow-sm shadow-brand-primary/5'
+            : 'text-studio-muted hover:bg-white/5 hover:text-white border border-transparent'
+        }`}
+      >
+        <Icon className="w-4 h-4 shrink-0" />
+        <span className="truncate">{link.label}</span>
+      </Link>
+    );
+  };
 
   return (
     <div className="min-h-screen flex bg-studio-dark">
-      <aside className="w-72 border-r border-white/5 bg-black/40 backdrop-blur-xl flex flex-col justify-between p-6 shrink-0 hidden md:flex relative z-40">
-        <div className="space-y-8">
-          <div className="flex items-center justify-between pl-1">
+      <aside className="w-72 border-r border-white/5 bg-black/40 backdrop-blur-xl flex flex-col justify-between p-6 shrink-0 hidden md:flex sticky top-0 h-screen z-40">
+        <div className="flex flex-col min-h-0 space-y-6">
+          <div className="flex items-center justify-between pl-1 shrink-0">
             <Link href="/" className="flex items-center space-x-2">
               <div className="w-11 h-11 flex items-center justify-center">
                 <Image
@@ -137,30 +246,61 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 LHU <span className="text-gradient">MEDIA</span>
               </span>
             </Link>
-            <NotificationBell align="left" />
+            <div className="flex items-center space-x-2 shrink-0">
+              <ThemeToggle />
+              <NotificationBell align="left" />
+            </div>
           </div>
 
-          <nav className="space-y-6 text-left">
-            <div className="space-y-2">
-              <span className="text-[10px] font-bold tracking-widest text-studio-muted/70 uppercase pl-3 block mb-4">
-                Hệ thống Quản trị
-              </span>
-              {sidebarLinks.map(renderNavLink)}
-            </div>
+          <nav className="flex-1 overflow-y-auto pr-1 space-y-1.5 text-left">
+            <span className="text-[10px] font-bold tracking-widest text-studio-muted/70 uppercase pl-3 block mb-3">
+              Hệ thống Quản trị
+            </span>
 
-            <div className="space-y-2">
-              <span
-                className={`text-[10px] font-bold tracking-widest uppercase pl-3 block mb-4 ${isContentActive ? 'text-brand-primary/80' : 'text-studio-muted/70'
-                  }`}
-              >
-                Quản lý Nội dung
-              </span>
-              {contentManagementLinks.map(renderNavLink)}
-            </div>
+            {sidebarMenu.map((item) => {
+              if (item.type === 'link') {
+                return renderTopLink(item);
+              }
+
+              const GroupIcon = item.icon;
+              const groupActive = isGroupActive(item.children);
+              const expanded = isGroupExpanded(item.id, item.children);
+
+              return (
+                <div key={item.id} className="space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(item.id, item.children)}
+                    aria-expanded={expanded}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer ${
+                      groupActive
+                        ? 'bg-brand-primary/10 text-brand-primary border border-brand-primary/20'
+                        : 'text-studio-muted hover:bg-white/5 hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <span className="flex items-center space-x-3 min-w-0">
+                      <GroupIcon className="w-4.5 h-4.5 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </span>
+                    <ChevronDown
+                      className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
+                        expanded ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {expanded && (
+                    <div className="ml-5 pl-3 border-l border-white/10 space-y-1 py-1">
+                      {item.children.map(renderSubLink)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </nav>
         </div>
 
-        <div className="space-y-4 pt-6 border-t border-white/5">
+        <div className="space-y-4 pt-5 border-t border-white/5 shrink-0">
           <div className="flex items-center space-x-3 bg-white/5 p-3 rounded-2xl border border-white/5">
             {user.avatarUrl ? (
               <img
@@ -216,6 +356,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className="font-extrabold text-base tracking-tight text-white">ADMIN PANEL</span>
           </Link>
           <div className="flex items-center space-x-2 overflow-x-auto">
+            <ThemeToggle />
             <NotificationBell align="right" />
             {allMobileLinks.map((link) => {
               const Icon = link.icon;
@@ -223,10 +364,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <Link
                   key={link.href}
                   href={link.href}
-                  className={`p-2 rounded-xl border shrink-0 ${isActive(link.href)
-                    ? 'bg-brand-primary/20 border-brand-primary text-brand-primary'
-                    : 'border-white/5 text-studio-muted hover:text-white'
-                    }`}
+                  className={`p-2 rounded-xl border shrink-0 ${
+                    isLinkActive(link)
+                      ? 'bg-brand-primary/20 border-brand-primary text-brand-primary'
+                      : 'border-white/5 text-studio-muted hover:text-white'
+                  }`}
                   title={link.label}
                 >
                   <Icon className="w-4 h-4" />

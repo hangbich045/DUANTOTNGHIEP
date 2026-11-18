@@ -120,7 +120,7 @@ export default function HomePage() {
       <Navbar />
 
       {showHero && (
-        <section className="relative h-[calc(100vh-73px)] min-h-[600px] flex items-center justify-center overflow-hidden">
+        <section data-hero-dark="true" className="relative h-[calc(100vh-73px)] min-h-[600px] flex items-center justify-center overflow-hidden bg-[#0F111A]">
           {content?.heroVideoUrl && (
             <video
               autoPlay
@@ -239,9 +239,9 @@ export default function HomePage() {
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-6" />
-                  <div className="absolute bottom-6 left-6 translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                  <div data-force-light-text="true" className="absolute bottom-6 left-6 translate-y-4 group-hover:translate-y-0 opacity-0 group-hover:opacity-100 transition-all duration-300">
                     <h4 className="text-lg font-bold text-white">{image.title}</h4>
-                    <p className="text-xs text-brand-primary font-medium">LHU Media Studio</p>
+                    <p className="text-xs text-brand-accent font-medium">LHU Media Studio</p>
                   </div>
                 </div>
               ))}

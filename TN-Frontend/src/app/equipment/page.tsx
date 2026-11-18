@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
@@ -481,23 +482,17 @@ export default function UserEquipmentPage() {
                           <span>Ngày giờ mượn</span>
                         </label>
                         <div className="flex gap-2">
+                          <DatePickerVN
+                            value={borrowDateOnly}
+                            onChange={setBorrowDateOnly}
+                            disabled={submitting}
+                            required
+                            className="flex-1"
+                            inputClassName="min-w-0 py-2.5"
+                          />
                           <div 
-                            className="flex-1 flex items-center space-x-2 bg-black/35 border border-white/5 rounded-xl px-3 py-2.5 cursor-pointer focus-within:border-brand-primary/50 transition-all"
-                            onClick={(e) => { try { e.currentTarget.querySelector('input')?.showPicker(); } catch (err) {} }}
-                          >
-                            <Calendar className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-                            <input
-                              type="date"
-                              value={borrowDateOnly}
-                              onChange={(e) => setBorrowDateOnly(e.target.value)}
-                              className="bg-transparent text-xs text-white focus:outline-none w-full cursor-pointer [color-scheme:dark]"
-                              disabled={submitting}
-                              required
-                            />
-                          </div>
-                          <div 
-                            className="w-[42%] flex items-center space-x-2 bg-black/35 border border-white/5 rounded-xl px-3 py-2.5 cursor-pointer focus-within:border-brand-primary/50 transition-all"
-                            onClick={(e) => { try { e.currentTarget.querySelector('input')?.showPicker(); } catch (err) {} }}
+                            className="w-[42%] flex items-center space-x-2 bg-black/50 border border-white/15 rounded-xl px-3 py-2.5 cursor-pointer focus-within:border-brand-primary transition-all"
+                            onClick={(e) => { try { e.currentTarget.querySelector('input')?.showPicker(); } catch {} }}
                           >
                             <Clock className="w-3.5 h-3.5 text-brand-primary shrink-0" />
                             <input
@@ -537,23 +532,17 @@ export default function UserEquipmentPage() {
                           <span>Ngày giờ trả</span>
                         </label>
                         <div className="flex gap-2">
+                          <DatePickerVN
+                            value={returnDateOnly}
+                            onChange={setReturnDateOnly}
+                            disabled={submitting}
+                            required
+                            className="flex-1"
+                            inputClassName="min-w-0 py-2.5"
+                          />
                           <div 
-                            className="flex-1 flex items-center space-x-2 bg-black/35 border border-white/5 rounded-xl px-3 py-2.5 cursor-pointer focus-within:border-brand-primary/50 transition-all"
-                            onClick={(e) => { try { e.currentTarget.querySelector('input')?.showPicker(); } catch (err) {} }}
-                          >
-                            <Calendar className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-                            <input
-                              type="date"
-                              value={returnDateOnly}
-                              onChange={(e) => setReturnDateOnly(e.target.value)}
-                              className="bg-transparent text-xs text-white focus:outline-none w-full cursor-pointer [color-scheme:dark]"
-                              disabled={submitting}
-                              required
-                            />
-                          </div>
-                          <div 
-                            className="w-[42%] flex items-center space-x-2 bg-black/35 border border-white/5 rounded-xl px-3 py-2.5 cursor-pointer focus-within:border-brand-primary/50 transition-all"
-                            onClick={(e) => { try { e.currentTarget.querySelector('input')?.showPicker(); } catch (err) {} }}
+                            className="w-[42%] flex items-center space-x-2 bg-black/50 border border-white/15 rounded-xl px-3 py-2.5 cursor-pointer focus-within:border-brand-primary transition-all"
+                            onClick={(e) => { try { e.currentTarget.querySelector('input')?.showPicker(); } catch {} }}
                           >
                             <Clock className="w-3.5 h-3.5 text-brand-primary shrink-0" />
                             <input

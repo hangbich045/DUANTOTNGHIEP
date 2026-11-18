@@ -11,6 +11,7 @@ interface User {
   role: 'ADMIN' | 'USER' | 'COLLABORATOR';
   employeeCode: string;
   avatarUrl?: string;
+  themePreference?: 'dark' | 'light';
 }
 
 interface AuthContextType {
@@ -20,6 +21,7 @@ interface AuthContextType {
   register: (data: any) => Promise<any>;
   logout: () => void;
   setSession: (accessToken: string, userData: User) => void;
+  updateUser: (patch: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -34,11 +36,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (userCookie && tokenCookie) {
       try {
         setUser(JSON.parse(userCookie));
-      } catch (e) {
+      } catch {
         Cookies.remove('user');
         Cookies.remove('token');
       }
       setLoading(false);
+      // Đồng bộ ngầm profile mới nhất từ server (bao gồm themePreference đa thiết bị)
+      api.get('/auth/profile')
+        .then((res) => {
+          const fresh = res?.data || res;
+          if (fresh && fresh.id) {
+            Cookies.set('user', JSON.stringify(fresh), { expires: 7 });
+            setUser(fresh as User);
+          }
+        })
+        .catch(() => {
+          // giữ nguyên phiên cache nếu mạng tạm gián đoạn
+        });
       return;
     }
     if (tokenCookie && !userCookie) {
@@ -101,8 +115,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(userData);
   };
 
+  const updateUser = (patch: Partial<User>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const merged = { ...prev, ...patch };
+      Cookies.set('user', JSON.stringify(merged), { expires: 7 });
+      return merged;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, setSession }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, setSession, updateUser }}>
       {children}
     </AuthContext.Provider>
   );

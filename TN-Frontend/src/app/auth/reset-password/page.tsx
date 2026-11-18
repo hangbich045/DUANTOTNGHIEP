@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useToast } from '@/context/ToastContext';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
+import api from '@/lib/api';
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState('');
@@ -47,14 +48,7 @@ export default function ResetPasswordPage() {
 
     setSubmitting(true);
     try {
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-      const res = await fetch(`${BASE_URL}/auth/reset-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp, newPassword }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Đặt lại mật khẩu thất bại');
+      const data = await api.post('/auth/reset-password', { email, otp, newPassword });
 
       // Update state in context and store accessToken in cookies
       setSession(data.accessToken, data.user);

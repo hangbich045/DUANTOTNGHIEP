@@ -5,8 +5,9 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { Menu, X, LogOut, LayoutDashboard, Calendar, Camera, History, Home, User, CheckSquare, FileSpreadsheet } from 'lucide-react';
+import { Menu, X, LogOut, LayoutDashboard, Calendar, Camera, History, Home, CheckSquare } from 'lucide-react';
 import NotificationBell from '@/components/NotificationBell';
+import ThemeToggle from '@/components/common/ThemeToggle';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -24,10 +25,7 @@ export default function Navbar() {
     { href: '/studio', label: 'Đặt phòng Studio', icon: Calendar },
     ...(user ? [{ href: '/history', label: 'Lịch sử của tôi', icon: History }] : []),
     ...(user && (user.role === 'COLLABORATOR' || user.role === 'ADMIN')
-      ? [
-          { href: '/tasks', label: 'Nhiệm vụ của tôi', icon: CheckSquare },
-          { href: '/tasks/summary', label: 'Tổng công việc tháng', icon: FileSpreadsheet },
-        ]
+      ? [{ href: '/tasks', label: 'Nhiệm vụ của tôi', icon: CheckSquare }]
       : []),
   ];
 
@@ -81,7 +79,8 @@ export default function Navbar() {
       </div>
 
       {/* Desktop auth buttons / user panel */}
-      <div className="hidden md:flex items-center space-x-4">
+      <div className="hidden md:flex items-center space-x-3">
+        <ThemeToggle />
         {user ? (
           <div className="flex items-center space-x-3">
             <NotificationBell />
@@ -134,8 +133,9 @@ export default function Navbar() {
         )}
       </div>
 
-      {/* Mobile controls (Notification Bell + Hamburger menu) */}
+      {/* Mobile controls (Theme Toggle + Notification Bell + Hamburger menu) */}
       <div className="flex md:hidden items-center space-x-2">
+        <ThemeToggle />
         {user && <NotificationBell />}
         <button
           onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

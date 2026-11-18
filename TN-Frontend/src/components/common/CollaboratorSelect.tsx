@@ -1,8 +1,8 @@
 'use strict';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import api from '@/lib/api';
-import { Users, Loader2, Search, UserCheck, AlertCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 export interface CollaboratorItem {
   id: string;
@@ -49,7 +49,6 @@ export default function CollaboratorSelect({
 }: CollaboratorSelectProps) {
   const [collaborators, setCollaborators] = useState<CollaboratorItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   // Mặc định allowAll = true nếu mục đích là 'filter', false nếu là 'assign'
   const isAllowAll = allowAll !== undefined ? allowAll : purpose === 'filter';
@@ -60,7 +59,6 @@ export default function CollaboratorSelect({
 
     const fetchList = async () => {
       setLoading(true);
-      setError(null);
       try {
         const queryPurpose = purpose;
         const queryStatus = status || (purpose === 'assign' ? 'Active' : 'ALL');
@@ -94,7 +92,6 @@ export default function CollaboratorSelect({
       } catch (err: any) {
         if (isMounted) {
           console.error('Lỗi khi tải danh sách CTV:', err);
-          setError(err.message || 'Không thể tải danh sách CTV');
         }
       } finally {
         if (isMounted) {

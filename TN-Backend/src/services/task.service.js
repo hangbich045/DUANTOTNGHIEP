@@ -202,6 +202,8 @@ const createTask = async (data, currentUser) => {
     .createNotification({
       userId: assignedToUserId,
       userEmail: assignee.email,
+      recipientName: assignee.fullName,
+      senderName: currentUser.fullName || 'Nhân sự Studio',
       title: '📋 Bạn được giao nhiệm vụ mới',
       message: `Nhân sự Studio vừa giao nhiệm vụ "${title.trim()}" cho bạn${formattedDeadline ? `. Hạn chót: ${new Date(formattedDeadline).toLocaleDateString('vi-VN')}` : ''
         }.`,
@@ -211,7 +213,9 @@ const createTask = async (data, currentUser) => {
       detailRows: [
         { label: 'Tên nhiệm vụ', value: title.trim() },
         { label: 'Loại công việc', value: taskType === 'Khác' ? `Khác (${finalOtherTaskType})` : (taskType || 'Mặc định') },
-        { label: 'Hạn hoàn thành', value: formattedDeadline ? new Date(formattedDeadline).toLocaleString('vi-VN') : 'Không giới hạn' },
+        ...(formattedStartTime ? [{ label: 'Thời gian bắt đầu', value: new Date(formattedStartTime).toLocaleString('vi-VN') }] : []),
+        ...(formattedDeadline ? [{ label: 'Hạn hoàn thành', value: new Date(formattedDeadline).toLocaleString('vi-VN') }] : []),
+        ...(finalLocation ? [{ label: 'Địa điểm thực hiện', value: finalLocation }] : []),
         { label: 'Người giao', value: currentUser.fullName || 'Nhân sự Studio' },
       ],
     })
@@ -295,14 +299,15 @@ const createExternalTask = async (data, currentUser) => {
   // Ghi chú nghiệp vụ: Khi CTV khai báo việc ngoài hệ thống, nhiệm vụ lưu ở trạng thái PENDING_APPROVAL.
   // Tuyệt đối KHÔNG ghi nhận chấm công hoặc tính giờ thù lao trước khi Nhân sự nghiệm thu chính thức!
 
-  // Thông báo in-app cho Nhân sự (Admin) biết có CTV khai báo việc ngoài hệ thống (FR-07)
+  // Thông báo in-app và email cho Nhân sự (Admin) biết có CTV khai báo việc ngoài hệ thống (FR-07)
   notificationService
     .notifyAdmins({
+      senderName: currentUser.fullName || 'Cộng tác viên',
       title: `📝 CTV ${currentUser.fullName} khai báo việc ngoài hệ thống`,
       message: `Cộng tác viên ${currentUser.fullName} vừa khai báo công việc ngoài hệ thống: "${title.trim()}". Vui lòng kiểm tra và nghiệm thu.`,
       type: 'TASK_SUBMITTED',
       link: '/admin/tasks',
-      sendEmail: false,
+      sendEmail: true,
       detailRows: [
         { label: 'Nhiệm vụ', value: title.trim() },
         { label: 'CTV thực hiện', value: currentUser.fullName },
@@ -468,12 +473,33 @@ const updateProgress = async (id, data, currentUser) => {
 
   const { status, resultLink, proofFile } = data;
 
-  // Luồng 1: CTV bắt đầu thực hiện (NOT_STARTED -> IN_PROGRESS hoặc REVISION_REQUESTED -> IN_PROGRESS)
+  // Luồng 1: CTV bắt đầu thực hiện / cập nhật tiến độ (NOT_STARTED -> IN_PROGRESS hoặc REVISION_REQUESTED -> IN_PROGRESS)
+  const prevStatus = task.status;
   if (status === 'IN_PROGRESS') {
     if (!['NOT_STARTED', 'REVISION_REQUESTED', 'IN_PROGRESS'].includes(task.status)) {
       throw new Error(`Không thể chuyển sang Đang thực hiện từ trạng thái '${task.status}'`);
     }
     task.status = 'IN_PROGRESS';
+
+    // Thông báo in-app + email cho Nhân sự (Admin) khi CTV bắt đầu hoặc cập nhật tiến độ công việc
+    notificationService
+      .notifyAdmins({
+        senderName: currentUser.fullName || 'Cộng tác viên',
+        title: `🔄 CTV ${currentUser.fullName} cập nhật tiến độ công việc`,
+        message:
+          prevStatus === 'REVISION_REQUESTED'
+            ? `Cộng tác viên ${currentUser.fullName} đã bắt đầu chỉnh sửa lại nhiệm vụ "${task.title}" theo yêu cầu.`
+            : `Cộng tác viên ${currentUser.fullName} đã bắt đầu thực hiện nhiệm vụ "${task.title}".`,
+        type: 'TASK_IN_PROGRESS',
+        link: '/admin/tasks',
+        sendEmail: true,
+        detailRows: [
+          { label: 'Nhiệm vụ', value: task.title },
+          { label: 'CTV thực hiện', value: currentUser.fullName || 'Cộng tác viên' },
+          { label: 'Trạng thái mới', value: 'Đang thực hiện' },
+        ],
+      })
+      .catch(() => { });
   }
 
   // Luồng 2: CTV nộp duyệt kết quả (-> PENDING_APPROVAL)
@@ -501,14 +527,15 @@ const updateProgress = async (id, data, currentUser) => {
       task.actualHours = Math.round(parsedHours * 100) / 100;
     }
 
-    // Gửi thông báo in-app cho Nhân sự (Admin) biết CTV đã nộp kết quả duyệt (FR-07)
+    // Gửi thông báo in-app và email cho Nhân sự (Admin) biết CTV đã nộp kết quả duyệt (FR-07)
     notificationService
       .notifyAdmins({
+        senderName: currentUser.fullName || 'Cộng tác viên',
         title: `📬 CTV ${currentUser.fullName} nộp kết quả công việc`,
         message: `Cộng tác viên ${currentUser.fullName} đã hoàn thành và nộp kết quả cho nhiệm vụ "${task.title}". Vui lòng kiểm tra và nghiệm thu.`,
         type: 'TASK_SUBMITTED',
         link: '/admin/tasks',
-        sendEmail: false,
+        sendEmail: true,
         detailRows: [
           { label: 'Nhiệm vụ', value: task.title },
           { label: 'CTV nộp bài', value: currentUser.fullName },
@@ -603,6 +630,7 @@ const reviewTask = async (id, data, currentUser) => {
     notificationService
       .createNotification({
         userId: task.assignedToUserId,
+        senderName: currentUser.fullName || 'Nhân sự Studio',
         title: '🎉 Công việc đã được nghiệm thu hoàn thành',
         message: `Nhiệm vụ "${task.title}" của bạn đã được Nhân sự Studio nghiệm thu đạt yêu cầu và ghi nhận vào bảng thống kê công việc${data.actualHours ? ` (${data.actualHours} giờ)` : ''
           }.`,
@@ -613,7 +641,7 @@ const reviewTask = async (id, data, currentUser) => {
           { label: 'Nhiệm vụ', value: task.title },
           { label: 'Thời gian hoàn thành', value: new Date().toLocaleString('vi-VN') },
           { label: 'Số giờ công tính', value: `${data.actualHours !== undefined ? data.actualHours : task.actualHours || 0} giờ` },
-          { label: 'Trạng thái', value: 'HOÀN THÀNH (COMPLETED)' },
+          { label: 'Trạng thái', value: 'Đã nghiệm thu hoàn thành' },
         ],
       })
       .catch(() => { });
@@ -631,6 +659,7 @@ const reviewTask = async (id, data, currentUser) => {
     notificationService
       .createNotification({
         userId: task.assignedToUserId,
+        senderName: currentUser.fullName || 'Nhân sự Studio',
         title: '⚠️ Yêu cầu chỉnh sửa sản phẩm nhiệm vụ',
         message: `Nhân sự Studio yêu cầu chỉnh sửa nhiệm vụ "${task.title}". Lý do: ${feedback.trim()}`,
         type: 'TASK_REVISION_REQUESTED',

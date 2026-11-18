@@ -149,6 +149,17 @@ const User = sequelize.define(
       allowNull: true,
       field: 'otp_expiry',
     },
+
+    // Tùy chọn giao diện Sáng / Tối của từng tài khoản (đồng bộ đa thiết bị)
+    themePreference: {
+      type: DataTypes.STRING(10),
+      defaultValue: 'dark',
+      allowNull: false,
+      field: 'theme_preference',
+      validate: {
+        isIn: { args: [['dark', 'light']], msg: 'Theme phải là dark hoặc light' },
+      },
+    },
   },
   {
     // ===== OPTIONS =====

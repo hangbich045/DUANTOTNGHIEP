@@ -271,4 +271,21 @@ const getAllUsers = async (req, res) => {
   }
 };
 
-module.exports = { register, login, getProfile, updateProfile, getAllUsers };
+const updateTheme = async (req, res) => {
+  try {
+    const theme = req.body?.theme || req.body?.themePreference;
+    const result = await authService.updateThemePreference(req.user.id, theme);
+    return res.status(200).json({
+      success: true,
+      message: 'Đã lưu tùy chọn giao diện!',
+      data: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+module.exports = { register, login, getProfile, updateProfile, updateTheme, getAllUsers };

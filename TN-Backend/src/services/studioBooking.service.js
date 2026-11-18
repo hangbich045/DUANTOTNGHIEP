@@ -6,9 +6,10 @@
  */
 
 const { Op } = require('sequelize');
-const { StudioBooking, User } = require('../models');
+const { sequelize, StudioBooking, User } = require('../models');
 const notificationService = require('./notification.service');
 const auditLogService = require('./auditLog.service');
+const { acquireAppLock } = require('../utils/dbLock.util');
 
 // Khoảng đệm tối thiểu giữa 2 ca đặt phòng Studio: 30 phút
 const BUFFER_MS = 30 * 60 * 1000;
@@ -129,7 +130,7 @@ const validateOperatingHours = (startTime, endTime, role = null) => {
  * Hai khoảng [startA, endA] và [startB, endB] vi phạm khi:
  * (startB < endA + 30m) && (endB > startA - 30m)
  */
-const checkStudioConflict = async (studioName, startTime, endTime, excludeBookingId = null) => {
+const checkStudioConflict = async (studioName, startTime, endTime, excludeBookingId = null, transaction = null) => {
   const bufferedStart = new Date(new Date(startTime).getTime() - BUFFER_MS);
   const bufferedEnd = new Date(new Date(endTime).getTime() + BUFFER_MS);
 
@@ -147,6 +148,7 @@ const checkStudioConflict = async (studioName, startTime, endTime, excludeBookin
   return await StudioBooking.findOne({
     where,
     order: [['start_time', 'ASC']],
+    ...(transaction ? { transaction } : {}),
   });
 };
 
@@ -262,15 +264,17 @@ const create = async (data, userId, currentUser = null) => {
     status: 'PENDING',
   });
 
-  // Gửi thông báo in-app cho Admin biết có yêu cầu đặt phòng Studio mới (FR-07)
+  // Gửi thông báo in-app và email cho Admin biết có yêu cầu đặt phòng Studio mới (FR-07)
   notificationService
     .notifyAdmins({
+      senderName: fullName || 'Người dùng hệ thống',
       title: '📅 Yêu cầu đặt phòng Studio mới',
-      message: `Có yêu cầu đặt phòng "${studioName}" cho mục đích "${data.purpose}" (${attendees} người). Khung giờ: ${new Date(data.startTime).toLocaleString('vi-VN')} - ${new Date(data.endTime).toLocaleTimeString('vi-VN')}.`,
+      message: `${fullName || 'Người dùng'} vừa gửi yêu cầu đặt phòng "${studioName}" cho mục đích "${data.purpose}" (${attendees} người). Khung giờ: ${new Date(data.startTime).toLocaleString('vi-VN')} - ${new Date(data.endTime).toLocaleTimeString('vi-VN')}.`,
       type: 'STUDIO_BOOKING_REQUEST',
-      link: '/admin/bookings',
-      sendEmail: false,
+      link: '/admin/requests',
+      sendEmail: true,
       detailRows: [
+        { label: 'Người đăng ký', value: fullName || 'Người dùng hệ thống' },
         { label: 'Phòng Studio', value: studioName },
         { label: 'Mục đích', value: data.purpose },
         { label: 'Số người', value: `${attendees} người` },
@@ -292,83 +296,117 @@ const create = async (data, userId, currentUser = null) => {
  * @param {Object} [options] - { force?: boolean, adminNote?: string }
  */
 const processBooking = async (bookingId, action, cancelReason = null, options = {}) => {
-  const booking = await StudioBooking.findByPk(bookingId);
+  // Thực thi trong Transaction kèm khóa độc quyền theo phòng Studio (chống race condition khi duyệt trùng lịch)
+  const txResult = await sequelize.transaction(async (t) => {
+    const initialBooking = await StudioBooking.findByPk(bookingId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
 
-  if (!booking) {
-    const error = new Error('Booking không tồn tại.');
-    error.statusCode = 404;
-    throw error;
-  }
-
-  if (booking.status !== 'PENDING') {
-    const error = new Error(`Booking đã ở trạng thái "${booking.status}", không thể xử lý lại.`);
-    error.statusCode = 400;
-    throw error;
-  }
-
-  if (action === 'confirm') {
-    // Backend kiểm tra xung đột lại tại thời điểm duyệt để tránh xác nhận trùng lịch
-    const conflict = await checkStudioConflict(
-      booking.studioName,
-      booking.startTime,
-      booking.endTime,
-      booking.id
-    );
-
-    if (conflict && !options.force) {
-      return {
-        status: 'warning',
-        message: `Phòng "${booking.studioName}" đã có lịch khác được xác nhận trong cùng khung giờ hoặc vi phạm khoảng đệm 30 phút (từ ${formatVNTime(conflict.startTime)} đến ${formatVNTime(conflict.endTime)}). Bạn có chắc chắn muốn duyệt đè lịch (hoạt động ưu tiên cấp trường)?`,
-        conflictBookingId: conflict.id,
-      };
+    if (!initialBooking) {
+      const error = new Error('Booking không tồn tại.');
+      error.statusCode = 404;
+      throw error;
     }
 
-    const updatedNotes = options.adminNote
-      ? (booking.notes ? `${booking.notes}\n[Ghi chú duyệt]: ${options.adminNote}` : options.adminNote)
-      : booking.notes;
+    await acquireAppLock(sequelize, `studio_room_${String(initialBooking.studioName || 'default').slice(0, 100)}`, t);
 
-    await booking.update({ status: 'CONFIRMED', notes: updatedNotes });
+    const booking = await StudioBooking.findByPk(bookingId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
 
-    // Gửi thông báo in-app và email xác nhận duyệt đặt phòng cho người dùng (FR-07)
+    if (!booking) {
+      const error = new Error('Booking không tồn tại.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    if (booking.status !== 'PENDING') {
+      const error = new Error(`Booking đã ở trạng thái "${booking.status}", không thể xử lý lại.`);
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (action === 'confirm') {
+      // Backend kiểm tra xung đột lại ngay trong Transaction sau khi đã giữ khóa phòng
+      const conflict = await checkStudioConflict(
+        booking.studioName,
+        booking.startTime,
+        booking.endTime,
+        booking.id,
+        t
+      );
+
+      if (conflict && !options.force) {
+        return {
+          warning: true,
+          payload: {
+            status: 'warning',
+            message: `Phòng "${booking.studioName}" đã có lịch khác được xác nhận trong cùng khung giờ hoặc vi phạm khoảng đệm 30 phút (từ ${formatVNTime(conflict.startTime)} đến ${formatVNTime(conflict.endTime)}). Bạn có chắc chắn muốn duyệt đè lịch (hoạt động ưu tiên cấp trường)?`,
+            conflictBookingId: conflict.id,
+          },
+        };
+      }
+
+      const updatedNotes = options.adminNote
+        ? (booking.notes ? `${booking.notes}\n[Ghi chú duyệt]: ${options.adminNote}` : options.adminNote)
+        : booking.notes;
+
+      await booking.update({ status: 'CONFIRMED', notes: updatedNotes }, { transaction: t });
+      return { warning: false, booking, action: 'confirm' };
+    } else if (action === 'cancel') {
+      await booking.update({ status: 'CANCELLED', cancelReason }, { transaction: t });
+      return { warning: false, booking, action: 'cancel' };
+    } else {
+      const error = new Error('Action không hợp lệ. Chỉ chấp nhận "confirm" hoặc "cancel".');
+      error.statusCode = 400;
+      throw error;
+    }
+  });
+
+  if (txResult.warning) {
+    return txResult.payload;
+  }
+
+  const booking = txResult.booking;
+
+  // Gửi thông báo in-app và email SAU khi transaction đã commit để không giữ khóa CSDL
+  if (txResult.action === 'confirm') {
     notificationService
       .createNotification({
         userId: booking.userId,
-        title: '✅ Lịch đặt phòng Studio đã được xác nhận',
-        message: `Lịch đặt phòng "${booking.studioName}" cho mục đích "${booking.purpose}" của bạn đã được Quản trị viên duyệt xác nhận thành công.`,
+        senderName: 'Quản trị viên LHU Media Studio',
+        title: '✅ Lịch đặt phòng Studio đã được duyệt',
+        message: `Lịch đặt phòng "${booking.studioName}" cho mục đích "${booking.purpose}" của bạn đã được Quản trị viên phê duyệt thành công.`,
         type: 'STUDIO_BOOKING_APPROVED',
-        link: '/profile',
+        link: '/history',
         sendEmail: true,
         detailRows: [
           { label: 'Phòng Studio', value: booking.studioName },
           { label: 'Mục đích', value: booking.purpose },
           { label: 'Thời gian', value: `${new Date(booking.startTime).toLocaleString('vi-VN')} – ${new Date(booking.endTime).toLocaleTimeString('vi-VN')}` },
-          { label: 'Trạng thái', value: 'ĐÃ XÁC NHẬN (CONFIRMED)' },
+          { label: 'Trạng thái', value: 'Đã duyệt' },
         ],
       })
       .catch(() => {});
-  } else if (action === 'cancel') {
-    await booking.update({ status: 'CANCELLED', cancelReason });
-
-    // Gửi thông báo in-app và email từ chối đặt phòng cho người dùng (FR-07)
+  } else if (txResult.action === 'cancel') {
     notificationService
       .createNotification({
         userId: booking.userId,
+        senderName: 'Quản trị viên LHU Media Studio',
         title: '❌ Lịch đặt phòng Studio không được duyệt',
         message: `Lịch đặt phòng "${booking.studioName}" của bạn đã bị từ chối/hủy bỏ.${cancelReason ? ` Lý do: ${cancelReason}` : ''}`,
         type: 'STUDIO_BOOKING_REJECTED',
-        link: '/profile',
+        link: '/history',
         sendEmail: true,
         detailRows: [
           { label: 'Phòng Studio', value: booking.studioName },
           { label: 'Lý do từ chối', value: cancelReason || 'Không có lý do chi tiết' },
-          { label: 'Trạng thái', value: 'ĐÃ HỦY (CANCELLED)' },
+          { label: 'Trạng thái', value: 'Đã hủy' },
         ],
       })
       .catch(() => {});
-  } else {
-    const error = new Error('Action không hợp lệ. Chỉ chấp nhận "confirm" hoặc "cancel".');
-    error.statusCode = 400;
-    throw error;
   }
 
   return booking;
@@ -401,6 +439,24 @@ const cancelByUser = async (bookingId, userId) => {
   }
 
   await booking.update({ status: 'CANCELLED', cancelReason: 'Người dùng tự huỷ' });
+
+  // Thông báo in-app và email cho Admin biết người dùng đã tự hủy lịch đặt phòng
+  notificationService
+    .notifyAdmins({
+      senderName: booking.fullName || 'Người dùng hệ thống',
+      title: '🚫 Người dùng đã hủy lịch đặt phòng Studio',
+      message: `${booking.fullName || 'Người dùng'} đã tự hủy lịch đặt phòng "${booking.studioName}" (${new Date(booking.startTime).toLocaleString('vi-VN')} – ${new Date(booking.endTime).toLocaleTimeString('vi-VN')}). Khung giờ đã được giải phóng.`,
+      type: 'STUDIO_BOOKING_CANCELLED',
+      link: '/admin/requests',
+      sendEmail: true,
+      detailRows: [
+        { label: 'Phòng Studio', value: booking.studioName },
+        { label: 'Người đặt', value: booking.fullName || 'Người dùng' },
+        { label: 'Khung giờ đã hủy', value: `${new Date(booking.startTime).toLocaleString('vi-VN')} – ${new Date(booking.endTime).toLocaleTimeString('vi-VN')}` },
+      ],
+    })
+    .catch(() => {});
+
   return booking;
 };
 
@@ -506,6 +562,7 @@ const reschedule = async (bookingId, data, currentUser) => {
     notificationService
       .createNotification({
         userId: booking.userId,
+        senderName: currentUser.fullName || 'Quản trị viên LHU Media Studio',
         title: '🔄 Lịch đặt phòng Studio đã được dời lịch',
         message: `Quản trị viên đã thay đổi lịch đặt phòng "${newStudioName}" của bạn sang: ${newTimeStr}.${rescheduleReason ? ` Lý do: ${rescheduleReason}` : ''}`,
         type: 'STUDIO_BOOKING_RESCHEDULED',
@@ -516,18 +573,19 @@ const reschedule = async (bookingId, data, currentUser) => {
           { label: 'Lịch cũ', value: oldTimeStr },
           { label: 'Lịch mới', value: newTimeStr },
           { label: 'Lý do dời lịch', value: rescheduleReason || 'Điều phối lịch Studio' },
-          { label: 'Trạng thái', value: newStatus === 'CONFIRMED' ? 'ĐÃ XÁC NHẬN (CONFIRMED)' : 'CHỜ DUYỆT (PENDING)' },
+          { label: 'Trạng thái', value: newStatus === 'CONFIRMED' ? 'Đã duyệt' : 'Chờ duyệt' },
         ],
       })
       .catch(() => {});
   } else {
     notificationService
       .notifyAdmins({
+        senderName: booking.booker?.fullName || booking.fullName || 'Người đặt phòng',
         title: '🔄 Yêu cầu dời lịch đặt phòng Studio',
         message: `Người dùng "${booking.booker?.fullName || 'Người đặt'}" đã dời lịch đặt phòng "${newStudioName}" sang: ${newTimeStr}.${rescheduleReason ? ` Lý do: ${rescheduleReason}` : ''}`,
         type: 'STUDIO_BOOKING_REQUEST',
         link: '/admin/requests',
-        sendEmail: false,
+        sendEmail: true,
         detailRows: [
           { label: 'Phòng Studio', value: newStudioName },
           { label: 'Người đặt', value: booking.booker?.fullName || 'N/A' },
@@ -1050,20 +1108,21 @@ const checkIn = async (bookingId, currentUser, reqInfo = {}) => {
 
   const bookerName = booking.booker?.fullName || booking.fullName || 'Người đặt';
 
-  // Gửi thông báo đến ADMIN
+  // Gửi thông báo in-app và email đến ADMIN
   notificationService
     .notifyAdmins({
+      senderName: bookerName,
       title: '📍 Người dùng đã xác nhận đến Studio',
       message: `Người dùng "${bookerName}" đã xác nhận có mặt sử dụng phòng "${booking.studioName}" theo lịch ngày ${bookingTimeInfo.dateString} (${formatVNTime(booking.startTime)}). Vui lòng kiểm tra và xác nhận sử dụng.`,
       type: 'STUDIO_USER_CHECKED_IN',
       link: '/admin/requests',
-      sendEmail: false,
+      sendEmail: true,
       detailRows: [
         { label: 'Phòng Studio', value: booking.studioName },
         { label: 'Người dùng', value: bookerName },
         { label: 'Khung giờ đặt', value: `${new Date(booking.startTime).toLocaleTimeString('vi-VN')} – ${new Date(booking.endTime).toLocaleTimeString('vi-VN')}` },
         { label: 'Thời gian xác nhận đến', value: formatVNTime(now) },
-        { label: 'Trạng thái', value: 'Chờ ADMIN xác nhận (Chờ xác nhận có mặt)' },
+        { label: 'Trạng thái', value: 'Chờ Quản trị viên xác nhận có mặt' },
       ],
     })
     .catch(() => {});
@@ -1147,10 +1206,11 @@ const confirmUsage = async (bookingId, currentUser, options = {}, reqInfo = {}) 
     notes: updatedNotes,
   });
 
-  // Gửi thông báo đến người đặt phòng
+  // Gửi thông báo in-app và email đến người đặt phòng
   notificationService
     .createNotification({
       userId: booking.userId,
+      senderName: currentUser.fullName || 'Quản trị viên LHU Media Studio',
       title: '🎉 Hoàn tất xác nhận sử dụng Studio',
       message: `Quản trị viên đã xác nhận bạn đã hoàn tất buổi sử dụng phòng "${booking.studioName}" theo lịch đặt lúc ${formatVNTime(booking.startTime)}.`,
       type: 'STUDIO_USAGE_CONFIRMED',
@@ -1159,8 +1219,8 @@ const confirmUsage = async (bookingId, currentUser, options = {}, reqInfo = {}) 
       detailRows: [
         { label: 'Phòng Studio', value: booking.studioName },
         { label: 'Khung giờ', value: `${new Date(booking.startTime).toLocaleTimeString('vi-VN')} – ${new Date(booking.endTime).toLocaleTimeString('vi-VN')} (${formatVNTime(booking.startTime).split(' ngày ')[1]})` },
-        { label: 'Thời gian Admin xác nhận', value: formatVNTime(now) },
-        { label: 'Trạng thái', value: 'ĐÃ XÁC NHẬN SỬ DỤNG (HOÀN THÀNH)' },
+        { label: 'Thời gian xác nhận', value: formatVNTime(now) },
+        { label: 'Trạng thái', value: 'Đã xác nhận sử dụng' },
       ],
     })
     .catch(() => {});
@@ -1220,6 +1280,24 @@ const markAbsent = async (bookingId, currentUser, options = {}, reqInfo = {}) =>
     attendanceStatus: 'ABSENT',
     notes: updatedNotes,
   });
+
+  // Gửi thông báo in-app và email cho người đặt phòng về việc đánh dấu vắng mặt
+  notificationService
+    .createNotification({
+      userId: booking.userId,
+      senderName: currentUser.fullName || 'Quản trị viên LHU Media Studio',
+      title: '⚠️ Ghi nhận không đến sử dụng Studio',
+      message: `Lịch đặt phòng "${booking.studioName}" lúc ${formatVNTime(booking.startTime)} của bạn đã được ghi nhận trạng thái vắng mặt. Lý do: ${reason}`,
+      type: 'STUDIO_BOOKING_ABSENT',
+      link: '/history',
+      sendEmail: true,
+      detailRows: [
+        { label: 'Phòng Studio', value: booking.studioName },
+        { label: 'Khung giờ đăng ký', value: formatVNTime(booking.startTime) },
+        { label: 'Ghi chú', value: reason },
+      ],
+    })
+    .catch(() => {});
 
   auditLogService
     .recordLog({

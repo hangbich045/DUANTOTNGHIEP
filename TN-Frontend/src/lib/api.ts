@@ -6,7 +6,8 @@ const getBaseUrl = () => {
     // Trong trình duyệt, ưu tiên gọi qua Next.js proxy rewrite /api để tránh CORS/PNA
     return '/api';
   }
-  return 'http://127.0.0.1:5000/api';
+  const internalUrl = (process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
+  return `${internalUrl}/api`;
 };
 
 class ApiClient {
@@ -117,6 +118,69 @@ class ApiClient {
     }
     const response = await fetch(`${getBaseUrl()}${endpoint}`, options);
     return this.handleResponse(response);
+  }
+
+  /**
+   * Tải file nhị phân (.xlsx, .pdf, ...) kèm JWT Authorization header qua Next.js proxy /api.
+   * Tự động đọc lỗi JSON nếu server trả về lỗi và trích xuất tên file chuẩn từ Content-Disposition.
+   */
+  async download(endpoint: string, fallbackFilename = 'export.xlsx'): Promise<string> {
+    const headers: HeadersInit = {};
+    const token = Cookies.get('token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${getBaseUrl()}${endpoint}`, {
+      method: 'GET',
+      headers,
+      cache: 'no-store',
+    });
+
+    if (response.status === 401) {
+      Cookies.remove('token');
+      Cookies.remove('user');
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/auth')) {
+        window.location.href = '/auth/login';
+      }
+      throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.');
+    }
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => null);
+      throw new Error(errData?.message || `Không thể tải file (Mã lỗi ${response.status}).`);
+    }
+
+    // Trích xuất tên file từ header Content-Disposition nếu có
+    let filename = fallbackFilename;
+    const disposition = response.headers.get('Content-Disposition');
+    if (disposition) {
+      const utf8Match = disposition.match(/filename\*=UTF-8''([^;\n]+)/i);
+      if (utf8Match && utf8Match[1]) {
+        filename = decodeURIComponent(utf8Match[1].trim());
+      } else {
+        const simpleMatch = disposition.match(/filename="?([^";\n]+)"?/i);
+        if (simpleMatch && simpleMatch[1]) {
+          filename = simpleMatch[1].trim();
+        }
+      }
+    }
+
+    const blob = await response.blob();
+    if (!blob || blob.size === 0) {
+      throw new Error('File xuất ra bị trống. Vui lòng thử lại.');
+    }
+
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+
+    return filename;
   }
 }
 

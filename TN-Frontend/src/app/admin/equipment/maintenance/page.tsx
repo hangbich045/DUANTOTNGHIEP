@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import {
@@ -119,7 +120,7 @@ export default function EquipmentMaintenancePage() {
 
   // Phân trang
   const [page, setPage] = useState(1);
-  const [limit, setLimit] = useState(15);
+  const limit = 15;
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
 
@@ -458,10 +459,6 @@ export default function EquipmentMaintenancePage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2 text-brand-primary text-xs font-bold uppercase tracking-wider mb-1">
-              <Wrench className="w-4 h-4" />
-              <span>Quản lý Tài sản &amp; Kế toán Studio (FR-01.5)</span>
-            </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
               Bảo trì, Sửa chữa &amp; Thanh lý Thiết bị
             </h1>
@@ -660,28 +657,28 @@ export default function EquipmentMaintenancePage() {
             {/* Start Date */}
             <div>
               <label className="text-[11px] text-studio-muted block mb-1">Từ ngày:</label>
-              <input
-                type="date"
+              <DatePickerVN
                 value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
+                onChange={(val) => {
+                  setStartDate(val);
                   setPage(1);
                 }}
-                className="w-full bg-studio-dark/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-primary"
+                clearable
+                className="w-full"
               />
             </div>
 
             {/* End Date */}
             <div>
               <label className="text-[11px] text-studio-muted block mb-1">Đến ngày:</label>
-              <input
-                type="date"
+              <DatePickerVN
                 value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
+                onChange={(val) => {
+                  setEndDate(val);
                   setPage(1);
                 }}
-                className="w-full bg-studio-dark/70 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-primary"
+                clearable
+                className="w-full"
               />
             </div>
           </div>
@@ -980,10 +977,10 @@ export default function EquipmentMaintenancePage() {
                       required
                       className="w-full bg-studio-dark/80 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary cursor-pointer"
                     >
-                      <option value="MAINTENANCE" className="bg-studio-card text-white">Bảo trì định kỳ (MAINTENANCE)</option>
-                      <option value="REPAIR" className="bg-studio-card text-white">Sửa chữa sự cố (REPAIR)</option>
-                      <option value="LOST" className="bg-studio-card text-white">Báo mất thiết bị (LOST)</option>
-                      <option value="DISPOSAL" className="bg-studio-card text-white">Thanh lý / Tiêu hủy (DISPOSAL)</option>
+                      <option value="MAINTENANCE" className="bg-studio-card text-white">Bảo trì định kỳ</option>
+                      <option value="REPAIR" className="bg-studio-card text-white">Sửa chữa sự cố</option>
+                      <option value="LOST" className="bg-studio-card text-white">Báo mất thiết bị</option>
+                      <option value="DISPOSAL" className="bg-studio-card text-white">Thanh lý / Tiêu hủy</option>
                     </select>
                   </div>
                 </div>
@@ -1066,11 +1063,11 @@ export default function EquipmentMaintenancePage() {
                     <label className="text-[11px] font-bold text-studio-muted block mb-1">
                       Ngày xuất hóa đơn / Ngày lập chứng từ:
                     </label>
-                    <input
-                      type="date"
+                    <DatePickerVN
                       value={invoiceDate}
-                      onChange={(e) => setInvoiceDate(e.target.value)}
-                      className="w-full bg-studio-dark/80 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary"
+                      onChange={setInvoiceDate}
+                      clearable
+                      className="w-full"
                     />
                   </div>
                 </div>
@@ -1105,12 +1102,11 @@ export default function EquipmentMaintenancePage() {
                     <label className="text-[11px] font-bold text-studio-muted block mb-1">
                       Ngày bắt đầu:
                     </label>
-                    <input
-                      type="date"
+                    <DatePickerVN
                       value={formStartDate}
-                      onChange={(e) => setFormStartDate(e.target.value)}
+                      onChange={setFormStartDate}
                       required
-                      className="w-full bg-studio-dark/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-primary"
+                      className="w-full"
                     />
                   </div>
 
@@ -1118,11 +1114,11 @@ export default function EquipmentMaintenancePage() {
                     <label className="text-[11px] font-bold text-studio-muted block mb-1">
                       Ngày hoàn thành (nếu có):
                     </label>
-                    <input
-                      type="date"
+                    <DatePickerVN
                       value={formEndDate}
-                      onChange={(e) => setFormEndDate(e.target.value)}
-                      className="w-full bg-studio-dark/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-primary"
+                      onChange={setFormEndDate}
+                      clearable
+                      className="w-full"
                     />
                   </div>
 
@@ -1135,9 +1131,9 @@ export default function EquipmentMaintenancePage() {
                       onChange={(e: any) => setFormStatus(e.target.value)}
                       className="w-full bg-studio-dark/80 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-primary cursor-pointer"
                     >
-                      <option value="IN_PROGRESS" className="bg-studio-card text-white">Đang xử lý (IN_PROGRESS)</option>
-                      <option value="COMPLETED" className="bg-studio-card text-white">Đã hoàn thành (COMPLETED)</option>
-                      <option value="CANCELLED" className="bg-studio-card text-white">Đã hủy bỏ (CANCELLED)</option>
+                      <option value="IN_PROGRESS" className="bg-studio-card text-white">Đang xử lý</option>
+                      <option value="COMPLETED" className="bg-studio-card text-white">Đã hoàn thành</option>
+                      <option value="CANCELLED" className="bg-studio-card text-white">Đã hủy bỏ</option>
                     </select>
                   </div>
                 </div>

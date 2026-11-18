@@ -162,7 +162,6 @@
 const { Router } = require('express');
 const borrowRequestController = require('../controllers/borrowRequest.controller');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
-const { validateCreateBorrowRequest } = require('../middlewares/validate.middleware');
 
 const router = Router();
 
@@ -218,7 +217,20 @@ router.put('/:id/reject', authenticate, authorize('ADMIN'), async (req, res) => 
   } catch (e) { return res.status(e.statusCode || 500).json({ message: e.message }); }
 });
 
-// [ADMIN] Bàn giao thiết bị cho người mượn
+/**
+ * @swagger
+ * /api/borrow-requests/{id}/handover:
+ *   put:
+ *     summary: "[ADMIN] Xác nhận bàn giao thực tế thiết bị (APPROVED -> HANDED_OVER)"
+ *     tags: [Borrow Requests]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Bàn giao thiết bị thành công }
+ */
 router.patch('/:id/handover', authenticate, authorize('ADMIN'), borrowRequestController.handoverEquipment);
 
 router.put('/:id/handover', authenticate, authorize('ADMIN'), async (req, res) => {

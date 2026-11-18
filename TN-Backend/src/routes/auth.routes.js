@@ -414,6 +414,27 @@ router.put('/profile', authenticate, authController.updateProfile);
 
 /**
  * @swagger
+ * /api/auth/theme:
+ *   patch:
+ *     summary: Lưu chế độ giao diện sáng/tối (light/dark) theo tài khoản
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [theme]
+ *             properties:
+ *               theme: { type: string, enum: [light, dark] }
+ *     responses:
+ *       200: { description: Đã lưu tùy chọn giao diện }
+ */
+router.patch('/theme', authenticate, authController.updateTheme);
+router.put('/theme', authenticate, authController.updateTheme);
+
+/**
+ * @swagger
  * /api/auth/users:
  *   get:
  *     summary: "[ADMIN] Lấy danh sách tất cả người dùng"

@@ -10,7 +10,8 @@
     "import:devices": "node import-devices.js",
     "db:sync": "node src/models/index.js",
     "test": "node --test test/unit.test.js",
-    "test:collab": "node scripts/test_collaborator_sync.js"
+    "test:collab": "node scripts/test_collaborator_sync.js",
+    "test:phase5": "node scripts/test_phase5_comprehensive.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

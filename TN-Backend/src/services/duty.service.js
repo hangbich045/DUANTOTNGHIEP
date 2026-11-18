@@ -12,11 +12,11 @@
  */
 
 const { Op } = require('sequelize');
+const ExcelJS = require('exceljs');
 const {
   StudioShift,
   DutyPeriod,
   ShiftRegistration,
-  Notification,
   User,
   AttendanceRecord,
   Task,
@@ -24,7 +24,7 @@ const {
   MonthlyPayroll,
   sequelize,
 } = require('../models');
-const { sendNotificationEmail } = require('../config/mailer');
+const notificationService = require('./notification.service');
 
 // Các khung giờ tiêu chuẩn theo ca (4 giờ/ca)
 const SHIFT_TIMES = {
@@ -163,26 +163,25 @@ const createDutyPeriod = async (adminUserId, data, ...rest) => {
     createdByUserId: adminUserId,
   });
 
-  // Gửi thông báo đến toàn bộ CTV đang hoạt động
+  // Gửi thông báo in-app và email đến toàn bộ CTV đang hoạt động
   try {
-    const collaborators = await User.findAll({
-      where: { role: 'COLLABORATOR', isActive: true },
-      attributes: ['id'],
+    const adminUser = await User.findByPk(adminUserId, { attributes: ['fullName'] }).catch(() => null);
+    const deadlineStr = finalDeadline
+      ? ` (Hạn chót: ${new Date(finalDeadline).toLocaleDateString('vi-VN')})`
+      : '';
+    await notificationService.notifyCollaborators({
+      senderName: adminUser?.fullName || 'Bộ phận Truyền thông',
+      title: `Mở đợt đăng ký ca trực Studio Tháng ${m}/${y}`,
+      message: `Bộ phận Truyền thông đã mở đợt đăng ký ca trực Tháng ${m}/${y}${deadlineStr}. Vui lòng truy cập để chọn các ngày/buổi bạn có thể tham gia trực.`,
+      type: 'DUTY_PERIOD_OPEN',
+      link: '/tasks',
+      sendEmail: true,
+      detailRows: [
+        { label: 'Tháng đăng ký', value: `Tháng ${m}/${y}` },
+        { label: 'Hạn chót đăng ký', value: finalDeadline ? new Date(finalDeadline).toLocaleDateString('vi-VN') : 'Theo thông báo' },
+        ...(note && note.trim() ? [{ label: 'Ghi chú', value: note.trim() }] : []),
+      ],
     });
-
-    if (collaborators.length > 0) {
-      const deadlineStr = finalDeadline
-        ? ` (Hạn chót: ${new Date(finalDeadline).toLocaleDateString('vi-VN')})`
-        : '';
-      const notifs = collaborators.map((c) => ({
-        userId: c.id,
-        title: `Mở đợt đăng ký ca trực Studio Tháng ${m}/${y}`,
-        message: `Bộ phận Truyền thông đã mở đợt đăng ký ca trực Tháng ${m}/${y}${deadlineStr}. Vui lòng truy cập để chọn các ngày/buổi bạn có thể tham gia trực.`,
-        type: 'DUTY_PERIOD_OPEN',
-        link: '/tasks',
-      }));
-      await Notification.bulkCreate(notifs);
-    }
   } catch (err) {
     console.error('Lỗi khi gửi thông báo tạo đợt trực:', err);
   }
@@ -604,15 +603,21 @@ const registerAvailability = async (userId, data) => {
 
     await t.commit();
 
-    // 3. Thông báo cho Admin (Người tạo đợt)
+    // 3. Thông báo in-app và email cho các Quản trị viên (ADMIN)
     try {
-      const user = await User.findByPk(userId, { attributes: ['fullName'] });
-      await Notification.create({
-        userId: period.createdByUserId,
+      const user = await User.findByPk(userId, { attributes: ['fullName', 'email'] });
+      await notificationService.notifyAdmins({
+        senderName: user?.fullName || 'Cộng tác viên',
         title: `CTV ${user?.fullName || ''} đã gửi đăng ký ca trực`,
         message: `Cộng tác viên ${user?.fullName || ''} đã cập nhật ${recordsToCreate.length} buổi có thể trực trong Tháng ${period.month}/${period.year}.`,
         type: 'DUTY_REGISTRATION_SUBMITTED',
         link: '/admin/duty',
+        sendEmail: true,
+        detailRows: [
+          { label: 'Cộng tác viên', value: user?.email ? `${user.fullName} (${user.email})` : (user?.fullName || 'CTV') },
+          { label: 'Đợt đăng ký', value: `Tháng ${period.month}/${period.year}` },
+          { label: 'Số buổi đăng ký', value: `${recordsToCreate.length} buổi` },
+        ],
       });
     } catch {
       // ignore
@@ -1190,10 +1195,26 @@ const assignShifts = async (adminUserId, periodId, assignments, options = {}) =>
 
     await t.commit();
 
-    // Gửi thông báo in-app đến các CTV bị ảnh hưởng (ngoài transaction)
+    // Gửi thông báo in-app và email đến các CTV bị ảnh hưởng (ngoài transaction)
     if (affectedUserNotifications.length > 0) {
       try {
-        await Notification.bulkCreate(affectedUserNotifications);
+        const adminUser = await User.findByPk(adminUserId, { attributes: ['fullName'] }).catch(() => null);
+        const senderLabel = adminUser?.fullName || 'Bộ phận Truyền thông';
+        for (const item of affectedUserNotifications) {
+          await notificationService.createNotification({
+            userId: item.userId,
+            senderName: senderLabel,
+            title: item.title,
+            message: item.message,
+            type: item.type || 'DUTY_SCHEDULE_UPDATED',
+            link: item.link || '/tasks',
+            sendEmail: true,
+            detailRows: [
+              { label: 'Đợt trực', value: `Tháng ${period.month}/${period.year}` },
+              { label: 'Người điều chỉnh', value: senderLabel },
+            ],
+          });
+        }
       } catch (notifErr) {
         console.error('Lỗi khi gửi thông báo cập nhật ca trực:', notifErr);
       }
@@ -1287,45 +1308,37 @@ const confirmPeriodSchedule = async (adminUserId, periodId) => {
 
     await t.commit();
 
-    // 4. Gửi thông báo đến từng CTV có ca trực chính thức (in-app & email)
+    // 4. Gửi thông báo in-app và email có theo dõi trạng thái đến từng CTV có ca trực chính thức
     try {
       const ctvIds = [...new Set(shifts.map((s) => s.userId))];
-      const notifs = ctvIds.map((cid) => ({
-        userId: cid,
-        title: `Lịch trực Studio Tháng ${period.month}/${period.year} đã được phê duyệt`,
-        message: `Bộ phận Truyền thông đã xác nhận lịch trực chính thức Tháng ${period.month}/${period.year}. Vui lòng kiểm tra lịch trực của bạn tại trang Nhiệm vụ & Ca trực.`,
-        type: 'DUTY_SCHEDULE_CONFIRMED',
-        link: '/tasks',
-      }));
-      await Notification.bulkCreate(notifs);
+      const adminUser = await User.findByPk(adminUserId, { attributes: ['fullName'] }).catch(() => null);
+      const senderLabel = adminUser?.fullName || 'Bộ phận Truyền thông';
+      const ctvUsers = await User.findAll({
+        where: { id: ctvIds },
+        attributes: ['id', 'fullName', 'email'],
+      });
+      const userById = new Map(ctvUsers.map((u) => [u.id, u]));
 
-      // Gửi email bất đồng bộ (non-blocking)
-      (async () => {
-        try {
-          const ctvUsers = await User.findAll({
-            where: { id: ctvIds },
-            attributes: ['id', 'email'],
-          });
-          for (const u of ctvUsers) {
-            if (u.email) {
-              const myShiftCount = shifts.filter((s) => s.userId === u.id).length;
-              sendNotificationEmail(u.email, {
-                title: `Lịch trực Studio Tháng ${period.month}/${period.year} đã được chốt`,
-                message: `Bộ phận Truyền thông đã xác nhận lịch trực chính thức Tháng ${period.month}/${period.year}. Bạn được phân công ${myShiftCount} ca trực Studio trong tháng này.`,
-                type: 'DUTY_SCHEDULE_CONFIRMED',
-                link: '/tasks',
-                detailRows: [
-                  { label: 'Tháng trực', value: `Tháng ${period.month}/${period.year}` },
-                  { label: 'Số ca được xếp', value: `${myShiftCount} ca (4 giờ/ca)` },
-                  { label: 'Trạng thái', value: 'LỊCH CHÍNH THỨC (CONFIRMED)' },
-                ],
-              }).catch(() => {});
-            }
-          }
-        } catch {
-          // ignore
-        }
-      })();
+      for (const cid of ctvIds) {
+        const u = userById.get(cid);
+        const myShiftCount = shifts.filter((s) => s.userId === cid).length;
+        await notificationService.createNotification({
+          userId: cid,
+          userEmail: u?.email || null,
+          recipientName: u?.fullName || null,
+          senderName: senderLabel,
+          title: `Lịch trực Studio Tháng ${period.month}/${period.year} đã được phê duyệt`,
+          message: `Bộ phận Truyền thông đã xác nhận lịch trực chính thức Tháng ${period.month}/${period.year}. Bạn được phân công ${myShiftCount} ca trực Studio trong tháng này. Vui lòng kiểm tra lịch trực tại trang Nhiệm vụ & Ca trực.`,
+          type: 'DUTY_SCHEDULE_CONFIRMED',
+          link: '/tasks',
+          sendEmail: true,
+          detailRows: [
+            { label: 'Tháng trực', value: `Tháng ${period.month}/${period.year}` },
+            { label: 'Số ca được xếp', value: `${myShiftCount} ca (4 giờ/ca)` },
+            { label: 'Trạng thái', value: 'Lịch trực chính thức' },
+          ],
+        });
+      }
     } catch {
       // ignore
     }
@@ -1450,6 +1463,28 @@ const confirmShift = async (shiftId, adminUserId) => {
   shift.confirmedByUserId = adminUserId;
   await shift.save();
 
+  // Thông báo in-app và email cho CTV về ca trực đã được xác nhận
+  try {
+    const adminUser = await User.findByPk(adminUserId, { attributes: ['fullName'] }).catch(() => null);
+    const shiftLabel = shift.shiftType === 'MORNING' ? 'Sáng (07:30–11:30)' : shift.shiftType === 'AFTERNOON' ? 'Chiều (13:00–17:00)' : 'Tối (17:30–21:30)';
+    await notificationService.createNotification({
+      userId: shift.userId,
+      senderName: adminUser?.fullName || 'Bộ phận Truyền thông',
+      title: '✅ Ca trực Studio của bạn đã được xác nhận',
+      message: `Ca trực ngày ${shift.date} (${shiftLabel}) của bạn đã được Nhân sự xác nhận chính thức.`,
+      type: 'DUTY_SCHEDULE_CONFIRMED',
+      link: '/tasks',
+      sendEmail: true,
+      detailRows: [
+        { label: 'Ngày trực', value: String(shift.date) },
+        { label: 'Buổi trực', value: shiftLabel },
+        { label: 'Trạng thái', value: 'Đã xác nhận' },
+      ],
+    });
+  } catch {
+    // ignore
+  }
+
   return shift;
 };
 
@@ -1549,14 +1584,23 @@ const cancelShift = async (shiftId, userId, userRole, reason = '') => {
         console.error('Lỗi ghi lịch sử xóa ca trực:', histErr);
       }
 
-      // Thông báo cho CTV bị xóa ca
+      // Thông báo in-app và email cho CTV bị xóa ca
       try {
-        await Notification.create({
+        const adminUser = await User.findByPk(userId, { attributes: ['fullName'] }).catch(() => null);
+        const sessLabel = sess === 'S' ? 'Sáng' : sess === 'C' ? 'Chiều' : 'Tối';
+        await notificationService.createNotification({
           userId: targetUserId,
+          senderName: adminUser?.fullName || 'Bộ phận Truyền thông',
           title: 'Hủy ca trực Studio',
-          message: `Ca trực ngày ${shiftDate} (Buổi ${sess === 'S' ? 'Sáng' : sess === 'C' ? 'Chiều' : 'Tối'}) của bạn đã được Nhân sự xóa khỏi lịch trực chính thức.`,
+          message: `Ca trực ngày ${shiftDate} (Buổi ${sessLabel}) của bạn đã được Nhân sự xóa khỏi lịch trực chính thức.`,
           type: 'DUTY_SCHEDULE_UPDATED',
           link: '/tasks',
+          sendEmail: true,
+          detailRows: [
+            { label: 'Ngày trực', value: String(shiftDate) },
+            { label: 'Buổi trực', value: `Buổi ${sessLabel}` },
+            { label: 'Lý do', value: reason || 'Điều chỉnh lịch trực' },
+          ],
         });
       } catch (notifErr) {
         console.error('Lỗi gửi thông báo hủy ca trực:', notifErr);
@@ -2161,6 +2205,550 @@ const getWeeklySchedule = async (query = {}, user) => {
   };
 };
 
+/**
+ * Helper chuyển số thứ tự cột (1-based) sang chữ cái cột Excel (A, B, ..., Z, AA, AB...)
+ */
+const colIndexToLetter = (colIdx) => {
+  let letter = '';
+  let n = colIdx;
+  while (n > 0) {
+    const rem = (n - 1) % 26;
+    letter = String.fromCharCode(65 + rem) + letter;
+    n = Math.floor((n - 1) / 26);
+  }
+  return letter;
+};
+
+/**
+ * Xuất file Excel Bảng phân công lịch trực tuần (mẫu BPTT)
+ * - ADMIN: xuất toàn bộ nhân sự BPTT theo bộ lọc đang chọn (date, search, role)
+ * - COLLABORATOR: chỉ được xuất dữ liệu lịch trực & sự vụ cá nhân của chính mình (RBAC)
+ */
+const exportWeeklyScheduleExcel = async (query = {}, currentUser, res) => {
+  const data = await getWeeklySchedule(query, currentUser);
+  const isCollaborator = currentUser && currentUser.role === 'COLLABORATOR';
+
+  let filteredRows = data.rows || [];
+  if (isCollaborator) {
+    filteredRows = filteredRows.filter((r) => r.user && r.user.id === currentUser.id);
+  } else {
+    if (query.role && query.role !== 'ALL') {
+      filteredRows = filteredRows.filter((r) => r.user && r.user.role === query.role);
+    }
+    if (query.search && String(query.search).trim()) {
+      const kw = String(query.search).trim().toLowerCase();
+      filteredRows = filteredRows.filter((r) => {
+        const u = r.user || {};
+        return (
+          (u.fullName && u.fullName.toLowerCase().includes(kw)) ||
+          (u.employeeCode && u.employeeCode.toLowerCase().includes(kw)) ||
+          (u.email && u.email.toLowerCase().includes(kw))
+        );
+      });
+    }
+  }
+
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = 'LHU Media Studio System';
+  workbook.created = new Date();
+
+  const sheet = workbook.addWorksheet('Lich_Truc_Tuan', {
+    views: [{ state: 'frozen', xSplit: 4, ySplit: 6 }],
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+
+  const thinBorder = {
+    top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+    right: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+  };
+  const headerBorder = {
+    top: { style: 'thin', color: { argb: 'FF1E3A8A' } },
+    left: { style: 'thin', color: { argb: 'FF1E3A8A' } },
+    bottom: { style: 'thin', color: { argb: 'FF1E3A8A' } },
+    right: { style: 'thin', color: { argb: 'FF1E3A8A' } },
+  };
+
+  const totalCols = 31; // A..D (4) + 7*3 (21 -> E..Y) + 6 summary (Z..AE)
+  const lastColLetter = colIndexToLetter(totalCols); // AE
+
+  // Banner tiêu đề
+  sheet.mergeCells(`A1:${lastColLetter}1`);
+  const orgCell = sheet.getCell('A1');
+  orgCell.value = 'TRƯỜNG ĐẠI HỌC LẠC HỒNG - BỘ PHẬN TRUYỀN THÔNG (LHU MEDIA STUDIO)';
+  orgCell.font = { name: 'Times New Roman', size: 12, bold: true, color: { argb: 'FF1E3A8A' } };
+  orgCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(1).height = 22;
+
+  sheet.mergeCells(`A2:${lastColLetter}2`);
+  const titleCell = sheet.getCell('A2');
+  const startFmt = data.weekDays[0]?.formattedDate || '';
+  const endFmt = data.weekDays[6]?.formattedDate || '';
+  titleCell.value = isCollaborator
+    ? `LỊCH LÀM VIỆC & TRỰC STUDIO CÁ NHÂN (${startFmt} - ${endFmt})`
+    : `BẢNG PHÂN CÔNG LỊCH LÀM VIỆC NHÂN SỰ BPTT (${startFmt} - ${endFmt})`;
+  titleCell.font = { name: 'Times New Roman', size: 14, bold: true, color: { argb: 'FF0F172A' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(2).height = 26;
+
+  const nowVN = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date());
+
+  const filterParts = [];
+  if (isCollaborator) {
+    filterParts.push(`Cá nhân: ${currentUser.fullName || currentUser.email}`);
+  } else {
+    if (query.role && query.role !== 'ALL') {
+      filterParts.push(`Vai trò: ${query.role === 'ADMIN' ? 'Nhân sự' : 'CTV'}`);
+    }
+    if (query.search && String(query.search).trim()) {
+      filterParts.push(`Tìm kiếm: "${String(query.search).trim()}"`);
+    }
+  }
+  sheet.mergeCells(`A3:${lastColLetter}3`);
+  const metaCell = sheet.getCell('A3');
+  metaCell.value = `Thời điểm xuất: ${nowVN}${filterParts.length ? `  |  Phạm vi: ${filterParts.join(' • ')}` : '  |  Phạm vi: Toàn bộ nhân sự BPTT'}`;
+  metaCell.font = { name: 'Times New Roman', size: 10, italic: true, color: { argb: 'FF475569' } };
+  metaCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  sheet.getRow(3).height = 18;
+  sheet.getRow(4).height = 8;
+
+  // Header 2 tầng (Row 5 & Row 6)
+  const fixedHeaders = [
+    { col: 1, label: 'STT', width: 6 },
+    { col: 2, label: 'Họ và tên', width: 26 },
+    { col: 3, label: 'Vai trò', width: 12 },
+    { col: 4, label: 'Tổng ca', width: 10 },
+  ];
+  for (const h of fixedHeaders) {
+    const colLetter = colIndexToLetter(h.col);
+    sheet.mergeCells(`${colLetter}5:${colLetter}6`);
+    const cell = sheet.getCell(`${colLetter}5`);
+    cell.value = h.label;
+    cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    sheet.getColumn(h.col).width = h.width;
+    sheet.getCell(`${colLetter}5`).border = headerBorder;
+    sheet.getCell(`${colLetter}6`).border = headerBorder;
+  }
+
+  // 7 ngày trong tuần (E..Y)
+  for (let i = 0; i < data.weekDays.length; i++) {
+    const wd = data.weekDays[i];
+    const startCol = 5 + i * 3;
+    const c1 = colIndexToLetter(startCol);
+    const c3 = colIndexToLetter(startCol + 2);
+    sheet.mergeCells(`${c1}5:${c3}5`);
+    const dayCell = sheet.getCell(`${c1}5`);
+    dayCell.value = `${wd.dayName}\n${wd.formattedDate.slice(0, 5)}`;
+    dayCell.font = {
+      name: 'Times New Roman',
+      size: 10,
+      bold: true,
+      color: { argb: 'FFFFFFFF' },
+    };
+    dayCell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: wd.isSunday ? 'FF9F1239' : 'FF1D4ED8' },
+    };
+    dayCell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+
+    const sessions = ['S', 'C', 'T'];
+    for (let sIdx = 0; sIdx < 3; sIdx++) {
+      const sc = startCol + sIdx;
+      sheet.getColumn(sc).width = 5.5;
+      sheet.getCell(5, sc).border = headerBorder;
+      const subCell = sheet.getCell(6, sc);
+      subCell.value = sessions[sIdx];
+      subCell.font = {
+        name: 'Times New Roman',
+        size: 10,
+        bold: true,
+        color: { argb: wd.isSunday ? 'FF9F1239' : 'FF1E3A8A' },
+      };
+      subCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: wd.isSunday ? 'FFFFE4E6' : 'FFDBEAFE' },
+      };
+      subCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      subCell.border = headerBorder;
+    }
+  }
+
+  // Các cột thống kê tổng hợp (Z..AE)
+  const summaryHeaders = [
+    { col: 26, label: 'LV\n(Trực)', width: 8 },
+    { col: 27, label: 'SV\n(Sự vụ)', width: 8 },
+    { col: 28, label: 'Đêm\n(Ca T)', width: 8 },
+    { col: 29, label: 'DP', width: 7 },
+    { col: 30, label: 'NP', width: 7 },
+    { col: 31, label: 'ĐK\n(Rảnh)', width: 8 },
+  ];
+  for (const sh of summaryHeaders) {
+    const colLetter = colIndexToLetter(sh.col);
+    sheet.mergeCells(`${colLetter}5:${colLetter}6`);
+    const cell = sheet.getCell(`${colLetter}5`);
+    cell.value = sh.label;
+    cell.font = { name: 'Times New Roman', size: 9.5, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    sheet.getColumn(sh.col).width = sh.width;
+    sheet.getCell(`${colLetter}5`).border = headerBorder;
+    sheet.getCell(`${colLetter}6`).border = headerBorder;
+  }
+
+  sheet.getRow(5).height = 30;
+  sheet.getRow(6).height = 20;
+
+  const symbolStyles = {
+    LV: { fill: 'FFDBEAFE', color: 'FF1E40AF', bold: true, italic: false },
+    SV: { fill: 'FFFEF3C7', color: 'FF92400E', bold: true, italic: false },
+    ĐK: { fill: 'FFECFDF5', color: 'FF047857', bold: false, italic: true },
+    DP: { fill: 'FFF3E8FF', color: 'FF6B21A8', bold: true, italic: false },
+    NP: { fill: 'FFF1F5F9', color: 'FF475569', bold: true, italic: false },
+    NL: { fill: 'FFFFE4E6', color: 'FFBE123C', bold: true, italic: false },
+    SX: { fill: 'FFE0F2FE', color: 'FF0369A1', bold: true, italic: false },
+  };
+
+  let curRow = 7;
+  const startDataRow = 7;
+  const collectedTasks = [];
+  const seenTaskKey = new Set();
+
+  if (filteredRows.length === 0) {
+    sheet.mergeCells(`A7:${lastColLetter}7`);
+    const emptyCell = sheet.getCell('A7');
+    emptyCell.value = 'Không có dữ liệu lịch trực phù hợp với bộ lọc trong tuần này.';
+    emptyCell.font = { name: 'Times New Roman', size: 11, italic: true, color: { argb: 'FF64748B' } };
+    emptyCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    sheet.getRow(7).height = 28;
+    for (let c = 1; c <= totalCols; c++) {
+      sheet.getCell(7, c).border = thinBorder;
+    }
+    curRow = 8;
+  } else {
+    filteredRows.forEach((rowData, idx) => {
+      const r = curRow;
+      const excelRow = sheet.getRow(r);
+      excelRow.height = 22;
+
+      const u = rowData.user || {};
+      const cStt = sheet.getCell(r, 1);
+      cStt.value = idx + 1;
+      cStt.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      const cName = sheet.getCell(r, 2);
+      cName.value = u.employeeCode ? `${u.fullName} (${u.employeeCode})` : (u.fullName || '');
+      cName.alignment = { horizontal: 'left', vertical: 'middle' };
+
+      const cRole = sheet.getCell(r, 3);
+      cRole.value = u.role === 'ADMIN' ? 'Nhân sự' : 'CTV';
+      cRole.alignment = { horizontal: 'center', vertical: 'middle' };
+
+      const cTotal = sheet.getCell(r, 4);
+      cTotal.value = {
+        formula: `COUNTA(E${r}:Y${r})-COUNTIF(E${r}:Y${r},"ĐK")`,
+        result: rowData.summary?.totalShifts || 0,
+      };
+      cTotal.alignment = { horizontal: 'center', vertical: 'middle' };
+      cTotal.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+      cTotal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+
+      for (let dIdx = 0; dIdx < data.weekDays.length; dIdx++) {
+        const wd = data.weekDays[dIdx];
+        const dayObj = rowData.days?.[wd.dateStr];
+        const startCol = 5 + dIdx * 3;
+
+        if (dayObj?.dayTasks && dayObj.dayTasks.length > 0) {
+          for (const t of dayObj.dayTasks) {
+            const tk = `${t.id}_${u.id}_${wd.dateStr}`;
+            if (!seenTaskKey.has(tk)) {
+              seenTaskKey.add(tk);
+              collectedTasks.push({
+                dateStr: wd.dateStr,
+                formattedDate: wd.formattedDate,
+                dayName: wd.dayName,
+                userName: u.fullName || '',
+                userRole: u.role === 'ADMIN' ? 'Nhân sự' : 'CTV',
+                task: t,
+              });
+            }
+          }
+        }
+
+        const sessList = ['S', 'C', 'T'];
+        for (let sIdx = 0; sIdx < 3; sIdx++) {
+          const sess = sessList[sIdx];
+          const slot = dayObj?.[sess];
+          const sym = slot?.symbol || '';
+          const cell = sheet.getCell(r, startCol + sIdx);
+          cell.value = sym ? sym : null;
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          cell.border = thinBorder;
+
+          if (sym && symbolStyles[sym]) {
+            const st = symbolStyles[sym];
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: st.fill } };
+            cell.font = { name: 'Times New Roman', size: 10, bold: st.bold, italic: st.italic, color: { argb: st.color } };
+          } else {
+            cell.font = { name: 'Times New Roman', size: 10, color: { argb: 'FF334155' } };
+            if (wd.isSunday) {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF1F2' } };
+            }
+          }
+        }
+      }
+
+      // Cột tổng hợp theo dòng
+      const sumCells = [
+        { col: 26, formula: `COUNTIF(E${r}:Y${r},"LV")`, result: rowData.summary?.sc || 0 },
+        { col: 27, formula: `COUNTIF(E${r}:Y${r},"SV")`, result: rowData.summary?.sv || 0 },
+        { col: 28, value: rowData.summary?.d || 0 },
+        { col: 29, formula: `COUNTIF(E${r}:Y${r},"DP")`, result: rowData.summary?.dp || 0 },
+        { col: 30, formula: `COUNTIF(E${r}:Y${r},"NP")`, result: rowData.summary?.np || 0 },
+        { col: 31, formula: `COUNTIF(E${r}:Y${r},"ĐK")`, result: rowData.summary?.dk || 0 },
+      ];
+      for (const sc of sumCells) {
+        const cell = sheet.getCell(r, sc.col);
+        cell.value = sc.formula ? { formula: sc.formula, result: sc.result } : sc.value;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.font = { name: 'Times New Roman', size: 10, bold: sc.col <= 27, color: { argb: 'FF0F172A' } };
+        cell.border = thinBorder;
+      }
+
+      for (let c = 1; c <= 4; c++) {
+        const cell = sheet.getCell(r, c);
+        if (c !== 4) {
+          cell.font = { name: 'Times New Roman', size: 10, bold: c === 2, color: { argb: 'FF0F172A' } };
+        }
+        cell.border = thinBorder;
+      }
+
+      curRow++;
+    });
+
+    // Dòng TỔNG CỘNG
+    const lastDataRow = curRow - 1;
+    const totalRow = sheet.getRow(curRow);
+    totalRow.height = 24;
+    sheet.mergeCells(`A${curRow}:C${curRow}`);
+    const tLabel = sheet.getCell(curRow, 1);
+    tLabel.value = `TỔNG CỘNG (${filteredRows.length} nhân sự)`;
+    tLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const totalShiftsVal = filteredRows.reduce((acc, r) => acc + (r.summary?.totalShifts || 0), 0);
+    sheet.getCell(curRow, 4).value = {
+      formula: `SUM(D${startDataRow}:D${lastDataRow})`,
+      result: totalShiftsVal,
+    };
+
+    for (let dIdx = 0; dIdx < data.weekDays.length; dIdx++) {
+      const wd = data.weekDays[dIdx];
+      const startCol = 5 + dIdx * 3;
+      const sessList = ['S', 'C', 'T'];
+      for (let sIdx = 0; sIdx < 3; sIdx++) {
+        const cIdx = startCol + sIdx;
+        const cLet = colIndexToLetter(cIdx);
+        const sess = sessList[sIdx];
+        const countResult = filteredRows.reduce((acc, r) => {
+          const sym = r.days?.[wd.dateStr]?.[sess]?.symbol;
+          return acc + (sym && sym !== 'ĐK' ? 1 : 0);
+        }, 0);
+        sheet.getCell(curRow, cIdx).value = {
+          formula: `COUNTA(${cLet}${startDataRow}:${cLet}${lastDataRow})-COUNTIF(${cLet}${startDataRow}:${cLet}${lastDataRow},"ĐK")`,
+          result: countResult,
+        };
+      }
+    }
+
+    const sumKeys = ['sc', 'sv', 'd', 'dp', 'np', 'dk'];
+    sumKeys.forEach((k, idx) => {
+      const cIdx = 26 + idx;
+      const cLet = colIndexToLetter(cIdx);
+      const val = filteredRows.reduce((acc, r) => acc + (r.summary?.[k] || 0), 0);
+      sheet.getCell(curRow, cIdx).value = {
+        formula: `SUM(${cLet}${startDataRow}:${cLet}${lastDataRow})`,
+        result: val,
+      };
+    });
+
+    for (let c = 1; c <= totalCols; c++) {
+      const cell = sheet.getCell(curRow, c);
+      cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      if (c > 3) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = headerBorder;
+    }
+    curRow++;
+  }
+
+  // Ghi chú ký hiệu
+  curRow++;
+  sheet.mergeCells(`A${curRow}:${lastColLetter}${curRow}`);
+  const legendCell = sheet.getCell(curRow, 1);
+  legendCell.value = 'Chú thích ký hiệu:  LV = Trực Studio chính thức (4 giờ/ca)  |  SV = Tham gia sự vụ / công việc được phân công  |  ĐK = Nguyện vọng CTV đăng ký có thể trực (chưa chốt)  |  DP = Dự phòng  |  NP = Nghỉ phép  |  S/C/T = Sáng / Chiều / Tối';
+  legendCell.font = { name: 'Times New Roman', size: 9.5, italic: true, color: { argb: 'FF475569' } };
+  legendCell.alignment = { horizontal: 'left', vertical: 'middle' };
+  sheet.getRow(curRow).height = 20;
+
+  // =========================================================================
+  // SHEET 2: CHI TIẾT SỰ VỤ TRONG TUẦN
+  // =========================================================================
+  const taskSheet = workbook.addWorksheet('Chi_Tiet_Su_Vu_Tuan', {
+    views: [{ state: 'frozen', ySplit: 4 }],
+    pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+
+  taskSheet.mergeCells('A1:L1');
+  taskSheet.getCell('A1').value = `CHI TIẾT SỰ VỤ / CÔNG VIỆC TRONG TUẦN (${startFmt} - ${endFmt})`;
+  taskSheet.getCell('A1').font = { name: 'Times New Roman', size: 13, bold: true, color: { argb: 'FF1E3A8A' } };
+  taskSheet.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+  taskSheet.getRow(1).height = 26;
+
+  taskSheet.mergeCells('A2:L2');
+  taskSheet.getCell('A2').value = 'Các dòng tô nền vàng hổ phách là sự vụ có áp dụng hệ số ngoài giờ (×1,5) hoặc Chủ nhật (×2,0).';
+  taskSheet.getCell('A2').font = { name: 'Times New Roman', size: 10, italic: true, color: { argb: 'FF92400E' } };
+  taskSheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+  taskSheet.getRow(2).height = 18;
+  taskSheet.getRow(3).height = 8;
+
+  const taskHeaders = [
+    { label: 'STT', width: 6 },
+    { label: 'Ngày thực hiện', width: 14 },
+    { label: 'Thứ', width: 12 },
+    { label: 'Buổi', width: 9 },
+    { label: 'Nhân sự / CTV', width: 24 },
+    { label: 'Nội dung công việc', width: 36 },
+    { label: 'Loại nhiệm vụ', width: 18 },
+    { label: 'Giờ thực tế', width: 12 },
+    { label: 'Hệ số', width: 10 },
+    { label: 'Giờ quy đổi', width: 12 },
+    { label: 'Địa điểm', width: 20 },
+    { label: 'Ghi chú / Hệ số', width: 28 },
+  ];
+  const thRow = taskSheet.getRow(4);
+  thRow.height = 26;
+  taskHeaders.forEach((h, i) => {
+    taskSheet.getColumn(i + 1).width = h.width;
+    const cell = thRow.getCell(i + 1);
+    cell.value = h.label;
+    cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = headerBorder;
+  });
+
+  collectedTasks.sort((a, b) => a.dateStr.localeCompare(b.dateStr) || a.userName.localeCompare(b.userName, 'vi'));
+
+  if (collectedTasks.length === 0) {
+    taskSheet.mergeCells('A5:L5');
+    const emptyT = taskSheet.getCell('A5');
+    emptyT.value = 'Không có sự vụ / công việc nào được ghi nhận trong tuần này.';
+    emptyT.font = { name: 'Times New Roman', size: 11, italic: true, color: { argb: 'FF64748B' } };
+    emptyT.alignment = { horizontal: 'center', vertical: 'middle' };
+    taskSheet.getRow(5).height = 26;
+    for (let c = 1; c <= 12; c++) taskSheet.getCell(5, c).border = thinBorder;
+  } else {
+    const sessLabel = { S: 'Sáng', C: 'Chiều', T: 'Tối' };
+    collectedTasks.forEach((item, idx) => {
+      const r = 5 + idx;
+      const t = item.task || {};
+      const actualH = Number(t.actualHours || 0);
+      const mult = Number(t.multiplier || 1);
+      const convH = Number(t.convertedHours != null ? t.convertedHours : Number((actualH * mult).toFixed(2)));
+      const isHighlight = mult > 1 || Boolean(t.isHighlighted);
+      const row = taskSheet.getRow(r);
+      row.height = 22;
+
+      const values = [
+        idx + 1,
+        item.formattedDate,
+        item.dayName,
+        sessLabel[t.shiftSession] || t.shiftSession || '—',
+        item.userName,
+        t.title || '',
+        t.taskType || t.otherTaskType || 'Sự vụ',
+        actualH,
+        mult,
+        { formula: `ROUND(H${r}*I${r},2)`, result: convH },
+        t.location || [t.campus, t.room].filter(Boolean).join(' - ') || '—',
+        t.multiplierNote || t.note || '',
+      ];
+
+      values.forEach((v, cIdx) => {
+        const cell = row.getCell(cIdx + 1);
+        cell.value = v;
+        cell.font = {
+          name: 'Times New Roman',
+          size: 10,
+          bold: isHighlight && (cIdx === 8 || cIdx === 9),
+          color: { argb: isHighlight ? 'FF92400E' : 'FF0F172A' },
+        };
+        if (isHighlight) {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } };
+        }
+        cell.border = thinBorder;
+        if ([0, 1, 2, 3, 7, 8, 9].includes(cIdx)) {
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        } else {
+          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+        }
+        if (cIdx === 7 || cIdx === 9) cell.numFmt = '0.##';
+        if (cIdx === 8) cell.numFmt = '"×"0.0';
+      });
+    });
+
+    const totalTaskRowIdx = 5 + collectedTasks.length;
+    const tr = taskSheet.getRow(totalTaskRowIdx);
+    tr.height = 24;
+    taskSheet.mergeCells(`A${totalTaskRowIdx}:G${totalTaskRowIdx}`);
+    tr.getCell(1).value = `TỔNG CỘNG (${collectedTasks.length} sự vụ)`;
+    tr.getCell(1).alignment = { horizontal: 'center', vertical: 'middle' };
+
+    const sumAct = collectedTasks.reduce((s, it) => s + Number(it.task?.actualHours || 0), 0);
+    const sumConv = collectedTasks.reduce((s, it) => {
+      const a = Number(it.task?.actualHours || 0);
+      const m = Number(it.task?.multiplier || 1);
+      return s + Number(it.task?.convertedHours != null ? it.task.convertedHours : (a * m));
+    }, 0);
+
+    tr.getCell(8).value = { formula: `SUM(H5:H${totalTaskRowIdx - 1})`, result: Number(sumAct.toFixed(2)) };
+    tr.getCell(8).numFmt = '0.##';
+    tr.getCell(10).value = { formula: `SUM(J5:J${totalTaskRowIdx - 1})`, result: Number(sumConv.toFixed(2)) };
+    tr.getCell(10).numFmt = '0.##';
+
+    for (let c = 1; c <= 12; c++) {
+      const cell = tr.getCell(c);
+      cell.font = { name: 'Times New Roman', size: 10, bold: true, color: { argb: 'FF0F172A' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2E8F0' } };
+      if (c >= 8) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+      cell.border = headerBorder;
+    }
+  }
+
+  const startSlug = (data.weekRange.startDate || '').replace(/-/g, '');
+  const endSlug = (data.weekRange.endDate || '').replace(/-/g, '');
+  const prefix = isCollaborator ? 'LHU_Media_Lich_Truc_Ca_Nhan' : 'LHU_Media_Lich_Truc_Tuan';
+  const filename = `${prefix}_${startSlug}_${endSlug}.xlsx`;
+
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+
+  await workbook.xlsx.write(res);
+  res.end();
+};
+
 module.exports = {
   createDutyPeriod,
   getDutyPeriods,
@@ -2179,6 +2767,7 @@ module.exports = {
   cancelShift,
   getShifts,
   getWeeklySchedule,
+  exportWeeklyScheduleExcel,
   calculateDefaultDeadline,
   isShiftEnded,
   autoCompletePastConfirmedShifts,

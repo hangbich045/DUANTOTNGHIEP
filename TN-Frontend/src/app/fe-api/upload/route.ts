@@ -25,14 +25,15 @@ export async function POST(req: NextRequest) {
       backendEndpoint = '/auth/avatar';
     }
 
-    const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+    const backendInternalUrl = (process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:5000').replace(/\/+$/, '');
+    const BASE_URL = (process.env.NEXT_PUBLIC_API_URL || `${backendInternalUrl}/api`).replace(/\/+$/, '');
 
     const headers: HeadersInit = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    // Proxy the upload to NestJS backend
+    // Proxy the upload to Backend API
     const response = await fetch(`${BASE_URL}${backendEndpoint}`, {
       method: 'POST',
       headers,

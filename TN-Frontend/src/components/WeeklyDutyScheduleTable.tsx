@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import {
   ChevronLeft,
   ChevronRight,
@@ -18,8 +19,6 @@ import {
   Info,
   MapPin,
   CheckCircle2,
-  AlertCircle,
-  FileText,
   Filter,
   Plus,
   Pencil,
@@ -27,8 +26,8 @@ import {
   ExternalLink,
   CheckSquare,
   Tag,
-  AlertTriangle,
   Loader2,
+  FileSpreadsheet,
 } from 'lucide-react';
 import api from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
@@ -204,6 +203,7 @@ export default function WeeklyDutyScheduleTable({
 
   const [scheduleData, setScheduleData] = useState<WeeklyScheduleData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [exporting, setExporting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'COLLABORATOR' | 'ADMIN'>('ALL');
 
@@ -220,7 +220,6 @@ export default function WeeklyDutyScheduleTable({
   } | null>(null);
 
   const tooltipRef = useRef<HTMLDivElement | null>(null);
-  const datePickerInputRef = useRef<HTMLInputElement | null>(null);
 
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'ADMIN';
@@ -241,7 +240,6 @@ export default function WeeklyDutyScheduleTable({
   const [assignDeadlineHour, setAssignDeadlineHour] = useState('17');
   const [assignDeadlineMinute, setAssignDeadlineMinute] = useState('00');
   const [assignLocationNote, setAssignLocationNote] = useState('');
-  const assignDatePickerRef = useRef<HTMLInputElement>(null);
   const [creatingTask, setCreatingTask] = useState(false);
 
   // Modal Chỉnh sửa nhiệm vụ từ Lịch trực
@@ -257,7 +255,6 @@ export default function WeeklyDutyScheduleTable({
   const [editDeadlineHour, setEditDeadlineHour] = useState('17');
   const [editDeadlineMinute, setEditDeadlineMinute] = useState('00');
   const [editLocationNote, setEditLocationNote] = useState('');
-  const editDatePickerRef = useRef<HTMLInputElement>(null);
   const [updatingTask, setUpdatingTask] = useState(false);
 
   // Modal Xác nhận xóa nhiệm vụ
@@ -348,7 +345,7 @@ export default function WeeklyDutyScheduleTable({
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
 
       fetchWeeklySchedule(currentDateStr, true);
@@ -466,7 +463,7 @@ export default function WeeklyDutyScheduleTable({
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
 
       fetchWeeklySchedule(currentDateStr, true);
@@ -494,7 +491,7 @@ export default function WeeklyDutyScheduleTable({
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
 
       fetchWeeklySchedule(currentDateStr, true);
@@ -502,21 +499,6 @@ export default function WeeklyDutyScheduleTable({
       toast(err.message || 'Lỗi khi xóa nhiệm vụ', 'error');
     } finally {
       setDeletingTask(false);
-    }
-  };
-
-  // Mở Date Picker khi nhấp vào phần hiển thị khoảng tuần
-  const handleOpenDatePicker = () => {
-    if (datePickerInputRef.current) {
-      if (typeof datePickerInputRef.current.showPicker === 'function') {
-        try {
-          datePickerInputRef.current.showPicker();
-        } catch (e) {
-          datePickerInputRef.current.focus();
-        }
-      } else {
-        datePickerInputRef.current.focus();
-      }
     }
   };
 
@@ -577,7 +559,7 @@ export default function WeeklyDutyScheduleTable({
           handleSync();
         }
       };
-    } catch (e) {
+    } catch {
       // ignore BroadcastChannel if not available
     }
 
@@ -812,37 +794,30 @@ export default function WeeklyDutyScheduleTable({
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            {/* Vị trí nút Hôm nay trước đây: Chuyển thành phần hiển thị tuần hiện tại & Date Picker chọn ngày */}
-            <div className="relative group flex items-center">
-              <button
-                type="button"
-                onClick={handleOpenDatePicker}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-brand-primary/20 hover:bg-brand-primary/30 border border-brand-primary/40 hover:border-brand-primary transition-all flex items-center space-x-1.5 cursor-pointer shadow-sm select-none"
-                title="Nhấp để mở lịch chọn ngày / tuần bất kỳ"
-              >
-                <Calendar className="w-3.5 h-3.5 text-brand-primary shrink-0" />
-                <span className="tracking-wide font-black">
-                  {formattedWeekRange || 'Đang tải tuần...'}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-brand-primary/70 group-hover:text-brand-primary transition-colors shrink-0" />
-              </button>
-              {/* Native Date picker mở khi click vào khoảng tuần */}
-              <input
-                ref={datePickerInputRef}
-                type="date"
-                value={currentDateStr}
-                onChange={(e) => {
-                  if (e.target.value) {
-                    const pickedDate = e.target.value;
-                    const mondayStr = getMondayStr(pickedDate);
-                    setCurrentDateStr(mondayStr);
-                  }
-                }}
-                aria-label="Chọn ngày trên lịch để chuyển sang tuần tương ứng"
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full pointer-events-none"
-                tabIndex={-1}
-              />
-            </div>
+            {/* Vị trí nút Hôm nay trước đây: Chuyển thành phần hiển thị tuần hiện tại & Date Picker chuẩn hóa */}
+            <DatePickerVN
+              value={currentDateStr}
+              onChange={(pickedDate) => {
+                if (pickedDate) {
+                  const mondayStr = getMondayStr(pickedDate);
+                  setCurrentDateStr(mondayStr);
+                }
+              }}
+              renderTrigger={({ toggle }) => (
+                <button
+                  type="button"
+                  onClick={toggle}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold text-white bg-brand-primary/20 hover:bg-brand-primary/30 border border-brand-primary/40 hover:border-brand-primary transition-all flex items-center space-x-1.5 cursor-pointer shadow-sm select-none"
+                  title="Nhấp để mở lịch chọn ngày / tuần bất kỳ"
+                >
+                  <Calendar className="w-3.5 h-3.5 text-brand-primary shrink-0" />
+                  <span className="tracking-wide font-black">
+                    {formattedWeekRange || 'Đang tải tuần...'}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-brand-primary/70 hover:text-brand-primary transition-colors shrink-0" />
+                </button>
+              )}
+            />
 
             <button
               type="button"
@@ -862,7 +837,7 @@ export default function WeeklyDutyScheduleTable({
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
             <span className="text-emerald-400 font-bold tracking-wide">
-              Đồng bộ thời gian thực
+              Tự động cập nhật
             </span>
           </div>
         </div>
@@ -922,6 +897,43 @@ export default function WeeklyDutyScheduleTable({
               </button>
             )}
 
+            {/* Nút Xuất Excel Lịch trực tuần */}
+            <button
+              type="button"
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  const params = new URLSearchParams({ date: currentDateStr });
+                  if (roleFilter !== 'ALL') params.set('role', roleFilter);
+                  if (searchQuery.trim()) params.set('search', searchQuery.trim());
+                  await api.download(
+                    `/duty/export-weekly?${params.toString()}`,
+                    `LHU_Media_Lich_Truc_Tuan_${currentDateStr}.xlsx`
+                  );
+                  toast(
+                    isAdmin
+                      ? 'Đã xuất file Excel Lịch trực tuần BPTT thành công!'
+                      : 'Đã xuất file Excel Lịch trực cá nhân của bạn thành công!',
+                    'success'
+                  );
+                } catch (err: any) {
+                  toast(err.message || 'Lỗi khi xuất file Excel lịch trực tuần', 'error');
+                } finally {
+                  setExporting(false);
+                }
+              }}
+              disabled={loading || exporting}
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-2xl text-xs font-bold text-emerald-300 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 transition-all cursor-pointer disabled:opacity-40"
+              title={
+                isAdmin
+                  ? 'Xuất bảng lịch trực tuần BPTT ra file Excel (.xlsx) theo bộ lọc hiện tại'
+                  : 'Xuất lịch trực cá nhân trong tuần của bạn ra file Excel (.xlsx)'
+              }
+            >
+              {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+              <span>Xuất Excel</span>
+            </button>
+
             {/* Nút Refresh */}
             <button
               type="button"
@@ -945,7 +957,7 @@ export default function WeeklyDutyScheduleTable({
           </span>
         </h2>
         <p className="text-[11px] text-studio-muted mt-0.5">
-          Dữ liệu trực Studio và phân công sự vụ được cập nhật đồng bộ từ CSDL thời gian thực
+          Dữ liệu trực Studio và phân công sự vụ được cập nhật tự động theo tuần
         </p>
       </div>
 
@@ -1002,7 +1014,10 @@ export default function WeeklyDutyScheduleTable({
       </div>
 
       {/* 4. Ma trận Bảng tuần Chuẩn tham chiếu */}
-      <div className="relative rounded-3xl border border-white/10 bg-black/35 shadow-2xl overflow-hidden">
+      <div
+        data-duty-table="true"
+        className="relative rounded-3xl border border-white/10 bg-black/35 shadow-2xl overflow-hidden"
+      >
         {loading ? (
           <div className="flex flex-col items-center justify-center py-28 space-y-3">
             <RefreshCw className="w-8 h-8 animate-spin text-brand-primary" />
@@ -1146,6 +1161,7 @@ export default function WeeklyDutyScheduleTable({
                   return (
                     <tr
                       key={row.user.id}
+                      data-current-user={isCurrentLoggedUser ? 'true' : undefined}
                       className={`border-b border-white/5 transition-colors ${rowBg}`}
                     >
                       {/* STT */}
@@ -1333,24 +1349,24 @@ export default function WeeklyDutyScheduleTable({
                       })}
 
                       {/* Thống kê: Số lượng buổi làm (SC, SV, D) */}
-                      <td className="p-2 border-r border-white/5 text-center font-bold text-blue-300 bg-blue-900/5">
+                      <td data-col-group="workload" className="p-2 border-r border-white/5 text-center font-bold text-blue-300 bg-blue-900/5">
                         {row.summary.sc}
                       </td>
-                      <td className="p-2 border-r border-white/5 text-center font-black text-purple-300 bg-purple-900/10">
+                      <td data-col-group="workload" className="p-2 border-r border-white/5 text-center font-black text-purple-300 bg-purple-900/10">
                         {row.summary.sv}
                       </td>
-                      <td className="p-2 border-r border-white/10 text-center font-semibold text-blue-300 bg-blue-900/5">
+                      <td data-col-group="workload" className="p-2 border-r border-white/10 text-center font-semibold text-blue-300 bg-blue-900/5">
                         {row.summary.d}
                       </td>
 
                       {/* Thống kê: Tình trạng (DP, NP, SX) */}
-                      <td className="p-2 border-r border-white/5 text-center font-medium text-teal-300 bg-teal-900/5">
+                      <td data-col-group="status" className="p-2 border-r border-white/5 text-center font-medium text-teal-300 bg-teal-900/5">
                         {row.summary.dp}
                       </td>
-                      <td className="p-2 border-r border-white/5 text-center font-medium text-rose-300 bg-rose-900/5">
+                      <td data-col-group="status" className="p-2 border-r border-white/5 text-center font-medium text-rose-300 bg-rose-900/5">
                         {row.summary.np}
                       </td>
-                      <td className="p-2 text-center font-medium text-indigo-300 bg-indigo-900/5">
+                      <td data-col-group="status" className="p-2 text-center font-medium text-indigo-300 bg-indigo-900/5">
                         {row.summary.sx}
                       </td>
                     </tr>
@@ -1376,35 +1392,36 @@ export default function WeeklyDutyScheduleTable({
                     const dayTotal = scheduleData.columnTotals.days[wd.dateStr] || { S: 0, C: 0, T: 0 };
                     const isToday = wd.isToday || wd.dateStr === effectiveTodayStr;
                     const cellBg = isToday ? 'bg-amber-400/25 text-yellow-300 font-black' : '';
+                    const colType = !isToday && wd.isSunday ? 'sunday' : undefined;
 
                     return (
                       <React.Fragment key={wd.dateStr}>
-                        <td className={`p-2 border-r border-white/5 ${cellBg}`}>{dayTotal.S}</td>
-                        <td className={`p-2 border-r border-white/5 ${cellBg}`}>{dayTotal.C}</td>
-                        <td className={`p-2 border-r border-white/10 ${cellBg}`}>{dayTotal.T}</td>
+                        <td data-col={colType} className={`p-2 border-r border-white/5 ${cellBg}`}>{dayTotal.S}</td>
+                        <td data-col={colType} className={`p-2 border-r border-white/5 ${cellBg}`}>{dayTotal.C}</td>
+                        <td data-col={colType} className={`p-2 border-r border-white/10 ${cellBg}`}>{dayTotal.T}</td>
                       </React.Fragment>
                     );
                   })}
 
                   {/* Tổng SC, SV, D */}
-                  <td className="p-2 border-r border-white/5 text-blue-300 bg-blue-900/20">
+                  <td data-col-group="workload" className="p-2 border-r border-white/5 text-blue-300 bg-blue-900/20">
                     {scheduleData.columnTotals.sc}
                   </td>
-                  <td className="p-2 border-r border-white/5 text-purple-300 bg-purple-900/25">
+                  <td data-col-group="workload" className="p-2 border-r border-white/5 text-purple-300 bg-purple-900/25">
                     {scheduleData.columnTotals.sv}
                   </td>
-                  <td className="p-2 border-r border-white/10 text-blue-300 bg-blue-900/20">
+                  <td data-col-group="workload" className="p-2 border-r border-white/10 text-blue-300 bg-blue-900/20">
                     {scheduleData.columnTotals.d}
                   </td>
 
                   {/* Tổng DP, NP, SX */}
-                  <td className="p-2 border-r border-white/5 text-teal-300 bg-teal-900/20">
+                  <td data-col-group="status" className="p-2 border-r border-white/5 text-teal-300 bg-teal-900/20">
                     {scheduleData.columnTotals.dp}
                   </td>
-                  <td className="p-2 border-r border-white/5 text-rose-300 bg-rose-900/20">
+                  <td data-col-group="status" className="p-2 border-r border-white/5 text-rose-300 bg-rose-900/20">
                     {scheduleData.columnTotals.np}
                   </td>
-                  <td className="p-2 text-indigo-300 bg-indigo-900/20">
+                  <td data-col-group="status" className="p-2 text-indigo-300 bg-indigo-900/20">
                     {scheduleData.columnTotals.sx}
                   </td>
                 </tr>
@@ -1592,7 +1609,7 @@ export default function WeeklyDutyScheduleTable({
                         <span className="text-studio-muted">
                           Thời lượng: {task.actualHours ? `${task.actualHours} giờ` : 'Chưa ghi nhận'}
                           {task.convertedHours !== undefined && task.convertedHours !== task.actualHours && (
-                            <strong className="text-amber-300 ml-1">({task.convertedHours}h quy đổi)</strong>
+                            <strong className="text-amber-300 ml-1">({task.convertedHours} giờ quy đổi)</strong>
                           )}
                         </span>
                         <span
@@ -1863,32 +1880,13 @@ export default function WeeklyDutyScheduleTable({
                 </label>
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                  <div className="sm:col-span-6 relative">
-                    <input
-                      ref={assignDatePickerRef}
-                      type="date"
+                  <div className="sm:col-span-6">
+                    <DatePickerVN
                       value={assignDeadlineDate}
-                      onChange={(e) => setAssignDeadlineDate(e.target.value)}
-                      onClick={(e) => {
-                        try {
-                          (e.currentTarget as any).showPicker?.();
-                        } catch {}
-                      }}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer [color-scheme:dark]"
-                      title="Nhấn để mở lịch chọn ngày"
+                      onChange={setAssignDeadlineDate}
+                      clearable
+                      className="w-full"
                     />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => {
-                        try {
-                          assignDatePickerRef.current?.showPicker?.();
-                        } catch {}
-                      }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-studio-muted hover:text-white transition-colors cursor-pointer"
-                    >
-                      <Calendar className="w-4 h-4 text-brand-primary" />
-                    </button>
                   </div>
 
                   <div className="sm:col-span-6 grid grid-cols-2 gap-2">
@@ -2112,32 +2110,13 @@ export default function WeeklyDutyScheduleTable({
                 </label>
 
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                  <div className="sm:col-span-6 relative">
-                    <input
-                      ref={editDatePickerRef}
-                      type="date"
+                  <div className="sm:col-span-6">
+                    <DatePickerVN
                       value={editDeadlineDate}
-                      onChange={(e) => setEditDeadlineDate(e.target.value)}
-                      onClick={(e) => {
-                        try {
-                          (e.currentTarget as any).showPicker?.();
-                        } catch {}
-                      }}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer [color-scheme:dark]"
-                      title="Nhấn để mở lịch chọn ngày"
+                      onChange={setEditDeadlineDate}
+                      clearable
+                      className="w-full"
                     />
-                    <button
-                      type="button"
-                      tabIndex={-1}
-                      onClick={() => {
-                        try {
-                          editDatePickerRef.current?.showPicker?.();
-                        } catch {}
-                      }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-studio-muted hover:text-white transition-colors cursor-pointer"
-                    >
-                      <Calendar className="w-4 h-4 text-blue-400" />
-                    </button>
                   </div>
 
                   <div className="sm:col-span-6 grid grid-cols-2 gap-2">

@@ -12,9 +12,6 @@ import {
   FileSpreadsheet,
   Download,
   RefreshCcw,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
   Users,
   Edit,
   X,
@@ -24,7 +21,6 @@ import {
   ArrowRight,
   Search,
   Filter,
-  Check,
   AlertTriangle,
 } from 'lucide-react';
 
@@ -140,6 +136,7 @@ export default function AdminPayrollPage() {
   const [activeTab, setActiveTab] = useState<'TIMESHEET' | 'TASKS_SUMMARY' | 'PAYROLL'>('TIMESHEET');
   const [loading, setLoading] = useState(false);
   const [calculating, setCalculating] = useState(false);
+  const [exportingType, setExportingType] = useState<'TIMESHEET' | 'TASKS_SUMMARY' | 'PAYROLL' | null>(null);
 
   // Bộ lọc CTV & Tìm kiếm (Hạng mục 3)
   const [searchCtvTerm, setSearchCtvTerm] = useState('');
@@ -249,14 +246,70 @@ export default function AdminPayrollPage() {
     }
   };
 
+  // Xây dựng query bộ lọc chung cho tất cả nút Xuất Excel
+  const buildExportQuery = () => {
+    const params = new URLSearchParams({
+      month: String(selectedMonth),
+      year: String(selectedYear),
+    });
+    if (selectedCtvFilter && selectedCtvFilter !== 'ALL') {
+      params.set('ctvId', selectedCtvFilter);
+    }
+    if (searchCtvTerm.trim()) {
+      params.set('search', searchCtvTerm.trim());
+    }
+    return params.toString();
+  };
+
   // Tải file Excel Bảng chấm công
-  const handleExportTimesheet = () => {
-    window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/payroll/export-timesheet?month=${selectedMonth}&year=${selectedYear}`, '_blank');
+  const handleExportTimesheet = async () => {
+    setExportingType('TIMESHEET');
+    try {
+      const mm = String(selectedMonth).padStart(2, '0');
+      await api.download(
+        `/payroll/export-timesheet?${buildExportQuery()}`,
+        `LHU_Media_Bang_Cham_Cong_T${mm}_${selectedYear}.xlsx`
+      );
+      toast(`Đã xuất file Excel Bảng chấm công Tháng ${mm}/${selectedYear}!`, 'success');
+    } catch (err: any) {
+      toast(err.message || 'Lỗi khi xuất file Bảng chấm công', 'error');
+    } finally {
+      setExportingType(null);
+    }
   };
 
   // Tải file Excel Bảng thống kê công việc
-  const handleExportTasksSummary = () => {
-    window.open(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/payroll/export-tasks-summary?month=${selectedMonth}&year=${selectedYear}`, '_blank');
+  const handleExportTasksSummary = async () => {
+    setExportingType('TASKS_SUMMARY');
+    try {
+      const mm = String(selectedMonth).padStart(2, '0');
+      await api.download(
+        `/payroll/export-tasks-summary?${buildExportQuery()}`,
+        `LHU_Media_Thong_Ke_Cong_Viec_T${mm}_${selectedYear}.xlsx`
+      );
+      toast(`Đã xuất file Excel Bảng thống kê công việc Tháng ${mm}/${selectedYear}!`, 'success');
+    } catch (err: any) {
+      toast(err.message || 'Lỗi khi xuất file Bảng thống kê công việc', 'error');
+    } finally {
+      setExportingType(null);
+    }
+  };
+
+  // Tải file Excel Bảng lương tháng
+  const handleExportPayroll = async () => {
+    setExportingType('PAYROLL');
+    try {
+      const mm = String(selectedMonth).padStart(2, '0');
+      await api.download(
+        `/payroll/export-payroll?${buildExportQuery()}`,
+        `LHU_Media_Bang_Luong_CTV_T${mm}_${selectedYear}.xlsx`
+      );
+      toast(`Đã xuất file Excel Bảng lương CTV Tháng ${mm}/${selectedYear}!`, 'success');
+    } catch (err: any) {
+      toast(err.message || 'Lỗi khi xuất file Bảng lương tháng', 'error');
+    } finally {
+      setExportingType(null);
+    }
   };
 
   // Mở modal sửa ô chấm công (Hạng mục 2: kiểm tra công việc tương ứng)
@@ -354,10 +407,6 @@ export default function AdminPayrollPage() {
         {/* Top Header */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-xs font-semibold mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Phân hệ Chấm công & Thù lao CTV (FR-05)</span>
-            </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
               Chấm Công &amp; Thống Kê Công Việc
             </h1>
@@ -488,20 +537,32 @@ export default function AdminPayrollPage() {
 
               <button
                 onClick={handleExportTimesheet}
-                className="flex items-center space-x-1.5 bg-brand-success/20 hover:bg-brand-success/30 text-brand-success border border-brand-success/30 font-bold px-3 py-2 rounded-2xl text-xs transition-all cursor-pointer"
-                title="Xuất file Excel Bảng Chấm Công (Sheet1)"
+                disabled={exportingType !== null}
+                className="flex items-center space-x-1.5 bg-brand-success/20 hover:bg-brand-success/30 text-brand-success border border-brand-success/30 font-bold px-3 py-2 rounded-2xl text-xs transition-all cursor-pointer disabled:opacity-50"
+                title="Xuất file Excel Bảng Chấm Công (đồng bộ bộ lọc CTV)"
               >
-                <Download className="w-3.5 h-3.5" />
+                {exportingType === 'TIMESHEET' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                 <span>Xuất Chấm công</span>
               </button>
 
               <button
                 onClick={handleExportTasksSummary}
-                className="flex items-center space-x-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 font-bold px-3 py-2 rounded-2xl text-xs transition-all cursor-pointer"
-                title="Xuất file Excel Bảng Thống Kê Công Việc (T10.2026)"
+                disabled={exportingType !== null}
+                className="flex items-center space-x-1.5 bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 border border-purple-500/30 font-bold px-3 py-2 rounded-2xl text-xs transition-all cursor-pointer disabled:opacity-50"
+                title="Xuất file Excel Bảng Thống Kê Công Việc (kèm Sheet chi tiết giờ & hệ số)"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
+                {exportingType === 'TASKS_SUMMARY' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
                 <span>Xuất Thống kê</span>
+              </button>
+
+              <button
+                onClick={handleExportPayroll}
+                disabled={exportingType !== null}
+                className="flex items-center space-x-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 font-bold px-3 py-2 rounded-2xl text-xs transition-all cursor-pointer disabled:opacity-50"
+                title="Xuất file Excel Bảng Lương Tháng CTV (tách giờ thường, ngoài giờ ×1,5, Chủ nhật ×2,0)"
+              >
+                {exportingType === 'PAYROLL' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                <span>Xuất Bảng lương</span>
               </button>
             </div>
           </div>
@@ -826,7 +887,7 @@ export default function AdminPayrollPage() {
                                   <div className="font-bold text-white/90">{task.hours}h</div>
                                   {isHighlighted && task.convertedHours !== undefined && task.convertedHours !== task.hours && (
                                     <div className="text-[10px] text-amber-300 font-bold mt-0.5">
-                                      ➔ {task.convertedHours}h quy đổi
+                                      ➔ {task.convertedHours} giờ quy đổi
                                     </div>
                                   )}
                                 </td>

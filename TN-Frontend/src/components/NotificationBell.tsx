@@ -5,9 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import {
   Bell,
-  Check,
   CheckCheck,
-  Loader2,
   X,
   ExternalLink,
   Calendar,
@@ -15,12 +13,11 @@ import {
   CheckSquare,
   AlertTriangle,
   Clock,
-  Sparkles,
   ShieldAlert,
   Inbox,
-  Filter,
 } from 'lucide-react';
 import api from '@/lib/api';
+import { useTheme } from '@/context/ThemeContext';
 
 interface NotificationItem {
   id: string;
@@ -33,11 +30,11 @@ interface NotificationItem {
 }
 
 export default function NotificationBell({ align = 'right' }: { align?: 'left' | 'right' }) {
+  const { isLight } = useTheme();
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [filterMode, setFilterMode] = useState<'ALL' | 'UNREAD'>('ALL');
-  const [loading, setLoading] = useState<boolean>(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -142,7 +139,11 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`relative p-2.5 rounded-xl border transition-all cursor-pointer ${
-          isOpen
+          isLight
+            ? isOpen
+              ? 'bg-blue-50 border-[#284F9E] text-[#284F9E] shadow-sm'
+              : 'bg-white border-slate-200 hover:border-[#284F9E] hover:bg-blue-50/50 text-slate-600 hover:text-[#284F9E] shadow-sm'
+            : isOpen
             ? 'bg-[#1E253B] border-[#3B82F6] text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]'
             : 'bg-[#141724] border-[#2B3553] hover:border-[#3B82F6] hover:bg-[#1B2032] text-[#CBD5E1] hover:text-white'
         }`}
@@ -150,7 +151,12 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-[#DC2626] text-[10px] font-black text-white shadow-lg shadow-red-900/80 ring-2 ring-[#0D101A] animate-bounce">
+          <span
+            data-force-light-text="true"
+            className={`absolute -top-1 -right-1 flex h-5 min-w-[20px] px-1 items-center justify-center rounded-full bg-[#DC2626] text-[10px] font-black text-white shadow-lg ring-2 animate-bounce ${
+              isLight ? 'ring-white' : 'ring-[#0D101A]'
+            }`}
+          >
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -159,18 +165,26 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
       {/* DROPDOWN THÔNG BÁO SOLID BACKGROUND HOÀN TOÀN (100% ĐẶC, KHÔNG TRONG SUỐT, NỔI BẬT Z-INDEX) */}
       {isOpen && (
         <div
-          className={`fixed sm:absolute inset-x-3 sm:inset-x-auto top-16 sm:top-full mt-2 w-auto sm:w-[420px] max-w-[calc(100vw-1.5rem)] rounded-2xl border-2 border-[#2B3553] bg-[#0D101A] shadow-[0_25px_60px_rgba(0,0,0,0.95)] z-[100] max-h-[min(580px,85vh)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
-            align === 'left' ? 'sm:left-0 sm:right-auto' : 'sm:right-0 sm:left-auto'
-          }`}
+          className={`fixed sm:absolute inset-x-3 sm:inset-x-auto top-16 sm:top-full mt-2 w-auto sm:w-[420px] max-w-[calc(100vw-1.5rem)] rounded-2xl border-2 z-[100] max-h-[min(580px,85vh)] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 ${
+            isLight
+              ? 'border-slate-200 bg-white shadow-[0_24px_56px_rgba(15,23,42,0.18)]'
+              : 'border-[#2B3553] bg-[#0D101A] shadow-[0_25px_60px_rgba(0,0,0,0.95)]'
+          } ${align === 'left' ? 'sm:left-0 sm:right-auto' : 'sm:right-0 sm:left-auto'}`}
         >
           {/* Header đặc, độ tương phản cao */}
-          <div className="bg-[#151928] px-4 py-3.5 border-b border-[#2B3553] shrink-0">
+          <div className={`px-4 py-3.5 border-b shrink-0 ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#151928] border-[#2B3553]'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
-                <Bell className="w-4 h-4 text-brand-accent" />
-                <span className="text-sm font-extrabold text-white tracking-wide">Thông báo</span>
+                <Bell className={`w-4 h-4 ${isLight ? 'text-[#284F9E]' : 'text-brand-accent'}`} />
+                <span className={`text-sm font-extrabold tracking-wide ${isLight ? 'text-slate-900' : 'text-white'}`}>Thông báo</span>
                 {unreadCount > 0 && (
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[#1E3A8A] text-[#93C5FD] border border-[#3B82F6] shadow-sm">
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold border shadow-sm ${
+                      isLight
+                        ? 'bg-blue-50 text-[#284F9E] border-blue-200'
+                        : 'bg-[#1E3A8A] text-[#93C5FD] border-[#3B82F6]'
+                    }`}
+                  >
                     {unreadCount} chưa đọc
                   </span>
                 )}
@@ -180,7 +194,11 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllAsRead}
-                    className="text-xs text-[#60A5FA] hover:text-white font-semibold flex items-center space-x-1 px-2.5 py-1 rounded-lg hover:bg-[#1E293B] border border-transparent hover:border-[#3B82F6] transition-all cursor-pointer"
+                    className={`text-xs font-semibold flex items-center space-x-1 px-2.5 py-1 rounded-lg border border-transparent transition-all cursor-pointer ${
+                      isLight
+                        ? 'text-[#284F9E] hover:bg-blue-50 hover:border-blue-200'
+                        : 'text-[#60A5FA] hover:text-white hover:bg-[#1E293B] hover:border-[#3B82F6]'
+                    }`}
                     title="Đánh dấu tất cả thông báo là đã đọc"
                   >
                     <CheckCheck className="w-3.5 h-3.5" />
@@ -190,7 +208,11 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="p-1 rounded-lg text-studio-muted hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  className={`p-1 rounded-lg transition-colors cursor-pointer ${
+                    isLight
+                      ? 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/70'
+                      : 'text-studio-muted hover:text-white hover:bg-white/10'
+                  }`}
                   title="Đóng thông báo (Esc)"
                   aria-label="Đóng"
                 >
@@ -200,12 +222,15 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
             </div>
 
             {/* Thanh lọc nhanh: Tất cả / Chưa đọc */}
-            <div className="flex items-center space-x-2 mt-3 pt-2.5 border-t border-[#23293D]">
+            <div className={`flex items-center space-x-2 mt-3 pt-2.5 border-t ${isLight ? 'border-slate-200' : 'border-[#23293D]'}`}>
               <button
                 onClick={() => setFilterMode('ALL')}
+                data-force-light-text={filterMode === 'ALL' ? 'true' : undefined}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   filterMode === 'ALL'
-                    ? 'bg-[#2563EB] text-white border border-[#3B82F6] shadow-sm'
+                    ? 'bg-[#284F9E] text-white border border-[#284F9E] shadow-sm'
+                    : isLight
+                    ? 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200'
                     : 'bg-[#0F121C] text-[#94A3B8] hover:text-white hover:bg-[#1A1F30] border border-[#242A3D]'
                 }`}
               >
@@ -213,9 +238,12 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
               </button>
               <button
                 onClick={() => setFilterMode('UNREAD')}
+                data-force-light-text={filterMode === 'UNREAD' ? 'true' : undefined}
                 className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   filterMode === 'UNREAD'
-                    ? 'bg-[#2563EB] text-white border border-[#3B82F6] shadow-sm'
+                    ? 'bg-[#284F9E] text-white border border-[#284F9E] shadow-sm'
+                    : isLight
+                    ? 'bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200'
                     : 'bg-[#0F121C] text-[#94A3B8] hover:text-white hover:bg-[#1A1F30] border border-[#242A3D]'
                 }`}
               >
@@ -225,14 +253,14 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
           </div>
 
           {/* Danh sách thông báo dạng Card với màu nền đặc, tương phản cao, cuộn độc lập */}
-          <div className="flex-1 max-h-[380px] overflow-y-auto overscroll-contain p-2.5 space-y-2.5 bg-[#0A0C14] divide-y-0">
+          <div className={`flex-1 max-h-[380px] overflow-y-auto overscroll-contain p-2.5 space-y-2.5 divide-y-0 ${isLight ? 'bg-slate-50/70' : 'bg-[#0A0C14]'}`}>
             {displayedNotifications.length === 0 ? (
               <div className="py-12 px-4 text-center space-y-2">
-                <Inbox className="w-10 h-10 text-gray-500 mx-auto opacity-50" />
-                <p className="text-white font-bold text-sm">
+                <Inbox className={`w-10 h-10 mx-auto opacity-50 ${isLight ? 'text-slate-400' : 'text-gray-500'}`} />
+                <p className={`font-bold text-sm ${isLight ? 'text-slate-800' : 'text-white'}`}>
                   {filterMode === 'UNREAD' ? 'Không có thông báo chưa đọc nào' : 'Bạn chưa có thông báo nào'}
                 </p>
-                <p className="text-xs text-[#94A3B8]">
+                <p className={`text-xs ${isLight ? 'text-slate-500' : 'text-[#94A3B8]'}`}>
                   Các cập nhật về mượn thiết bị, đặt phòng, phân công việc và lịch trực sẽ xuất hiện tại đây.
                 </p>
               </div>
@@ -245,7 +273,11 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
                     key={n.id}
                     onClick={() => isUnread && handleMarkAsRead(n.id)}
                     className={`group relative p-3.5 rounded-xl border transition-all cursor-pointer ${
-                      isUnread
+                      isLight
+                        ? isUnread
+                          ? 'bg-blue-50/80 hover:bg-blue-50 border-blue-200 border-l-4 border-l-[#284F9E] shadow-sm'
+                          : 'bg-white hover:bg-slate-50 border-slate-200 border-l-4 border-l-transparent'
+                        : isUnread
                         ? 'bg-[#1C243B] hover:bg-[#232E4A] border-[#374567] hover:border-[#4B5E8C] border-l-4 border-l-[#3B82F6] shadow-[0_4px_16px_rgba(0,0,0,0.6)]'
                         : 'bg-[#11141E] hover:bg-[#161B29] border-[#1F2433] hover:border-[#2C3348] border-l-4 border-l-transparent'
                     }`}
@@ -254,7 +286,11 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
                       {/* Icon nhận diện loại thông báo */}
                       <div
                         className={`p-2 rounded-xl shrink-0 mt-0.5 border ${
-                          isUnread
+                          isLight
+                            ? isUnread
+                              ? 'bg-white border-blue-200 shadow-xs'
+                              : 'bg-slate-50 border-slate-200'
+                            : isUnread
                             ? 'bg-[#111728] border-[#3B82F6] shadow-inner'
                             : 'bg-[#0D0F17] border-[#1F2433] opacity-75'
                         }`}
@@ -267,11 +303,13 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center space-x-1.5 min-w-0">
                             {isUnread && (
-                              <span className="w-2 h-2 rounded-full bg-[#3B82F6] shrink-0 shadow-[0_0_8px_#3B82F6]" />
+                              <span className="w-2 h-2 rounded-full bg-[#284F9E] shrink-0 shadow-[0_0_8px_#3B82F6]" />
                             )}
                             <h4
                               className={`text-xs leading-snug line-clamp-2 ${
-                                isUnread ? 'text-white font-bold' : 'text-[#CBD5E1] font-medium'
+                                isLight
+                                  ? isUnread ? 'text-slate-900 font-bold' : 'text-slate-700 font-medium'
+                                  : isUnread ? 'text-white font-bold' : 'text-[#CBD5E1] font-medium'
                               }`}
                             >
                               {n.title}
@@ -279,7 +317,10 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
                           </div>
 
                           {isUnread && (
-                            <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-[#2563EB] text-white border border-[#60A5FA] shadow-sm">
+                            <span
+                              data-force-light-text="true"
+                              className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-[#284F9E] text-white border border-blue-400 shadow-sm"
+                            >
                               Mới
                             </span>
                           )}
@@ -287,14 +328,16 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
 
                         <p
                           className={`text-xs leading-relaxed line-clamp-2 ${
-                            isUnread ? 'text-[#E2E8F0] font-normal' : 'text-[#8892A4]'
+                            isLight
+                              ? isUnread ? 'text-slate-700 font-normal' : 'text-slate-500'
+                              : isUnread ? 'text-[#E2E8F0] font-normal' : 'text-[#8892A4]'
                           }`}
                         >
                           {n.message}
                         </p>
 
                         <div className="flex items-center justify-between pt-1.5">
-                          <span className="text-[10px] text-[#94A3B8] font-medium flex items-center space-x-1">
+                          <span className={`text-[10px] font-medium flex items-center space-x-1 ${isLight ? 'text-slate-500' : 'text-[#94A3B8]'}`}>
                             <Clock className="w-3 h-3 text-[#64748B]" />
                             <span>
                               {new Date(n.createdAt).toLocaleDateString('vi-VN', {
@@ -316,7 +359,11 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
                                 setIsOpen(false);
                               }}
                               className={`text-[11px] flex items-center space-x-1 px-2.5 py-1 rounded-lg transition-all cursor-pointer ${
-                                isUnread
+                                isLight
+                                  ? isUnread
+                                    ? 'bg-white hover:bg-[#284F9E] text-[#284F9E] hover:text-white border border-[#284F9E]/40 font-bold shadow-xs'
+                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-[#284F9E] border border-slate-200 font-medium'
+                                  : isUnread
                                   ? 'bg-[#161F33] hover:bg-[#2563EB] text-[#60A5FA] hover:text-white border border-[#3B82F6] font-bold shadow-sm'
                                   : 'bg-[#0F131D] hover:bg-[#1E293B] text-[#94A3B8] hover:text-white border border-[#252B3C] hover:border-[#3B82F6] font-medium'
                               }`}
@@ -335,15 +382,17 @@ export default function NotificationBell({ align = 'right' }: { align?: 'left' |
           </div>
 
           {/* Footer đặc, có nút xem toàn bộ trang */}
-          <div className="bg-[#151928] px-4 py-2.5 border-t border-[#2B3553] flex items-center justify-between shrink-0">
-            <span className="text-[11px] text-[#94A3B8] font-medium">
+          <div className={`px-4 py-2.5 border-t flex items-center justify-between shrink-0 ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#151928] border-[#2B3553]'}`}>
+            <span className={`text-[11px] font-medium ${isLight ? 'text-slate-500' : 'text-[#94A3B8]'}`}>
               Hiển thị {displayedNotifications.length} thông báo gần nhất
             </span>
 
             <Link
               href="/notifications"
               onClick={() => setIsOpen(false)}
-              className="text-xs font-bold text-brand-accent hover:text-[#FDE047] hover:underline flex items-center space-x-1 transition-colors cursor-pointer"
+              className={`text-xs font-bold hover:underline flex items-center space-x-1 transition-colors cursor-pointer ${
+                isLight ? 'text-[#284F9E] hover:text-[#1F3F7F]' : 'text-brand-accent hover:text-[#FDE047]'
+              }`}
             >
               <span>Xem tất cả</span>
               <ExternalLink className="w-3 h-3" />

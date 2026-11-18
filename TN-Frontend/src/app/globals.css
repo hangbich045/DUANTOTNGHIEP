@@ -7,7 +7,7 @@
   --color-brand-accent: #ECC354;
   --color-brand-success: #10b981;
   --color-brand-error: #ef4444;
-  
+
   --color-studio-dark: #0F111A;
   --color-studio-card: #181B26;
   --color-studio-border: #2B3553;
@@ -15,9 +15,68 @@
   --color-studio-muted: #B8BECF;
 }
 
-:root {
+/* ============================================================================
+ * 1. THEME TOKENS: DARK MODE (DEFAULT — GIỮ NGUYÊN 100% PHONG CÁCH LHU DARK)
+ * ============================================================================ */
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
   --background: #0F111A;
   --foreground: #FFFFFF;
+
+  --color-brand-primary: #284F9E;
+  --color-brand-primary-hover: #1F3F7F;
+  --color-brand-secondary: #1F3F7F;
+  --color-brand-accent: #ECC354;
+  --color-brand-success: #10b981;
+  --color-brand-error: #ef4444;
+
+  --color-studio-dark: #0F111A;
+  --color-studio-card: #181B26;
+  --color-studio-border: #2B3553;
+  --color-studio-text: #FFFFFF;
+  --color-studio-muted: #B8BECF;
+
+  --surface-glass: rgba(24, 27, 38, 0.65);
+  --surface-glass-hover: rgba(24, 27, 38, 0.85);
+  --surface-border: #2B3553;
+  --scrollbar-track: #0F111A;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.14);
+  --scrollbar-thumb-hover: rgba(40, 79, 158, 0.55);
+}
+
+/* ============================================================================
+ * 2. THEME TOKENS: LIGHT MODE (NỀN SÁNG - THẺ TRẮNG - XANH DƯƠNG NHẬN DIỆN LHU)
+ * ============================================================================ */
+html[data-theme="light"] {
+  color-scheme: light;
+  --background: #EEF3FA;
+  --foreground: #0F172A;
+
+  --color-brand-primary: #284F9E;
+  --color-brand-primary-hover: #1E3F82;
+  --color-brand-secondary: #1E3F82;
+  --color-brand-accent: #B45309;
+  --color-brand-success: #047857;
+  --color-brand-error: #DC2626;
+
+  --color-studio-dark: #EEF3FA;
+  --color-studio-card: #FFFFFF;
+  --color-studio-border: #CBD5E1;
+  --color-studio-text: #0F172A;
+  --color-studio-muted: #475569;
+
+  --surface-canvas: #EEF3FA;
+  --surface-card: #FFFFFF;
+  --surface-subtle: #F4F7FC;
+  --surface-muted: #E8EFF8;
+  --surface-glass: rgba(255, 255, 255, 0.96);
+  --surface-glass-hover: #FFFFFF;
+  --surface-border: #D5DFEE;
+  --surface-border-strong: #B8C7DE;
+  --scrollbar-track: #E8EFF8;
+  --scrollbar-thumb: #B8C7DE;
+  --scrollbar-thumb-hover: #284F9E;
 }
 
 body {
@@ -27,12 +86,26 @@ body {
   overflow-x: hidden;
 }
 
-/* Glassmorphism utility classes */
+/* Hiệu ứng chuyển chế độ Sáng/Tối mượt mà, không nhấp nháy hay vỡ bố cục */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.22s ease, border-color 0.22s ease, color 0.18s ease, box-shadow 0.22s ease !important;
+}
+
+/* ============================================================================
+ * 3. GLASSMORPHISM & BRAND UTILITIES
+ * ============================================================================ */
 .glass-panel {
-  background: rgba(24, 27, 38, 0.65);
+  background: var(--surface-glass);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid #2B3553;
+  border: 1px solid var(--surface-border);
+}
+
+html[data-theme="light"] .glass-panel {
+  box-shadow: 0 2px 12px rgba(40, 79, 158, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .glass-panel-hover {
@@ -40,10 +113,15 @@ body {
 }
 
 .glass-panel-hover:hover {
-  background: rgba(24, 27, 38, 0.85);
-  border-color: #ECC354;
+  background: var(--surface-glass-hover);
+  border-color: var(--color-brand-accent);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
   transform: translateY(-2px);
+}
+
+html[data-theme="light"] .glass-panel-hover:hover {
+  border-color: #284F9E;
+  box-shadow: 0 12px 28px rgba(40, 79, 158, 0.14);
 }
 
 .text-gradient {
@@ -52,7 +130,15 @@ body {
   -webkit-text-fill-color: transparent;
 }
 
-/* FullCalendar styling overrides for dark mode */
+html[data-theme="light"] .text-gradient {
+  background: linear-gradient(135deg, #284F9E 0%, #B45309 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ============================================================================
+ * 4. FULLCALENDAR STYLING (DARK MODE + LIGHT MODE)
+ * ============================================================================ */
 .fc {
   --fc-border-color: #2B3553 !important;
   --fc-daygrid-event-dot-width: 8px !important;
@@ -60,6 +146,29 @@ body {
   --fc-event-border-color: rgba(40, 79, 158, 0.6) !important;
   --fc-event-text-color: #ffffff !important;
   font-family: inherit;
+}
+
+html[data-theme="light"] .fc {
+  --fc-border-color: #D5DFEE !important;
+  --fc-page-bg-color: #FFFFFF !important;
+  --fc-neutral-bg-color: #F4F7FC !important;
+  --fc-list-event-hover-bg-color: #EFF6FF !important;
+  --fc-event-bg-color: #DBEAFE !important;
+  --fc-event-border-color: #284F9E !important;
+  --fc-event-text-color: #0F172A !important;
+  color: #0F172A;
+}
+
+/* Chữ trong các khung giờ sự kiện FullCalendar (Tuần / Ngày / Tháng) dùng màu đen sắc nét trong Light Mode */
+html[data-theme="light"] .fc .fc-event,
+html[data-theme="light"] .fc .fc-event-main,
+html[data-theme="light"] .fc .fc-event-main-frame,
+html[data-theme="light"] .fc .fc-event-time,
+html[data-theme="light"] .fc .fc-event-title,
+html[data-theme="light"] .fc .fc-event-title-container,
+html[data-theme="light"] .fc .fc-daygrid-event,
+html[data-theme="light"] .fc .fc-daygrid-event * {
+  color: #0F172A !important;
 }
 
 .fc-theme-standard th {
@@ -72,8 +181,29 @@ body {
   color: #B8BECF;
 }
 
+html[data-theme="light"] .fc-theme-standard th {
+  background: #F1F5F9 !important;
+  color: #1E293B !important;
+}
+
+html[data-theme="light"] .fc .fc-col-header-cell-cushion,
+html[data-theme="light"] .fc .fc-daygrid-day-number,
+html[data-theme="light"] .fc .fc-toolbar-title,
+html[data-theme="light"] .fc .fc-timegrid-slot-label-cushion,
+html[data-theme="light"] .fc .fc-timegrid-axis-cushion {
+  color: #0F172A !important;
+}
+
+html[data-theme="light"] .fc .fc-day-other .fc-daygrid-day-number {
+  color: #94A3B8 !important;
+}
+
 .fc-day-today {
   background: rgba(40, 79, 158, 0.05) !important;
+}
+
+html[data-theme="light"] .fc-day-today {
+  background: rgba(40, 79, 158, 0.09) !important;
 }
 
 .fc-event {
@@ -98,31 +228,799 @@ body {
   text-transform: capitalize !important;
 }
 
+html[data-theme="light"] .fc-button-primary {
+  background-color: #FFFFFF !important;
+  border: 1px solid #CBD5E1 !important;
+  color: #1E293B !important;
+}
+
 .fc-button-primary:hover {
   background-color: rgba(40, 79, 158, 0.2) !important;
   border-color: rgba(40, 79, 158, 0.4) !important;
 }
 
+html[data-theme="light"] .fc-button-primary:hover {
+  background-color: #EFF6FF !important;
+  border-color: #284F9E !important;
+  color: #284F9E !important;
+}
+
 .fc-button-active {
   background-color: #284F9E !important;
   border-color: #284F9E !important;
+  color: #FFFFFF !important;
 }
 
-/* Custom Scrollbar */
+/* ============================================================================
+ * 5. CUSTOM SCROLLBAR
+ * ============================================================================ */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #0F111A;
+  background: var(--scrollbar-track);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--scrollbar-thumb);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(40, 79, 158, 0.4);
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ============================================================================
+ * 6. LIGHT MODE DESIGN SYSTEM — PHÂN TẦNG BỀ MẶT, TƯƠNG PHẢN WCAG AA & TRẠNG THÁI
+ * (Chỉ áp dụng khi html[data-theme="light"]; tuyệt đối không ảnh hưởng Dark Mode)
+ * ============================================================================ */
+
+/* --- 6.1. Tầng nền trang (Canvas #EEF3FA) --- */
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#0F111A]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#0A0C14]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#0a0c10]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#0e0e11]"] {
+  background-color: var(--surface-canvas) !important;
+  color: #0F172A;
+}
+
+/* Footer trang chủ dùng nền trắng sáng tách biệt rõ ràng */
+html[data-theme="light"] footer.bg-\[\#040508\] {
+  background-color: #FFFFFF !important;
+  border-top-color: #D5DFEE !important;
+}
+
+/* --- 6.2. Tầng thẻ / bảng / modal / sidebar / navbar (Card #FFFFFF) --- */
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/15,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/20,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/25,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/30 {
+  background-color: var(--surface-card) !important;
+}
+
+html[data-theme="light"] aside.bg-black\/40 {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  border-right-color: #D5DFEE !important;
+  box-shadow: 4px 0 24px rgba(40, 79, 158, 0.06);
+}
+
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#0D101A]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#101828]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#11141E]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#121216]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#121624]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#13151F]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#141418]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#14141c]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#141724]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#141726]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#151928]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#161620]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#161822]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#161A28]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#161B29]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#18181b]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#181820]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#181822]"],
+html[data-theme="light"] :not([data-hero-dark="true"]):not([data-hero-dark="true"] *)[class*="bg-[#1a202c]"] {
+  background-color: var(--surface-card) !important;
+  color: #0F172A;
+}
+
+/* --- 6.3. Tầng thành phần lồng nhau: ô lọc, input, nút phụ, thẻ con (#F4F7FC / #E8EFF8) --- */
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/35,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/40:not(aside),
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/45,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/50,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-black\/60,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/2,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/3,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/\[0\.015\],
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/\[0\.02\],
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/\[0\.03\],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#0D0F17]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#0F121C]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#0F131D]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#111728]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#13192B]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#161F33]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#1A1F30]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#1B2030]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#1B2032]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#1E253B]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#1E263D]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#1E293B]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="bg-[#242A40]"] {
+  background-color: var(--surface-subtle) !important;
+}
+
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/5 {
+  background-color: #F1F5F9 !important;
+}
+
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/10,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/15,
+html[data-theme="light"] :not([data-hero-dark="true"] *).bg-white\/20,
+html[data-theme="light"] .bg-zinc-500\/15,
+html[data-theme="light"] .bg-zinc-500\/20 {
+  background-color: #E2E8F0 !important;
+}
+
+/* Thông báo chưa đọc trên /notifications: phân biệt rõ ràng với thông báo đã đọc */
+html[data-theme="light"] .bg-\[\#1C243B\] {
+  background-color: #EFF6FF !important;
+  box-shadow: 0 4px 14px rgba(40, 79, 158, 0.08) !important;
+}
+
+html[data-theme="light"] .hover\:bg-\[\#232D4A\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#232E4A\]:hover {
+  background-color: #DBEAFE !important;
+}
+
+html[data-theme="light"] .bg-\[\#1E3A8A\] {
+  background-color: #DBEAFE !important;
+}
+
+/* Lớp phủ mờ (backdrop) sau Modal (chỉ phần tử inset-0) luôn giữ màu tối dịu để nổi hộp thoại trắng */
+html[data-theme="light"] .inset-0.bg-black\/70,
+html[data-theme="light"] .inset-0.bg-black\/75,
+html[data-theme="light"] .inset-0.bg-black\/80 {
+  background-color: rgba(15, 23, 42, 0.48) !important;
+}
+
+/* Các dòng chân bảng (tfoot / dòng Tổng cộng) và thẻ không phải modal backdrop dùng nền trắng tinh #FFFFFF */
+html[data-theme="light"] tfoot tr,
+html[data-theme="light"] tr.bg-black\/70,
+html[data-theme="light"] tr.bg-black\/75,
+html[data-theme="light"] tr.bg-black\/80 {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+html[data-theme="light"] span.bg-black\/70 {
+  background-color: rgba(255, 255, 255, 0.94) !important;
+}
+
+/* Mọi ô nhập liệu, khung tìm kiếm & dropdown chọn lọc trên Light Mode dùng nền trắng #FFFFFF sắc nét đồng bộ với DatePicker */
+html[data-theme="light"] .bg-studio-dark\/50,
+html[data-theme="light"] .bg-studio-dark\/70,
+html[data-theme="light"] .bg-studio-dark\/80,
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([class*="bg-transparent"]),
+html[data-theme="light"] select:not([class*="bg-transparent"]),
+html[data-theme="light"] textarea:not([class*="bg-transparent"]) {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+/* --- 6.4. Bảng dữ liệu, Sticky header & Dropdown / Form controls --- */
+html[data-theme="light"] thead tr {
+  background-color: #F1F5F9 !important;
+  color: #334155;
+}
+
+html[data-theme="light"] thead th:not([class*="bg-rose"]):not([class*="bg-blue"]):not([class*="bg-purple"]):not([class*="bg-amber"]):not([class*="bg-emerald"]) {
+  background-color: #F1F5F9 !important;
+}
+
+html[data-theme="light"] thead th {
+  color: #334155;
+}
+
+html[data-theme="light"] tbody tr:hover {
+  background-color: #F8FAFF;
+}
+
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html[data-theme="light"] select,
+html[data-theme="light"] textarea {
+  color: #0F172A !important;
+}
+
+html[data-theme="light"] input::placeholder,
+html[data-theme="light"] textarea::placeholder {
+  color: #64748B !important;
+  opacity: 1;
+}
+
+html[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]):focus,
+html[data-theme="light"] select:focus,
+html[data-theme="light"] textarea:focus {
+  border-color: #284F9E !important;
+  box-shadow: 0 0 0 3px rgba(40, 79, 158, 0.14);
+}
+
+html[data-theme="light"] select option {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+html[data-theme="light"] .\[color-scheme\:dark\] {
+  color-scheme: light !important;
+}
+
+/* Các thẻ khung lớn (.glass-panel) và nền tint rất nhẹ (/5) trong Light Mode luôn giữ nền trắng tinh #FFFFFF để sạch sẽ, chuyên nghiệp (chỉ giữ màu pastel ở badge/tag/nút nhỏ và ô lịch trực) */
+html[data-theme="light"] .glass-panel:not([data-hero-dark="true"] *),
+html[data-theme="light"] .bg-brand-primary\/5,
+html[data-theme="light"] .bg-brand-success\/5,
+html[data-theme="light"] .bg-brand-error\/5,
+html[data-theme="light"] .bg-blue-500\/5,
+html[data-theme="light"] .bg-amber-500\/5,
+html[data-theme="light"] .bg-rose-500\/5:not(td) {
+  background-color: #FFFFFF !important;
+}
+
+/* --- 6.5. Bề mặt trạng thái cho Badge / Pill / Ký hiệu lịch trực (LV/SV/ĐK/NL/DP) --- */
+/* Xanh dương / LHU Primary tint */
+html[data-theme="light"] :not(.glass-panel).bg-brand-primary\/10,
+html[data-theme="light"] :not(.glass-panel).bg-brand-primary\/15,
+html[data-theme="light"] :not(.glass-panel).bg-brand-primary\/20,
+html[data-theme="light"] :not(.glass-panel).bg-brand-primary\/30,
+html[data-theme="light"] :not(.glass-panel).bg-brand-secondary\/10,
+html[data-theme="light"] :not(.glass-panel).bg-brand-secondary\/20,
+html[data-theme="light"] :not(.glass-panel).bg-brand-secondary\/30,
+html[data-theme="light"] :not(.glass-panel).bg-blue-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-blue-500\/15,
+html[data-theme="light"] :not(.glass-panel).bg-blue-500\/20,
+html[data-theme="light"] :not(.glass-panel).bg-blue-500\/25,
+html[data-theme="light"] :not(.glass-panel).bg-blue-500\/30,
+html[data-theme="light"] :not(.glass-panel).bg-blue-600\/20,
+html[data-theme="light"] :not(.glass-panel).bg-blue-600\/30,
+html[data-theme="light"] :not(.glass-panel).bg-blue-900\/15,
+html[data-theme="light"] :not(.glass-panel).bg-blue-900\/20,
+html[data-theme="light"] :not(.glass-panel).bg-blue-900\/25,
+html[data-theme="light"] :not(.glass-panel).bg-blue-950\/20,
+html[data-theme="light"] :not(.glass-panel).bg-indigo-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-indigo-600\/25,
+html[data-theme="light"] :not(.glass-panel).bg-indigo-900\/20 {
+  background-color: #DBEAFE !important;
+}
+
+/* Xanh lá / Thành công tint */
+html[data-theme="light"] :not(.glass-panel).bg-brand-success\/10,
+html[data-theme="light"] :not(.glass-panel).bg-brand-success\/15,
+html[data-theme="light"] :not(.glass-panel).bg-brand-success\/20,
+html[data-theme="light"] :not(.glass-panel).bg-brand-success\/30,
+html[data-theme="light"] :not(.glass-panel).bg-emerald-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-emerald-500\/15,
+html[data-theme="light"] :not(.glass-panel).bg-emerald-500\/20,
+html[data-theme="light"] :not(.glass-panel).bg-emerald-500\/25,
+html[data-theme="light"] :not(.glass-panel).bg-emerald-500\/30,
+html[data-theme="light"] :not(.glass-panel).bg-emerald-600\/20,
+html[data-theme="light"] :not(.glass-panel).bg-emerald-950\/20 {
+  background-color: #D1FAE5 !important;
+}
+
+/* Vàng hổ phách / Cảnh báo / Hệ số nhân tint */
+html[data-theme="light"] :not(.glass-panel).bg-brand-accent\/10,
+html[data-theme="light"] :not(.glass-panel).bg-brand-accent\/15,
+html[data-theme="light"] :not(.glass-panel).bg-brand-accent\/20,
+html[data-theme="light"] :not(.glass-panel).bg-amber-400\/10,
+html[data-theme="light"] :not(.glass-panel).bg-amber-400\/15,
+html[data-theme="light"] :not(.glass-panel).bg-amber-400\/25,
+html[data-theme="light"] :not(.glass-panel).bg-amber-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-amber-500\/15,
+html[data-theme="light"] :not(.glass-panel).bg-amber-500\/20,
+html[data-theme="light"] :not(.glass-panel).bg-amber-500\/25,
+html[data-theme="light"] :not(.glass-panel).bg-amber-500\/30,
+html[data-theme="light"] :not(.glass-panel).bg-amber-600\/25,
+html[data-theme="light"] :not(.glass-panel).bg-amber-600\/30 {
+  background-color: #FEF3C7 !important;
+}
+
+/* Đỏ hồng / Lỗi / Quá hạn tint */
+html[data-theme="light"] :not(.glass-panel).bg-brand-error\/10,
+html[data-theme="light"] :not(.glass-panel).bg-brand-error\/15,
+html[data-theme="light"] :not(.glass-panel).bg-brand-error\/20,
+html[data-theme="light"] :not(.glass-panel).bg-rose-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-rose-500\/15,
+html[data-theme="light"] :not(.glass-panel).bg-rose-500\/20,
+html[data-theme="light"] :not(.glass-panel).bg-rose-500\/25,
+html[data-theme="light"] :not(.glass-panel).bg-rose-500\/30,
+html[data-theme="light"] :not(.glass-panel).bg-rose-500\/40,
+html[data-theme="light"] :not(.glass-panel).bg-rose-600\/25,
+html[data-theme="light"] :not(.glass-panel).bg-rose-900\/20,
+html[data-theme="light"] :not(.glass-panel).bg-red-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-red-600\/30 {
+  background-color: #FFE4E6 !important;
+}
+
+/* Tím / Sự vụ SV tint */
+html[data-theme="light"] :not(.glass-panel).bg-purple-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-purple-500\/20,
+html[data-theme="light"] :not(.glass-panel).bg-purple-500\/25,
+html[data-theme="light"] :not(.glass-panel).bg-purple-500\/30,
+html[data-theme="light"] :not(.glass-panel).bg-purple-600\/20,
+html[data-theme="light"] :not(.glass-panel).bg-purple-600\/30,
+html[data-theme="light"] :not(.glass-panel).bg-purple-600\/40,
+html[data-theme="light"] :not(.glass-panel).bg-purple-600\/50,
+html[data-theme="light"] :not(.glass-panel).bg-purple-600\/70,
+html[data-theme="light"] :not(.glass-panel).bg-purple-900\/10,
+html[data-theme="light"] :not(.glass-panel).bg-purple-900\/15,
+html[data-theme="light"] :not(.glass-panel).bg-purple-900\/25,
+html[data-theme="light"] :not(.glass-panel).bg-purple-900\/50,
+html[data-theme="light"] :not(.glass-panel).bg-purple-950\/20 {
+  background-color: #F3E8FF !important;
+}
+
+/* Xanh ngọc / Cyan tint */
+html[data-theme="light"] :not(.glass-panel).bg-cyan-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-teal-500\/10,
+html[data-theme="light"] :not(.glass-panel).bg-teal-600\/25,
+html[data-theme="light"] :not(.glass-panel).bg-teal-600\/30,
+html[data-theme="light"] :not(.glass-panel).bg-teal-900\/20 {
+  background-color: #CCFBF1 !important;
+}
+
+/* Banner tiêu đề Lịch trực tuần BPTT dùng gradient LHU sáng thanh lịch */
+html[data-theme="light"] .from-blue-900\/20.to-purple-900\/20 {
+  background-image: linear-gradient(90deg, #EFF6FF 0%, #E0E7FF 50%, #F3E8FF 100%) !important;
+}
+
+/* --- 6.5b. Đồng bộ hệ thống màu cột Bảng Lịch trực tuần (WeeklyDutyScheduleTable) trong Light Mode --- */
+/* Bảng dùng nền trắng sạch; mỗi nhóm cột tuân theo 3 tầng độ đậm thống nhất: Header (200) -> Subheader/Footer (100) -> Body (50) */
+html[data-theme="light"] [data-duty-table="true"] {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+}
+
+/* Header tầng 1 (Nhóm ngày, Số lượng buổi làm, Tình trạng) */
+html[data-theme="light"] [data-duty-table="true"] thead tr:first-child th:not([class*="bg-amber"]):not([class*="bg-rose"]):not([class*="bg-blue"]):not([class*="bg-purple"]) {
+  background-color: #EEF2F7 !important;
+  color: #1E293B !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-amber-400\/25 {
+  background-color: #FDE68A !important;
+  color: #92400E !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-amber-400\/25 .drop-shadow {
+  filter: none !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-rose-500\/15 {
+  background-color: #FECDD3 !important;
+  color: #9F1239 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-blue-900\/25 {
+  background-color: #CBE2FE !important;
+  color: #1E40AF !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-purple-900\/25 {
+  background-color: #E3DCFE !important;
+  color: #5B21B6 !important;
+}
+
+/* Header tầng 2 (S-C-T, SC-SV-D, DP-NP-SX) */
+html[data-theme="light"] [data-duty-table="true"] thead tr:nth-child(2) th:not([class*="bg-amber"]):not([class*="bg-rose"]):not([class*="bg-blue"]):not([class*="bg-purple"]) {
+  background-color: #F8FAFC !important;
+  color: #475569 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-amber-400\/15 {
+  background-color: #FEF3C7 !important;
+  color: #B45309 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-rose-500\/10 {
+  background-color: #FFE4E6 !important;
+  color: #BE123C !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-blue-900\/15 {
+  background-color: #DBEAFE !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] thead th.bg-purple-900\/15 {
+  background-color: #EDE9FE !important;
+}
+
+/* Dòng dữ liệu (Zebra đồng bộ cả 2 cột sticky STT/NHÂN SỰ lẫn các ngày thường) */
+html[data-theme="light"] [data-duty-table="true"] tbody tr:nth-child(odd),
+html[data-theme="light"] [data-duty-table="true"] tbody tr:nth-child(odd) td.sticky {
+  background-color: #FFFFFF !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tbody tr:nth-child(even),
+html[data-theme="light"] [data-duty-table="true"] tbody tr:nth-child(even) td.sticky {
+  background-color: #F8FAFC !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tbody tr[data-current-user="true"],
+html[data-theme="light"] [data-duty-table="true"] tbody tr[data-current-user="true"] td.sticky {
+  background-color: #EFF6FF !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tbody tr:hover,
+html[data-theme="light"] [data-duty-table="true"] tbody tr:hover td.sticky {
+  background-color: #F1F5FF !important;
+}
+
+/* Các cột màu đồng bộ trong thân bảng (Hôm nay, Chủ Nhật, Số lượng buổi làm, Tình trạng) */
+html[data-theme="light"] [data-duty-table="true"] tbody td.bg-amber-400\/10 {
+  background-color: #FEF9E2 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tbody td.bg-amber-400\/10:hover {
+  background-color: #FEF0B8 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tbody td.bg-rose-500\/5 {
+  background-color: #FFEFF2 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tbody td.bg-rose-500\/5:hover {
+  background-color: #FFE0E6 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tbody td[data-col-group="workload"] {
+  background-color: #EFF6FF !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tbody td[data-col-group="status"] {
+  background-color: #F5F3FF !important;
+}
+
+/* Hàng TỔNG đáy bảng khép kín màu từng nhóm cột */
+html[data-theme="light"] [data-duty-table="true"] tfoot tr,
+html[data-theme="light"] [data-duty-table="true"] tfoot td.sticky {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+  border-top-color: #CBD5E1 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tfoot td.bg-amber-400\/25 {
+  background-color: #FEF3C7 !important;
+  color: #92400E !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tfoot td[data-col="sunday"] {
+  background-color: #FFE4E6 !important;
+  color: #BE123C !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tfoot td[data-col-group="workload"] {
+  background-color: #DBEAFE !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] tfoot td[data-col-group="status"] {
+  background-color: #EDE9FE !important;
+}
+
+/* --- 6.6. Đường viền & đường phân tách sắc nét --- */
+html[data-theme="light"] :not([data-hero-dark="true"] *).border-white\/5,
+html[data-theme="light"] :not([data-hero-dark="true"] *).border-white\/10,
+html[data-theme="light"] :not([data-hero-dark="true"] *).border-white\/15,
+html[data-theme="light"] :not([data-hero-dark="true"] *).border-white\/20,
+html[data-theme="light"] :not([data-hero-dark="true"] *).border-white\/30,
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#1F2433]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#23293D]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#242A3D]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#252B3C]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#252E47]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#2B3553]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#2C3348]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#374567]"],
+html[data-theme="light"] :not([data-hero-dark="true"] *)[class*="border-[#4B5E8C]"] {
+  border-color: #D5DFEE !important;
+}
+
+html[data-theme="light"] .divide-white\/5> :not(:last-child),
+html[data-theme="light"] .divide-white\/10> :not(:last-child) {
+  border-color: #E2E8F0 !important;
+}
+
+/* Phân cấp đường kẻ trong Bảng Lịch trực tuần: ranh giới ngày/nhóm rõ hơn đường chia S-C-T */
+html[data-theme="light"] [data-duty-table="true"] .border-white\/5 {
+  border-color: #E2E8F0 !important;
+}
+
+html[data-theme="light"] [data-duty-table="true"] .border-white\/10,
+html[data-theme="light"] [data-duty-table="true"] .border-white\/20 {
+  border-color: #CBD5E1 !important;
+}
+
+/* --- 6.7. Hệ thống màu chữ tương phản cao (WCAG AA >= 4.5:1) --- */
+html[data-theme="light"] .text-white,
+html[data-theme="light"] .text-white\/95,
+html[data-theme="light"] .text-white\/90,
+html[data-theme="light"] .text-white\/85 {
+  color: #0F172A !important;
+}
+
+html[data-theme="light"] .text-white\/80,
+html[data-theme="light"] .text-gray-200,
+html[data-theme="light"] .text-gray-300,
+html[data-theme="light"] .text-slate-200,
+html[data-theme="light"] .text-slate-300,
+html[data-theme="light"] .text-\[\#CBD5E1\],
+html[data-theme="light"] .text-\[\#E2E8F0\] {
+  color: #1E293B !important;
+}
+
+html[data-theme="light"] .text-white\/70,
+html[data-theme="light"] .text-white\/60,
+html[data-theme="light"] .text-gray-400,
+html[data-theme="light"] .text-zinc-400,
+html[data-theme="light"] .text-\[\#94A3B8\],
+html[data-theme="light"] .text-\[\#8892A4\] {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .text-white\/40,
+html[data-theme="light"] .text-white\/30,
+html[data-theme="light"] .text-white\/20,
+html[data-theme="light"] .text-studio-muted\/70,
+html[data-theme="light"] .text-studio-muted\/60,
+html[data-theme="light"] .text-studio-muted\/50,
+html[data-theme="light"] .text-studio-muted\/40 {
+  color: #64748B !important;
+}
+
+/* Màu chữ trạng thái & nhấn đậm rõ nét trên nền sáng */
+html[data-theme="light"] .text-amber-200,
+html[data-theme="light"] .text-amber-200\/80,
+html[data-theme="light"] .text-amber-200\/90,
+html[data-theme="light"] .text-amber-300,
+html[data-theme="light"] .text-amber-300\/70,
+html[data-theme="light"] .text-amber-300\/80,
+html[data-theme="light"] .text-amber-300\/90,
+html[data-theme="light"] .text-amber-400,
+html[data-theme="light"] .text-amber-400\/80,
+html[data-theme="light"] .text-amber-500,
+html[data-theme="light"] .text-yellow-200,
+html[data-theme="light"] .text-yellow-300,
+html[data-theme="light"] .text-orange-400,
+html[data-theme="light"] .text-\[\#ECC354\],
+html[data-theme="light"] .text-\[\#FBBF24\],
+html[data-theme="light"] .text-\[\#FDE047\] {
+  color: #B45309 !important;
+}
+
+html[data-theme="light"] .text-emerald-300,
+html[data-theme="light"] .text-emerald-400,
+html[data-theme="light"] .text-emerald-400\/80,
+html[data-theme="light"] .text-emerald-400\/90,
+html[data-theme="light"] .text-emerald-500,
+html[data-theme="light"] .text-\[\#34D399\] {
+  color: #047857 !important;
+}
+
+html[data-theme="light"] .text-blue-200,
+html[data-theme="light"] .text-blue-300,
+html[data-theme="light"] .text-blue-300\/90,
+html[data-theme="light"] .text-blue-400,
+html[data-theme="light"] .text-blue-400\/80,
+html[data-theme="light"] .text-\[\#60A5FA\],
+html[data-theme="light"] .text-\[\#93C5FD\] {
+  color: #1D4ED8 !important;
+}
+
+html[data-theme="light"] .text-indigo-300,
+html[data-theme="light"] .text-indigo-400 {
+  color: #4338CA !important;
+}
+
+html[data-theme="light"] .text-purple-200,
+html[data-theme="light"] .text-purple-300,
+html[data-theme="light"] .text-purple-400 {
+  color: #6D28D9 !important;
+}
+
+html[data-theme="light"] .text-cyan-400,
+html[data-theme="light"] .text-cyan-400\/80,
+html[data-theme="light"] .text-cyan-400\/90 {
+  color: #0E7490 !important;
+}
+
+html[data-theme="light"] .text-teal-300,
+html[data-theme="light"] .text-teal-400 {
+  color: #0F766E !important;
+}
+
+html[data-theme="light"] .text-rose-200,
+html[data-theme="light"] .text-rose-200\/90,
+html[data-theme="light"] .text-rose-300,
+html[data-theme="light"] .text-rose-300\/70,
+html[data-theme="light"] .text-rose-300\/80,
+html[data-theme="light"] .text-rose-400,
+html[data-theme="light"] .text-rose-400\/80,
+html[data-theme="light"] .text-rose-400\/90,
+html[data-theme="light"] .text-red-400,
+html[data-theme="light"] .text-pink-400,
+html[data-theme="light"] .text-\[\#F87171\] {
+  color: #BE123C !important;
+}
+
+/* --- 6.8. BẢO TOÀN CHỮ TRẮNG #FFFFFF TRÊN NÚT CTA ĐẬM, BADGE ĐẬM, TOOLTIP ĐEN & HERO --- */
+html[data-theme="light"] [data-hero-dark="true"] .text-white,
+html[data-theme="light"] [data-force-light-text="true"],
+html[data-force-light-text="true"] .text-white,
+html[data-theme="light"] [data-force-light-text="true"] *,
+html[data-theme="light"] .bg-brand-primary,
+html[data-theme="light"] .bg-brand-primary *,
+html[data-theme="light"] .bg-brand-primary\/80,
+html[data-theme="light"] .bg-brand-primary\/80 *,
+html[data-theme="light"] .bg-brand-primary\/90,
+html[data-theme="light"] .bg-brand-primary\/90 *,
+html[data-theme="light"] .bg-brand-primary\/95,
+html[data-theme="light"] .bg-brand-primary\/95 *,
+html[data-theme="light"] .bg-brand-success,
+html[data-theme="light"] .bg-brand-success *,
+html[data-theme="light"] .bg-brand-success\/90,
+html[data-theme="light"] .bg-brand-success\/90 *,
+html[data-theme="light"] .bg-brand-error,
+html[data-theme="light"] .bg-brand-error *,
+html[data-theme="light"] .bg-brand-error\/90,
+html[data-theme="light"] .bg-brand-error\/90 *,
+html[data-theme="light"] .bg-brand-accent,
+html[data-theme="light"] .bg-brand-accent *,
+html[data-theme="light"] .bg-blue-600,
+html[data-theme="light"] .bg-blue-600 *,
+html[data-theme="light"] .bg-blue-500,
+html[data-theme="light"] .bg-blue-500 *,
+html[data-theme="light"] .bg-indigo-600,
+html[data-theme="light"] .bg-indigo-600 *,
+html[data-theme="light"] .bg-purple-600,
+html[data-theme="light"] .bg-purple-600 *,
+html[data-theme="light"] .bg-purple-500,
+html[data-theme="light"] .bg-purple-500 *,
+html[data-theme="light"] .bg-emerald-600,
+html[data-theme="light"] .bg-emerald-600 *,
+html[data-theme="light"] .bg-emerald-500,
+html[data-theme="light"] .bg-emerald-500 *,
+html[data-theme="light"] .bg-green-600,
+html[data-theme="light"] .bg-green-600 *,
+html[data-theme="light"] .bg-rose-600,
+html[data-theme="light"] .bg-rose-600 *,
+html[data-theme="light"] .bg-rose-500,
+html[data-theme="light"] .bg-rose-500 *,
+html[data-theme="light"] .bg-red-600,
+html[data-theme="light"] .bg-red-600 *,
+html[data-theme="light"] .bg-amber-600,
+html[data-theme="light"] .bg-amber-600 *,
+html[data-theme="light"] .bg-amber-500,
+html[data-theme="light"] .bg-amber-500 *,
+html[data-theme="light"] .bg-cyan-600,
+html[data-theme="light"] .bg-cyan-600 *,
+html[data-theme="light"] .bg-black.text-white,
+html[data-theme="light"] .bg-\[\#2563EB\],
+html[data-theme="light"] .bg-\[\#2563EB\] *,
+html[data-theme="light"] .bg-\[\#1D4ED8\],
+html[data-theme="light"] .bg-\[\#1D4ED8\] *,
+html[data-theme="light"] .bg-\[\#284F9E\],
+html[data-theme="light"] .bg-\[\#284F9E\] *,
+html[data-theme="light"] .bg-\[\#DC2626\],
+html[data-theme="light"] .bg-\[\#DC2626\] *,
+html[data-theme="light"] .bg-gradient-to-r.from-emerald-500,
+html[data-theme="light"] .bg-gradient-to-r.from-emerald-500 *,
+html[data-theme="light"] .bg-gradient-to-r.from-purple-600,
+html[data-theme="light"] .bg-gradient-to-r.from-purple-600 *,
+html[data-theme="light"] .bg-gradient-to-r.from-purple-500,
+html[data-theme="light"] .bg-gradient-to-r.from-purple-500 *,
+html[data-theme="light"] .bg-gradient-to-r.from-brand-primary,
+html[data-theme="light"] .bg-gradient-to-r.from-brand-primary *,
+html[data-theme="light"] .bg-gradient-to-r.from-amber-500,
+html[data-theme="light"] .bg-gradient-to-r.from-amber-500 *,
+html[data-theme="light"] .bg-gradient-to-r.from-amber-400,
+html[data-theme="light"] .bg-gradient-to-r.from-amber-400 * {
+  color: #FFFFFF !important;
+}
+
+html[data-theme="light"] [data-hero-dark="true"] .text-gray-200 {
+  color: #E5E7EB !important;
+}
+
+html[data-theme="light"] [data-hero-dark="true"] .glass-panel {
+  background: rgba(15, 17, 26, 0.62) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+  color: #FFFFFF !important;
+}
+
+html[data-theme="light"] [data-hero-dark="true"] .text-brand-primary {
+  color: #93C5FD !important;
+}
+
+/* --- 6.9. TRẠNG THÁI HOVER & DISABLED RÕ RÀNG TRONG LIGHT MODE --- */
+html[data-theme="light"] .hover\:bg-white\/2:hover,
+html[data-theme="light"] .hover\:bg-white\/5:hover,
+html[data-theme="light"] .hover\:bg-\[\#161A28\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#161B29\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#1A1F30\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#1B2032\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#1E263D\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#1E293B\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#242A40\]:hover {
+  background-color: #E8EFF8 !important;
+}
+
+html[data-theme="light"] .hover\:bg-white\/10:hover,
+html[data-theme="light"] .hover\:bg-white\/15:hover {
+  background-color: #DCE6F4 !important;
+}
+
+/* Hover đổi chữ sang xanh LHU cho các link/nút nền trung tính */
+html[data-theme="light"] .hover\:text-white:hover {
+  color: #284F9E !important;
+}
+
+/* QUAN TRỌNG: Nút chuyển nền đậm khi hover PHẢI giữ chữ trắng #FFFFFF! */
+html[data-theme="light"] .hover\:bg-brand-primary:hover,
+html[data-theme="light"] .hover\:bg-brand-primary:hover *,
+html[data-theme="light"] .hover\:bg-brand-primary\/90:hover,
+html[data-theme="light"] .hover\:bg-brand-primary\/90:hover *,
+html[data-theme="light"] .hover\:bg-brand-primary\/95:hover,
+html[data-theme="light"] .hover\:bg-brand-primary\/95:hover *,
+html[data-theme="light"] .hover\:bg-brand-primary\/80:hover,
+html[data-theme="light"] .hover\:bg-brand-primary\/80:hover *,
+html[data-theme="light"] .hover\:bg-brand-error:hover,
+html[data-theme="light"] .hover\:bg-brand-error:hover *,
+html[data-theme="light"] .hover\:bg-brand-success:hover,
+html[data-theme="light"] .hover\:bg-brand-success:hover *,
+html[data-theme="light"] .hover\:bg-brand-accent:hover,
+html[data-theme="light"] .hover\:bg-brand-accent:hover *,
+html[data-theme="light"] .hover\:bg-blue-600:hover,
+html[data-theme="light"] .hover\:bg-blue-600:hover *,
+html[data-theme="light"] .hover\:bg-blue-500:hover,
+html[data-theme="light"] .hover\:bg-blue-500:hover *,
+html[data-theme="light"] .hover\:bg-emerald-600:hover,
+html[data-theme="light"] .hover\:bg-emerald-600:hover *,
+html[data-theme="light"] .hover\:bg-emerald-500:hover,
+html[data-theme="light"] .hover\:bg-emerald-500:hover *,
+html[data-theme="light"] .hover\:bg-amber-500:hover,
+html[data-theme="light"] .hover\:bg-amber-500:hover *,
+html[data-theme="light"] .hover\:bg-purple-600:hover,
+html[data-theme="light"] .hover\:bg-purple-600:hover *,
+html[data-theme="light"] .hover\:bg-purple-500:hover,
+html[data-theme="light"] .hover\:bg-purple-500:hover *,
+html[data-theme="light"] .hover\:bg-rose-600:hover,
+html[data-theme="light"] .hover\:bg-rose-600:hover *,
+html[data-theme="light"] .hover\:bg-rose-500:hover,
+html[data-theme="light"] .hover\:bg-rose-500:hover *,
+html[data-theme="light"] .hover\:bg-red-600:hover,
+html[data-theme="light"] .hover\:bg-red-600:hover *,
+html[data-theme="light"] .hover\:bg-\[\#2563EB\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#2563EB\]:hover *,
+html[data-theme="light"] .hover\:bg-\[\#1D4ED8\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#1D4ED8\]:hover *,
+html[data-theme="light"] .hover\:bg-\[\#284F9E\]:hover,
+html[data-theme="light"] .hover\:bg-\[\#284F9E\]:hover *,
+html[data-theme="light"] .bg-brand-primary.hover\:text-white:hover,
+html[data-theme="light"] [data-force-light-text="true"]:hover,
+html[data-theme="light"] [data-force-light-text="true"]:hover * {
+  color: #FFFFFF !important;
+}
+
+/* Trạng thái Disabled rõ ràng trong Light Mode */
+html[data-theme="light"] button:disabled,
+html[data-theme="light"] input:disabled,
+html[data-theme="light"] select:disabled,
+html[data-theme="light"] textarea:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }

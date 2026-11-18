@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import {
-  History,
   Search,
   Filter,
   RefreshCw,
@@ -15,12 +15,10 @@ import {
   X,
   Copy,
   Check,
-  Calendar,
   User,
   Shield,
   Activity,
   Layers,
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -99,7 +97,6 @@ export default function AdminAuditLogsPage() {
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadingStats, setLoadingStats] = useState(false);
 
   // Bộ lọc
   const [search, setSearch] = useState('');
@@ -150,7 +147,6 @@ export default function AdminAuditLogsPage() {
 
   // Tải thống kê
   const fetchStats = useCallback(async () => {
-    setLoadingStats(true);
     try {
       const res: any = await api.get('/audit-logs/stats');
       if (res.success && res.data) {
@@ -158,8 +154,6 @@ export default function AdminAuditLogsPage() {
       }
     } catch (err: any) {
       console.warn('Lỗi tải thống kê audit logs:', err.message);
-    } finally {
-      setLoadingStats(false);
     }
   }, []);
 
@@ -315,15 +309,11 @@ export default function AdminAuditLogsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
-            <div className="flex items-center space-x-2 text-brand-primary text-xs font-bold uppercase tracking-wider mb-1">
-              <History className="w-4 h-4" />
-              <span>Phân hệ Kiểm toán &amp; Truy vết (FR-09)</span>
-            </div>
             <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight">
               Lịch sử thao tác
             </h1>
             <p className="text-studio-muted text-xs md:text-sm mt-1 max-w-2xl leading-relaxed">
-              Tự động ghi vết và giám sát 100% thao tác quan trọng trên hệ thống: thêm/sửa/xóa, phê duyệt/từ chối, cấp quyền và xác thực người dùng.
+              Theo dõi toàn bộ thao tác quan trọng trên hệ thống: thêm/sửa/xóa, phê duyệt/từ chối, phân quyền và đăng nhập.
             </p>
           </div>
 
@@ -354,7 +344,7 @@ export default function AdminAuditLogsPage() {
             <div className="text-2xl font-black text-white mt-2">
               {stats ? stats.total.toLocaleString() : '---'}
             </div>
-            <div className="text-[11px] text-studio-muted mt-1">Toàn bộ nhật ký kiểm toán</div>
+            <div className="text-[11px] text-studio-muted mt-1">Toàn bộ thao tác đã ghi nhận</div>
           </div>
 
           <div className="bg-studio-card/80 border border-white/10 rounded-2xl p-5 backdrop-blur-md relative overflow-hidden">
@@ -501,14 +491,14 @@ export default function AdminAuditLogsPage() {
               <label className="text-[11px] font-bold uppercase tracking-wider text-studio-muted block mb-1.5">
                 Từ ngày
               </label>
-              <input
-                type="date"
+              <DatePickerVN
                 value={startDate}
-                onChange={(e) => {
-                  setStartDate(e.target.value);
+                onChange={(val) => {
+                  setStartDate(val);
                   setPage(1);
                 }}
-                className="w-full bg-studio-dark/70 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary transition-all [color-scheme:dark]"
+                clearable
+                className="w-full"
               />
             </div>
 
@@ -517,14 +507,14 @@ export default function AdminAuditLogsPage() {
               <label className="text-[11px] font-bold uppercase tracking-wider text-studio-muted block mb-1.5">
                 Đến ngày
               </label>
-              <input
-                type="date"
+              <DatePickerVN
                 value={endDate}
-                onChange={(e) => {
-                  setEndDate(e.target.value);
+                onChange={(val) => {
+                  setEndDate(val);
                   setPage(1);
                 }}
-                className="w-full bg-studio-dark/70 border border-white/10 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-brand-primary transition-all [color-scheme:dark]"
+                clearable
+                className="w-full"
               />
             </div>
 
@@ -751,7 +741,7 @@ export default function AdminAuditLogsPage() {
                       Chi tiết Lịch sử thao tác
                     </h3>
                     <p className="text-xs text-studio-muted font-mono">
-                      Log ID: {selectedLog.id}
+                      Mã thao tác: {selectedLog.id}
                     </p>
                   </div>
                 </div>
@@ -782,7 +772,7 @@ export default function AdminAuditLogsPage() {
                   <div>
                     <span className="text-studio-muted block text-[11px]">Trạng thái:</span>
                     <strong className={`mt-1 block font-bold ${selectedLog.status === 'SUCCESS' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                      {selectedLog.status === 'SUCCESS' ? 'Thành công (200/201)' : 'Thất bại'}
+                      {selectedLog.status === 'SUCCESS' ? 'Thành công' : 'Thất bại'}
                     </strong>
                   </div>
                   <div>
@@ -805,7 +795,7 @@ export default function AdminAuditLogsPage() {
 
                 {selectedLog.userAgent && (
                   <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 text-xs">
-                    <span className="text-studio-muted block text-[11px]">User-Agent:</span>
+                    <span className="text-studio-muted block text-[11px]">Trình duyệt / Thiết bị:</span>
                     <span className="font-mono text-white/80 text-[11px] break-all">
                       {selectedLog.userAgent}
                     </span>
@@ -848,7 +838,7 @@ export default function AdminAuditLogsPage() {
                   </div>
 
                   <p className="text-[10px] text-studio-muted italic">
-                    * Hệ thống tự động ghi nhận mô tả thao tác bằng văn bản tự nhiên, bảo đảm không lưu mã nguồn JSON thô và không lưu mật khẩu, mã OTP hay token nhạy cảm (tuân thủ QUY_TAC.md 11.4).
+                    * Hệ thống tự động ghi nhận mô tả thao tác dễ đọc và không lưu mật khẩu hay mã xác thực bảo mật.
                   </p>
                 </div>
               </div>

@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
+import ThemeToggle from '@/components/common/ThemeToggle';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -69,6 +70,10 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-6 bg-studio-dark relative overflow-hidden">
+      {/* Nút chuyển chế độ Sáng/Tối */}
+      <div className="absolute top-5 right-5 z-20">
+        <ThemeToggle variant="pill" />
+      </div>
       {/* Background radial glow */}
       <div className="absolute top-1/4 left-1/4 w-[400px] h-[400px] rounded-full bg-brand-primary/10 blur-[120px] pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-[400px] h-[400px] rounded-full bg-brand-secondary/10 blur-[120px] pointer-events-none" />

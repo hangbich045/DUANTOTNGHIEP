@@ -1,9 +1,10 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import CollaboratorMonthlySummary from '@/components/CollaboratorMonthlySummary';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
@@ -18,7 +19,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   RefreshCcw,
-  ExternalLink,
   PlusCircle,
   FileText,
   FileSpreadsheet,
@@ -31,15 +31,8 @@ import {
   CalendarDays,
   Coins,
   Check,
-  Trash2,
   Table as TableIcon,
-  ShieldAlert,
-  Info,
-  Lock,
-  Unlock,
-  CheckCheck,
   Users,
-  ShieldCheck,
   MapPin,
 } from 'lucide-react';
 import { TASK_TYPES } from '@/lib/constants';
@@ -165,6 +158,8 @@ export default function MyTasksPage() {
 
   // Mode: TASKS (Nhiệm vụ) or DUTY (Lịch trực Studio & Chấm công)
   const [viewMode, setViewMode] = useState<'TASKS' | 'DUTY'>('TASKS');
+  // Sub-tab bên trong mục Nhiệm vụ của tôi: LIST (Danh sách nhiệm vụ) | SUMMARY (Tổng công việc tháng)
+  const [taskSubTab, setTaskSubTab] = useState<'LIST' | 'SUMMARY'>('LIST');
 
   // Month & Year filter for Duty tab
   const currentDate = new Date();
@@ -233,8 +228,6 @@ export default function MyTasksPage() {
 
   // GIAI ĐOẠN 3 & QUYỀN XEM LỊCH TOÀN BỘ CTV: BẢNG LỊCH TRỰC CHÍNH THỨC TOÀN STUDIO
   const [periodSummary, setPeriodSummary] = useState<any | null>(null);
-  const [loadingSummary, setLoadingSummary] = useState<boolean>(false);
-  const [activeTabSchedule, setActiveTabSchedule] = useState<'OFFICIAL' | 'WISH'>('OFFICIAL');
   const [allStudioShifts, setAllStudioShifts] = useState<ShiftItem[]>([]);
   const [dutyListScope, setDutyListScope] = useState<'MY' | 'ALL'>('ALL');
   const [activeSvKey, setActiveSvKey] = useState<string | null>(null);
@@ -358,7 +351,6 @@ export default function MyTasksPage() {
 
   // Lấy bảng tổng hợp lịch trực toàn Studio (Giai đoạn 3 & Lịch chính thức)
   const fetchPeriodSummary = async (periodId: string) => {
-    setLoadingSummary(true);
     try {
       const res = await api.get(`/duty/periods/${periodId}/summary`);
       if (res.success && res.data) {
@@ -366,8 +358,6 @@ export default function MyTasksPage() {
       }
     } catch (err) {
       console.error('Lỗi tải tổng hợp lịch trực Studio:', err);
-    } finally {
-      setLoadingSummary(false);
     }
   };
 
@@ -400,16 +390,6 @@ export default function MyTasksPage() {
     if (!Array.isArray(dutyPeriods) || !selectedPeriodId) return null;
     return dutyPeriods.find((p) => p && p.id === selectedPeriodId) || null;
   }, [dutyPeriods, selectedPeriodId]);
-
-  useEffect(() => {
-    if (activePeriod) {
-      if (activePeriod.status === 'CONFIRMED') {
-        setActiveTabSchedule('OFFICIAL');
-      } else if (activePeriod.status === 'OPEN') {
-        setActiveTabSchedule('WISH');
-      }
-    }
-  }, [activePeriod?.status]);
 
   // Toggle slot đăng ký có thể trực
   const handleToggleSlot = (dateStr: string, session: 'S' | 'C' | 'T') => {
@@ -462,7 +442,7 @@ export default function MyTasksPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi lưu đăng ký ca trực', 'error');
@@ -498,7 +478,7 @@ export default function MyTasksPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi xóa đăng ký', 'error');
@@ -570,7 +550,7 @@ export default function MyTasksPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi nộp kết quả công việc', 'error');
@@ -635,7 +615,7 @@ export default function MyTasksPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi khai báo công việc ngoài hệ thống', 'error');
@@ -759,10 +739,6 @@ export default function MyTasksPage() {
         {/* Top Header & Mode Switcher */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-brand-primary/10 border border-brand-primary/20 text-brand-primary text-xs font-semibold mb-2">
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Phân hệ CTV Studio (FR-04 &amp; FR-05)</span>
-            </div>
             <h1 className="text-3xl font-extrabold tracking-tight">Cổng Làm Việc Cộng Tác Viên</h1>
             <p className="text-sm text-studio-muted mt-1 max-w-2xl leading-relaxed">
               Theo dõi nhiệm vụ, nộp kết quả sản phẩm, đăng ký thời gian có thể trực và theo dõi bảng chấm công, thù lao theo chuẩn Bộ phận Truyền thông ĐH Lạc Hồng.
@@ -782,13 +758,6 @@ export default function MyTasksPage() {
               <CheckSquare className="w-4 h-4" />
               <span>Nhiệm vụ &amp; Sự vụ</span>
             </button>
-            <Link
-              href="/tasks/summary"
-              className="flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all text-studio-muted hover:text-white hover:bg-white/5 cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
-              <span>Tổng công việc tháng</span>
-            </Link>
             <button
               onClick={() => setViewMode('DUTY')}
               className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -804,25 +773,49 @@ export default function MyTasksPage() {
         </div>
 
         {/* ========================================================================= */}
-        {/* VIEW MODE 1: TASKS & EXTERNAL WORK                                       */}
+        {/* VIEW MODE 1: TASKS & EXTERNAL WORK + TỔNG CÔNG VIỆC THÁNG                 */}
         {/* ========================================================================= */}
         {viewMode === 'TASKS' && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/2 p-4 rounded-3xl border border-white/5">
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-semibold text-studio-muted">Danh mục:</span>
-                <span className="text-xs font-bold text-white bg-white/5 px-3 py-1 rounded-xl border border-white/10">
-                  Nhiệm vụ được giao &amp; Việc tự khai báo
-                </span>
-              </div>
-              <div className="flex items-center space-x-3">
+            {/* Thanh chuyển đổi mục phụ bên trong Nhiệm vụ của tôi */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white/[0.02] p-3 sm:p-4 rounded-3xl border border-white/10">
+              <div className="flex items-center bg-black/40 p-1 rounded-2xl border border-white/10 w-fit flex-wrap gap-1">
                 <button
-                  onClick={fetchTasksAndStats}
-                  className="p-2.5 rounded-2xl border border-white/5 hover:bg-white/5 text-studio-muted hover:text-white transition-all cursor-pointer"
-                  title="Làm mới"
+                  type="button"
+                  onClick={() => setTaskSubTab('LIST')}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    taskSubTab === 'LIST'
+                      ? 'bg-white/15 text-white border border-white/15 shadow-sm'
+                      : 'text-studio-muted hover:text-white hover:bg-white/5'
+                  }`}
                 >
-                  <RefreshCcw className="w-4 h-4" />
+                  <CheckSquare className="w-3.5 h-3.5 text-brand-primary" />
+                  <span>Danh sách nhiệm vụ</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskSubTab('SUMMARY')}
+                  className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    taskSubTab === 'SUMMARY'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35 shadow-sm'
+                      : 'text-studio-muted hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Tổng công việc tháng</span>
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                {taskSubTab === 'LIST' && (
+                  <button
+                    onClick={fetchTasksAndStats}
+                    className="p-2.5 rounded-2xl border border-white/5 hover:bg-white/5 text-studio-muted hover:text-white transition-all cursor-pointer"
+                    title="Làm mới"
+                  >
+                    <RefreshCcw className="w-4 h-4" />
+                  </button>
+                )}
                 <button
                   onClick={openExternalModal}
                   className="flex items-center space-x-2 bg-purple-600 hover:bg-purple-500 text-white font-bold px-4 py-2.5 rounded-2xl shadow-lg shadow-purple-600/20 transition-all cursor-pointer text-xs"
@@ -833,6 +826,8 @@ export default function MyTasksPage() {
               </div>
             </div>
 
+            {taskSubTab === 'LIST' ? (
+              <>
             {stats && (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                 <div className="glass-panel p-4 rounded-2xl border border-white/5 bg-black/25">
@@ -1080,6 +1075,10 @@ export default function MyTasksPage() {
                 })}
               </div>
             )}
+              </>
+            ) : (
+              <CollaboratorMonthlySummary />
+            )}
           </div>
         )}
 
@@ -1117,7 +1116,7 @@ export default function MyTasksPage() {
                     )}
                   </div>
                   <p className="text-xs text-studio-muted leading-relaxed">
-                    Lịch phân công trực Studio và sự vụ BPTT toàn bộ nhân sự theo tuần. Tự động đồng bộ theo thời gian thực.
+                    Lịch phân công trực Studio và sự vụ theo tuần của toàn bộ nhân sự.
                   </p>
                 </div>
 
@@ -1475,7 +1474,7 @@ export default function MyTasksPage() {
                           <span className="text-3xl font-black text-purple-300">{gioSv}</span>
                           <span className="text-xs text-studio-muted">giờ thực tế</span>
                         </div>
-                        <p className="text-[11px] text-studio-muted mt-1">Ghi nhận từ công việc COMPLETED</p>
+                        <p className="text-[11px] text-studio-muted mt-1">Ghi nhận từ công việc đã hoàn thành</p>
                       </div>
 
                       <div className="glass-panel p-5 rounded-3xl border border-white/10 bg-gradient-to-br from-black/40 to-white/5">
@@ -1806,11 +1805,11 @@ export default function MyTasksPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div>
                     <label className="block text-studio-muted mb-1 font-medium">Ngày thực hiện</label>
-                    <input
-                      type="date"
+                    <DatePickerVN
                       value={externalExecutionDate}
-                      onChange={(e) => setExternalExecutionDate(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2.5 text-white focus:outline-none focus:border-purple-500/50 cursor-pointer"
+                      onChange={setExternalExecutionDate}
+                      className="w-full"
+                      inputClassName="min-w-0 py-2.5"
                     />
                     {externalExecutionDate && (
                       <span className="text-[10px] text-purple-300 font-medium block mt-1">

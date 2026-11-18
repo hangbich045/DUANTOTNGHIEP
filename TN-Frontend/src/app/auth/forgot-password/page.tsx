@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useToast } from '@/context/ToastContext';
 import { useRouter } from 'next/navigation';
+import api from '@/lib/api';
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
@@ -25,14 +26,7 @@ export default function ForgotPasswordPage() {
     }
     setSubmitting(true);
     try {
-      const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
-      const res = await fetch(`${BASE_URL}/auth/forgot-password`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Yêu cầu OTP thất bại');
+      const data = await api.post('/auth/forgot-password', { email });
 
       toast(data.message || 'Đã gửi mã OTP đặt lại mật khẩu về email của bạn.', 'success');
       router.push(`/auth/reset-password?email=${encodeURIComponent(email)}`);

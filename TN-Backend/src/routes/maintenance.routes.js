@@ -10,6 +10,65 @@ const router = express.Router();
 const maintenanceController = require('../controllers/maintenance.controller');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 
+/**
+ * @swagger
+ * tags:
+ *   name: Maintenance
+ *   description: Quản lý bảo trì, sửa chữa, hóa đơn chứng từ, báo mất & thanh lý thiết bị (FR-01.5)
+ */
+
+/**
+ * @swagger
+ * /api/maintenances:
+ *   post:
+ *     summary: "[ADMIN] Lập phiếu bảo trì / sửa chữa / báo mất / thanh lý thiết bị"
+ *     tags: [Maintenance]
+ *     responses:
+ *       201: { description: Lập phiếu thành công }
+ *   get:
+ *     summary: "[ADMIN] Danh sách phiếu bảo trì có lọc và phân trang"
+ *     tags: [Maintenance]
+ *     responses:
+ *       200: { description: Danh sách phiếu bảo trì }
+ * /api/maintenances/stats:
+ *   get:
+ *     summary: "[ADMIN] Thống kê tổng chi phí sửa chữa, đang bảo trì, báo mất, thanh lý"
+ *     tags: [Maintenance]
+ *     responses:
+ *       200: { description: Dữ liệu thống kê bảo trì }
+ * /api/maintenances/{id}:
+ *   get:
+ *     summary: "[ADMIN] Xem chi tiết phiếu bảo trì"
+ *     tags: [Maintenance]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Chi tiết phiếu }
+ *   put:
+ *     summary: "[ADMIN] Cập nhật hoặc nghiệm thu hoàn tất bảo trì"
+ *     tags: [Maintenance]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Cập nhật thành công }
+ *   delete:
+ *     summary: "[ADMIN] Xóa phiếu bảo trì"
+ *     tags: [Maintenance]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Đã xóa phiếu }
+ */
+
 // Toàn bộ chức năng quản lý bảo trì, chứng từ kế toán, báo mất và thanh lý yêu cầu quyền ADMIN (QUY_TAC.md 1.1, 1.3)
 router.use(authenticate, authorize('ADMIN'));
 

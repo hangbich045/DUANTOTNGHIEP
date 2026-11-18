@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import Navbar from '@/components/Navbar';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
@@ -12,7 +13,6 @@ import {
   Loader2,
   Calendar,
   Users,
-  HelpCircle,
   Send,
   X,
   Clock,
@@ -20,7 +20,6 @@ import {
   Plus,
   Trash2,
   Edit2,
-  Check,
   Sparkles,
   AlertTriangle,
   CheckCircle2,
@@ -60,17 +59,16 @@ export default function StudioBookingPage() {
   const { toast } = useToast();
 
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
 
   // Chế độ chọn khung giờ: 'SUGGESTED' (Gợi ý khung giờ còn trống) | 'CUSTOM' (Tự nhập khung giờ)
   const [bookingMode, setBookingMode] = useState<'SUGGESTED' | 'CUSTOM'>('SUGGESTED');
 
-  // Ngày chọn đặt phòng (mặc định ngày mai hoặc ngày làm việc tiếp theo)
+  // Ngày chọn đặt phòng (mặc định ngày mai hoặc ngày làm việc tiếp theo, chuẩn giờ địa phương)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     if (d.getDay() === 0) d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
+    return format(d, 'yyyy-MM-dd');
   });
 
   // Dữ liệu slot trống gợi ý
@@ -96,10 +94,6 @@ export default function StudioBookingPage() {
   const [technicalSupport, setTechnicalSupport] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Detail Modal for clicks on calendar events
-  const [detailModalOpen, setDetailModalOpen] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<Booking | null>(null);
-
   // Protect page
   useEffect(() => {
     if (!authLoading && !user) {
@@ -124,7 +118,7 @@ export default function StudioBookingPage() {
     try {
       const res = await api.get(`/studio-bookings/available-slots?date=${dateStr}`);
       setAvailableSlotsData(res);
-    } catch (err: any) {
+    } catch {
       setAvailableSlotsData(null);
     } finally {
       setLoadingSlots(false);
@@ -138,7 +132,6 @@ export default function StudioBookingPage() {
   }, [user, selectedDate]);
 
   const fetchBookings = async () => {
-    setLoading(true);
     try {
       const data = await api.get('/studio-bookings?calendar=true');
       setBookings(data);
@@ -147,30 +140,27 @@ export default function StudioBookingPage() {
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi tải danh sách đặt phòng', 'error');
-    } finally {
-      setLoading(false);
     }
   };
 
   // Convert bookings and selections to FullCalendar events
   const calendarEvents = [
     ...bookings.map((b) => {
-      const isConfirmed = b.status === 'CONFIRMED' || b.status === 'APPROVED' || b.status === 'COMPLETED';
       const isPending = b.status === 'PENDING';
       const isCancelled = b.status === 'CANCELLED' || b.status === 'REJECTED';
       
       let border = '#284F9E';
       let bg = 'rgba(40, 79, 158, 0.2)';
-      let statusText = '✓ Đã Duyệt';
+      let statusText = '✓ Đã duyệt';
 
       if (isPending) {
         border = '#ECC354';
         bg = 'rgba(236, 195, 84, 0.2)';
-        statusText = '⏳ Chờ Duyệt';
+        statusText = '⏳ Chờ duyệt';
       } else if (isCancelled) {
         border = '#ef4444';
         bg = 'rgba(239, 68, 68, 0.15)';
-        statusText = '✕ Đã Hủy';
+        statusText = '✕ Đã hủy';
       }
 
       return {
@@ -365,7 +355,7 @@ export default function StudioBookingPage() {
 
     setCurrentSelection({ start, end });
     setFirstClickDate(null);
-    toast(`Đã chọn khung giờ: ${slot.label} (${slot.duration})`, 'info');
+    toast(`Đã chọn khung giờ: ${slot.label} ngày ${format(start, 'dd/MM/yyyy')} (${slot.duration})`, 'info');
   };
 
   // Áp dụng khung giờ tự nhập
@@ -510,7 +500,7 @@ export default function StudioBookingPage() {
         </div>
 
         {/* KHUNG ĐĂNG KÝ ĐẶT PHÒNG: GỢI Ý KHUNG GIỜ HOẶC TỰ NHẬP */}
-        <div className="glass-panel p-6 rounded-3xl border border-white/10 bg-[#121216] shadow-xl space-y-5">
+        <div className="glass-panel relative z-30 p-6 rounded-3xl border border-white/10 bg-[#121216] shadow-xl space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/5 pb-4">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-2xl bg-brand-primary/10 border border-brand-primary/20 flex items-center justify-center text-brand-primary shrink-0">
@@ -565,14 +555,18 @@ export default function StudioBookingPage() {
           {bookingMode === 'SUGGESTED' && (
             <div className="space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center space-x-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <label className="text-xs font-bold text-white shrink-0">Chọn ngày:</label>
-                  <input
-                    type="date"
+                  <DatePickerVN
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="bg-black/50 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white font-medium focus:outline-none focus:border-brand-primary cursor-pointer"
+                    onChange={setSelectedDate}
+                    highlightSunday={user?.role !== 'ADMIN'}
                   />
+                  {availableSlotsData?.dayName && selectedDate && (
+                    <span className="px-2.5 py-1 rounded-lg bg-white/5 border border-white/10 text-[11px] font-semibold text-studio-muted">
+                      {availableSlotsData.dayName}, {selectedDate.split('-').reverse().join('/')}
+                    </span>
+                  )}
                   {loadingSlots && (
                     <span className="text-xs text-studio-muted animate-pulse">Đang nạp khung giờ trống...</span>
                   )}
@@ -656,13 +650,13 @@ export default function StudioBookingPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-studio-muted mb-1 uppercase">
-                    Ngày đặt phòng
+                    Ngày đặt phòng (dd/mm/yyyy)
                   </label>
-                  <input
-                    type="date"
+                  <DatePickerVN
                     value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-brand-primary cursor-pointer"
+                    onChange={setSelectedDate}
+                    highlightSunday={user?.role !== 'ADMIN'}
+                    className="w-full"
                   />
                 </div>
                 <div>
@@ -674,7 +668,7 @@ export default function StudioBookingPage() {
                     step="1800"
                     value={customStartTime}
                     onChange={(e) => setCustomStartTime(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-brand-primary"
+                    className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white font-semibold focus:outline-none focus:border-brand-primary [color-scheme:dark]"
                   />
                 </div>
                 <div>
@@ -686,7 +680,7 @@ export default function StudioBookingPage() {
                     step="1800"
                     value={customEndTime}
                     onChange={(e) => setCustomEndTime(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3.5 py-2.5 text-xs text-white font-medium focus:outline-none focus:border-brand-primary"
+                    className="w-full bg-black/50 border border-white/15 rounded-xl px-3.5 py-2 text-xs text-white font-semibold focus:outline-none focus:border-brand-primary [color-scheme:dark]"
                   />
                 </div>
               </div>
@@ -743,7 +737,7 @@ export default function StudioBookingPage() {
           <div className="flex flex-wrap gap-4 text-xs bg-white/5 px-6 py-3 rounded-2xl border border-white/5 w-fit">
             <div className="flex items-center space-x-2">
               <span className="w-3 h-3 rounded bg-brand-primary/20 border border-brand-primary inline-block" />
-              <span className="text-white font-medium">Đã Duyệt (Khóa lịch)</span>
+              <span className="text-white font-medium">Đã duyệt</span>
             </div>
             <div className="flex items-center space-x-2">
               <span className="w-3 h-3 rounded bg-brand-accent/20 border border-brand-accent inline-block" />
@@ -821,7 +815,7 @@ export default function StudioBookingPage() {
                           *
                         </div>
                         <span className="text-sm font-semibold text-brand-accent">
-                          {format(currentSelection.start, 'HH:mm')} - {format(currentSelection.end, 'HH:mm')} ({firstClickDate ? 'Đang chọn kết thúc' : 'Chưa thêm'})
+                          {format(currentSelection.start, 'HH:mm')} - {format(currentSelection.end, 'HH:mm')} ngày {format(currentSelection.start, 'dd/MM/yyyy')} ({firstClickDate ? 'Đang chọn kết thúc' : 'Chưa thêm'})
                         </span>
                       </div>
                       {!firstClickDate && (

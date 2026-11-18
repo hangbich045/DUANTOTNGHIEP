@@ -9,7 +9,7 @@ const { Router } = require('express');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 const { User, Equipment, BorrowRequest, StudioBooking, EquipmentCategory, Task, MonthlyPayroll } = require('../models');
 const userService = require('../services/user.service');
-const { Op, fn, col, literal } = require('sequelize');
+const { Op } = require('sequelize');
 const { sequelize } = require('../config/database');
 
 const router = Router();

@@ -7,11 +7,11 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import Cookies from 'js-cookie';
-import { User, Mail, CreditCard, Shield, Camera, Loader2, Save } from 'lucide-react';
+import { User, Mail, CreditCard, Camera, Loader2, Save } from 'lucide-react';
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { user, loading: authLoading, logout } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const [fullName, setFullName] = useState('');

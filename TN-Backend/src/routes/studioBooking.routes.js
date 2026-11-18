@@ -156,7 +156,20 @@ const { validateCreateStudioBooking } = require('../middlewares/validate.middlew
 
 const router = Router();
 
-// Lấy danh sách khung giờ trống gợi ý theo ngày
+/**
+ * @swagger
+ * /api/studio-bookings/available-slots:
+ *   get:
+ *     summary: Lấy danh sách khung giờ trống gợi ý theo ngày (T2–T7, kèm khoảng đệm 30 phút)
+ *     tags: [Studio Bookings]
+ *     parameters:
+ *       - in: query
+ *         name: date
+ *         required: true
+ *         schema: { type: string, example: "2026-11-20" }
+ *     responses:
+ *       200: { description: Danh sách khung giờ còn trống }
+ */
 router.get('/available-slots', authenticate, studioBookingController.getAvailableSlots);
 
 // Lấy danh sách booking (RBAC ở service)
@@ -191,15 +204,61 @@ router.put('/:id/reject', authenticate, authorize('ADMIN'), async (req, res) => 
 // User tự huỷ booking của mình
 router.patch('/:id/cancel', authenticate, studioBookingController.cancelByUser);
 
-// [PROMPT #32] Xác nhận đến sử dụng Studio (Check-in)
+/**
+ * @swagger
+ * /api/studio-bookings/{id}/check-in:
+ *   put:
+ *     summary: Người dùng xác nhận đã đến sử dụng Studio trong ngày đặt
+ *     tags: [Studio Bookings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Check-in thành công }
+ * /api/studio-bookings/{id}/confirm-usage:
+ *   put:
+ *     summary: "[ADMIN] Xác nhận hoàn tất sử dụng Studio"
+ *     tags: [Studio Bookings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Đã xác nhận sử dụng }
+ * /api/studio-bookings/{id}/mark-absent:
+ *   put:
+ *     summary: "[ADMIN] Đánh dấu người đặt vắng mặt / không đến sử dụng"
+ *     tags: [Studio Bookings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Đã đánh dấu vắng mặt }
+ * /api/studio-bookings/{id}/reschedule:
+ *   put:
+ *     summary: Dời lịch / chỉnh sửa lịch đặt phòng Studio (kèm kiểm tra xung đột)
+ *     tags: [Studio Bookings]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Dời lịch thành công }
+ */
 router.put('/:id/check-in', authenticate, studioBookingController.checkIn);
 router.patch('/:id/check-in', authenticate, studioBookingController.checkIn);
 
-// [PROMPT #32] Admin xác nhận đã sử dụng Studio hoàn tất
+// Admin xác nhận đã sử dụng Studio hoàn tất
 router.put('/:id/confirm-usage', authenticate, authorize('ADMIN'), studioBookingController.confirmUsage);
 router.patch('/:id/confirm-usage', authenticate, authorize('ADMIN'), studioBookingController.confirmUsage);
 
-// [PROMPT #32] Admin đánh dấu không đến sử dụng (Vắng mặt)
+// Admin đánh dấu không đến sử dụng (Vắng mặt)
 router.put('/:id/mark-absent', authenticate, authorize('ADMIN'), studioBookingController.markAbsent);
 router.patch('/:id/mark-absent', authenticate, authorize('ADMIN'), studioBookingController.markAbsent);
 

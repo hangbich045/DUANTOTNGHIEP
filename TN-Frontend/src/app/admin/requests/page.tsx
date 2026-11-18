@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
-import { Loader2, Check, X, Undo, Camera, Calendar, Clock, RefreshCcw, User, Eye, AlertTriangle, Send, PackageCheck, Wrench, ShieldAlert, CalendarClock, MapPin, CheckCircle2, UserCheck } from 'lucide-react';
+import { Loader2, Check, X, Undo, Camera, Calendar, Clock, RefreshCcw, Eye, AlertTriangle, PackageCheck, Wrench, ShieldAlert, CalendarClock, MapPin, CheckCircle2, FileSpreadsheet } from 'lucide-react';
 
 interface EquipmentItem {
   equipmentId: string;
@@ -85,6 +86,7 @@ export default function AdminRequestsPage() {
   const [loading, setLoading] = useState(true);
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [scanningOverdue, setScanningOverdue] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Detail Modal states
   const [detailModalOpen, setDetailModalOpen] = useState(false);
@@ -145,6 +147,23 @@ export default function AdminRequestsPage() {
       toast(err.message || 'Lỗi tải danh sách yêu cầu', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      if (activeTab === 'studio') {
+        await api.download('/reports/export-studio-bookings', 'LHU_Media_Dat_Phong_Studio.xlsx');
+        toast('Đã xuất file Excel Danh sách đặt phòng Studio thành công!', 'success');
+      } else {
+        await api.download('/reports/export-borrows', 'LHU_Media_Muon_Tra_Thiet_Bi.xlsx');
+        toast('Đã xuất file Excel Danh sách mượn/trả thiết bị thành công!', 'success');
+      }
+    } catch (err: any) {
+      toast(err.message || 'Lỗi khi xuất file Excel', 'error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -510,7 +529,8 @@ export default function AdminRequestsPage() {
     return <span className="text-xs text-studio-muted">—</span>;
   };
 
-  const getStatusBadge = (s: string) => {
+  // Chỉ dành riêng cho phân hệ Mượn / Trả Thiết bị (không dùng cho Đặt phòng Studio)
+  const getEquipmentStatusBadge = (s: string) => {
     switch (s) {
       case 'PENDING':
         return <span className="px-2.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider bg-brand-accent/20 text-brand-accent border border-brand-accent/30">Chờ duyệt</span>;
@@ -539,6 +559,15 @@ export default function AdminRequestsPage() {
             <p className="text-sm text-studio-muted mt-1">Xem thông tin chi tiết và phê duyệt lịch đặt phòng Studio hoặc mượn thiết bị.</p>
           </div>
           <div className="flex items-center space-x-2">
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting}
+              className="flex items-center space-x-1.5 px-3.5 py-2.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-xs font-bold transition-all cursor-pointer disabled:opacity-50"
+              title={activeTab === 'studio' ? 'Xuất danh sách đặt phòng Studio ra file Excel (.xlsx)' : 'Xuất danh sách mượn/trả thiết bị ra file Excel (.xlsx)'}
+            >
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+              <span>{activeTab === 'studio' ? 'Xuất Excel Studio' : 'Xuất Excel Mượn/Trả'}</span>
+            </button>
             {activeTab === 'equipment' && (
               <button
                 onClick={handleCheckOverdue}
@@ -711,7 +740,7 @@ export default function AdminRequestsPage() {
                         <td className="py-4 px-6 text-left text-white font-semibold">
                           {borrow.equipments.reduce((acc, eq) => acc + eq.quantity, 0)} thiết bị
                         </td>
-                        <td className="py-4 px-6 text-center">{getStatusBadge(borrow.status)}</td>
+                        <td className="py-4 px-6 text-center">{getEquipmentStatusBadge(borrow.status)}</td>
                         <td className="py-4 px-6">
                           <div className="flex items-center justify-center space-x-2">
                             {borrow.status === 'PENDING' && (
@@ -801,6 +830,12 @@ export default function AdminRequestsPage() {
                 {/* 1. Studio Booking Preview */}
                 {selectedStudio && (
                   <div className="space-y-4">
+                    {/* Trạng thái phê duyệt Studio */}
+                    <div className="flex items-center justify-between pb-3 border-b border-white/5">
+                      <span className="text-[10px] text-studio-muted font-bold uppercase tracking-wider">Trạng thái duyệt phòng</span>
+                      <div>{getStudioStatusBadge(selectedStudio.status)}</div>
+                    </div>
+
                     {/* User profile */}
                     <div className="grid grid-cols-2 gap-4">
                       <div>
@@ -1364,12 +1399,12 @@ export default function AdminRequestsPage() {
                     />
                     <span className="text-xs font-bold text-amber-300 flex items-center space-x-1.5">
                       <Wrench className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Thiết bị hư hỏng / cần chuyển sang Bảo trì (MAINTENANCE)</span>
+                      <span>Thiết bị hư hỏng / cần chuyển sang trạng thái bảo trì</span>
                     </span>
                   </label>
                   {isDamaged && (
                     <p className="text-[11px] text-amber-200/80 leading-relaxed pl-6">
-                      * Theo Quy tắc nghiệp vụ (Mục 3.9 & 3.10), thiết bị sẽ được chuyển sang trạng thái <strong>MAINTENANCE</strong> và tạm ngưng cho mượn cho đến khi hoàn tất sửa chữa.
+                      * Thiết bị sẽ được chuyển sang trạng thái <strong>Đang bảo trì</strong> và tạm ngưng cho mượn cho đến khi hoàn tất sửa chữa.
                     </p>
                   )}
                 </div>
@@ -1441,7 +1476,7 @@ export default function AdminRequestsPage() {
                       <span className="text-xs font-bold text-white">{selectedStudioReschedule.fullName}</span>
                       <span className="text-[10px] text-studio-muted ml-1.5">({selectedStudioReschedule.user?.employeeCode})</span>
                     </div>
-                    {getStatusBadge(selectedStudioReschedule.status)}
+                    {getStudioStatusBadge(selectedStudioReschedule.status)}
                   </div>
                   <div className="pt-2 border-t border-white/5 flex items-center space-x-2 text-xs text-studio-muted">
                     <Clock className="w-3.5 h-3.5 text-brand-primary shrink-0" />
@@ -1459,12 +1494,11 @@ export default function AdminRequestsPage() {
                     <label className="text-[11px] font-bold text-studio-muted uppercase block">
                       Ngày sử dụng mới (Thứ 2 – Thứ 7)
                     </label>
-                    <input
-                      type="date"
+                    <DatePickerVN
                       value={rescheduleDate}
-                      onChange={(e) => setRescheduleDate(e.target.value)}
-                      className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
+                      onChange={setRescheduleDate}
                       required
+                      className="w-full"
                     />
                   </div>
 

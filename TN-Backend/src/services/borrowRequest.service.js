@@ -23,6 +23,7 @@
 const { Op } = require('sequelize');
 const { sequelize, BorrowRequest, Equipment, User, EquipmentCategory } = require('../models');
 const notificationService = require('./notification.service');
+const { acquireAppLock } = require('../utils/dbLock.util');
 
 /**
  * Lấy danh sách đơn mượn có Tìm kiếm, Lọc, Phân trang
@@ -134,15 +135,20 @@ const create = async (data, userId) => {
     status: 'PENDING',
   });
 
-  // Thông báo in-app cho Admin biết có đơn mượn thiết bị mới (FR-07)
+  const requesterUser = await User.findByPk(userId, { attributes: ['fullName', 'email'] }).catch(() => null);
+  const requesterLabel = requesterUser?.fullName || 'Người dùng hệ thống';
+
+  // Thông báo in-app và email cho Admin biết có đơn mượn thiết bị mới (FR-07)
   notificationService
     .notifyAdmins({
+      senderName: requesterLabel,
       title: '📦 Yêu cầu mượn thiết bị mới',
-      message: `Có yêu cầu mượn ${data.quantity} thiết bị "${equipment.name}" (${equipment.code}). Vui lòng xem xét duyệt đơn.`,
+      message: `${requesterLabel} vừa gửi yêu cầu mượn ${data.quantity} thiết bị "${equipment.name}" (${equipment.code}). Vui lòng xem xét duyệt đơn.`,
       type: 'BORROW_REQUEST_CREATED',
       link: '/admin/requests',
-      sendEmail: false,
+      sendEmail: true,
       detailRows: [
+        { label: 'Người đăng ký', value: requesterUser?.email ? `${requesterLabel} (${requesterUser.email})` : requesterLabel },
         { label: 'Thiết bị', value: `${equipment.name} (${equipment.code})` },
         { label: 'Số lượng', value: `${data.quantity} cái` },
         { label: 'Mục đích mượn', value: data.purpose || 'Không ghi chú' },
@@ -169,11 +175,26 @@ const create = async (data, userId) => {
 const processRequest = async (requestId, action, rejectionReason = null) => {
   // Bắt đầu Transaction - toàn bộ thao tác phải thành công hoặc cùng fail
   const result = await sequelize.transaction(async (t) => {
-    // Lấy đơn mượn kèm lock (LOCK IN SHARE MODE) để tránh race condition
-    const request = await BorrowRequest.findByPk(requestId, {
-      include: [{ model: Equipment, as: 'equipment' }],
+    // 1. Lấy đơn mượn kèm lock trực tiếp trên bảng BorrowRequests (tránh 2 admin duyệt cùng 1 đơn)
+    const initialReq = await BorrowRequest.findByPk(requestId, {
       transaction: t,
-      lock: t.LOCK.UPDATE, // Lock row để tránh 2 admin cùng duyệt 1 lúc
+      lock: t.LOCK.UPDATE,
+    });
+
+    if (!initialReq) {
+      const error = new Error('Đơn mượn không tồn tại.');
+      error.statusCode = 404;
+      throw error;
+    }
+
+    // 2. Với SQL Server: Khóa ứng dụng độc quyền theo thiết bị trong phạm vi Transaction
+    // Ngăn tuyệt đối race condition khi 2 đơn khác nhau cùng mượn 1 thiết bị được duyệt song song
+    await acquireAppLock(sequelize, `borrow_eq_${initialReq.equipmentId}`, t);
+
+    // 3. Tải lại đơn mượn và khóa trực tiếp dòng Equipment sau khi giữ applock
+    const request = await BorrowRequest.findByPk(requestId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
     });
 
     if (!request) {
@@ -188,26 +209,48 @@ const processRequest = async (requestId, action, rejectionReason = null) => {
       throw error;
     }
 
+    const equipment = await Equipment.findByPk(request.equipmentId, {
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
+    if (!equipment) {
+      const error = new Error('Thiết bị liên kết với đơn mượn không tồn tại.');
+      error.statusCode = 404;
+      throw error;
+    }
+
     if (action === 'approve') {
-      // Kiểm tra lại số lượng khả dụng (có thể đã thay đổi từ lúc tạo đơn)
-      if (request.equipment.availableQuantity < request.quantity) {
+      // Kiểm tra lại số lượng khả dụng trong khóa độc quyền
+      if (equipment.availableQuantity < request.quantity) {
+        const error = new Error('Không còn đủ thiết bị để duyệt đơn này.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      // Cập nhật số lượng khả dụng một cách nguyên tử (atomic conditional update chống âm kho)
+      const [affectedRows] = await Equipment.update(
+        {
+          availableQuantity: sequelize.literal(`available_quantity - ${Number(request.quantity)}`),
+        },
+        {
+          where: {
+            id: request.equipmentId,
+            availableQuantity: { [Op.gte]: request.quantity },
+          },
+          transaction: t,
+        }
+      );
+
+      if (!affectedRows) {
         const error = new Error('Không còn đủ thiết bị để duyệt đơn này.');
         error.statusCode = 400;
         throw error;
       }
 
       // Cập nhật đơn mượn -> APPROVED
-      await request.update({ status: 'APPROVED' }, { transaction: t });
-
-      // Cập nhật số lượng khả dụng của thiết bị (giữ chỗ)
       // Theo TC-02: Duyệt đơn chỉ trừ số lượng khả dụng, CHƯA chuyển trạng thái thiết bị sang BORROWED
-      const newAvailable = request.equipment.availableQuantity - request.quantity;
-      await Equipment.update(
-        {
-          availableQuantity: newAvailable,
-        },
-        { where: { id: request.equipmentId }, transaction: t }
-      );
+      await request.update({ status: 'APPROVED' }, { transaction: t });
     } else if (action === 'reject') {
       // Cập nhật đơn mượn -> REJECTED với lý do
       await request.update(
@@ -220,7 +263,8 @@ const processRequest = async (requestId, action, rejectionReason = null) => {
       throw error;
     }
 
-    return request; // Transaction tự COMMIT nếu không có lỗi
+    request.setDataValue('equipment', equipment);
+    return request; // Transaction tự COMMIT & tự giải phóng sp_getapplock nếu không có lỗi
   });
 
   // Gửi thông báo in-app và email kết quả duyệt đơn mượn cho người dùng (FR-07)
@@ -228,16 +272,17 @@ const processRequest = async (requestId, action, rejectionReason = null) => {
     notificationService
       .createNotification({
         userId: result.userId,
+        senderName: 'Quản trị viên LHU Media Studio',
         title: '✅ Đơn mượn thiết bị đã được phê duyệt',
         message: `Đơn mượn thiết bị "${result.equipment?.name || 'thiết bị'}" (${result.quantity} cái) của bạn đã được phê duyệt. Vui lòng đến Studio để nhận bàn giao.`,
         type: 'BORROW_REQUEST_APPROVED',
-        link: '/profile',
+        link: '/history',
         sendEmail: true,
         detailRows: [
           { label: 'Thiết bị', value: `${result.equipment?.name || ''} (${result.equipment?.code || ''})` },
           { label: 'Số lượng duyệt', value: `${result.quantity} cái` },
           { label: 'Thời gian mượn', value: `Từ ${new Date(result.borrowDate).toLocaleDateString('vi-VN')} đến ${new Date(result.returnDate).toLocaleDateString('vi-VN')}` },
-          { label: 'Trạng thái', value: 'ĐÃ DUYỆT (Chờ nhận thiết bị)' },
+          { label: 'Trạng thái', value: 'Đã duyệt (Chờ nhận thiết bị)' },
         ],
       })
       .catch(() => {});
@@ -245,15 +290,16 @@ const processRequest = async (requestId, action, rejectionReason = null) => {
     notificationService
       .createNotification({
         userId: result.userId,
+        senderName: 'Quản trị viên LHU Media Studio',
         title: '❌ Đơn mượn thiết bị không được duyệt',
         message: `Đơn mượn thiết bị "${result.equipment?.name || 'thiết bị'}" của bạn đã bị từ chối.${rejectionReason ? ` Lý do: ${rejectionReason}` : ''}`,
         type: 'BORROW_REQUEST_REJECTED',
-        link: '/profile',
+        link: '/history',
         sendEmail: true,
         detailRows: [
           { label: 'Thiết bị', value: `${result.equipment?.name || ''} (${result.equipment?.code || ''})` },
           { label: 'Lý do từ chối', value: rejectionReason || 'Không có lý do chi tiết' },
-          { label: 'Trạng thái', value: 'BỊ TỪ CHỐI' },
+          { label: 'Trạng thái', value: 'Bị từ chối' },
         ],
       })
       .catch(() => {});
@@ -325,10 +371,11 @@ const handoverEquipment = async (requestId, currentUserId, currentUserRole, hand
   notificationService
     .createNotification({
       userId: result.userId,
+      senderName: 'Quản trị viên LHU Media Studio',
       title: '🤝 Thiết bị đã được bàn giao thành công',
       message: `Bạn đã nhận bàn giao ${result.quantity} thiết bị "${result.equipment?.name || 'thiết bị'}". Vui lòng bảo quản cẩn thận và hoàn trả trước hạn: ${new Date(result.returnDate).toLocaleDateString('vi-VN')}.`,
       type: 'EQUIPMENT_HANDED_OVER',
-      link: '/profile',
+      link: '/history',
       sendEmail: true,
       detailRows: [
         { label: 'Thiết bị', value: `${result.equipment?.name || ''} (${result.equipment?.code || ''})` },
@@ -413,16 +460,17 @@ const returnEquipment = async (requestId, currentUserId, currentUserRole, return
   notificationService
     .createNotification({
       userId: result.userId,
+      senderName: 'Quản trị viên LHU Media Studio',
       title: '📦 Xác nhận hoàn trả thiết bị thành công',
       message: `Đơn mượn thiết bị "${result.equipment?.name || 'thiết bị'}" của bạn đã hoàn tất thủ tục trả máy và kiểm tra thiết bị.`,
       type: 'EQUIPMENT_RETURNED',
-      link: '/profile',
+      link: '/history',
       sendEmail: true,
       detailRows: [
         { label: 'Thiết bị', value: `${result.equipment?.name || ''} (${result.equipment?.code || ''})` },
         { label: 'Tình trạng khi trả', value: result.returnCondition || 'Đã kiểm tra đầy đủ' },
         { label: 'Ngày hoàn trả', value: new Date().toLocaleDateString('vi-VN') },
-        { label: 'Trạng thái', value: 'ĐÃ HOÀN TRẢ (RETURNED)' },
+        { label: 'Trạng thái', value: 'Đã hoàn trả' },
       ],
     })
     .catch(() => {});

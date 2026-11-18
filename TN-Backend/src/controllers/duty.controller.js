@@ -291,6 +291,22 @@ const getWeeklySchedule = async (req, res) => {
   }
 };
 
+/**
+ * Xuất Excel Bảng phân công lịch trực tuần BPTT (ADMIN: toàn bộ theo bộ lọc, CTV: chỉ lịch cá nhân)
+ */
+const exportWeeklySchedule = async (req, res) => {
+  try {
+    await dutyService.exportWeeklyScheduleExcel(req.query, req.user, res);
+  } catch (error) {
+    if (!res.headersSent) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi khi xuất file Excel lịch trực tuần',
+      });
+    }
+  }
+};
+
 module.exports = {
   createDutyPeriod,
   getDutyPeriods,
@@ -309,4 +325,5 @@ module.exports = {
   cancelShift,
   getShifts,
   getWeeklySchedule,
+  exportWeeklySchedule,
 };

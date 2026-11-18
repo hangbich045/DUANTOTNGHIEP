@@ -1023,3 +1023,281 @@ Kiểm tra và đồng bộ Frontend, Backend, Database, phân quyền và hệ 
      - Kết quả kiểm thử: **133/133 tests PASS 100%** (23 suites).
      - Frontend TypeScript: `tsc --noEmit` đạt **0 lỗi (0 errors)**.
 - **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #33
+- **Thời gian tiếp nhận:** 18/11/2026 - Chuẩn hóa trạng thái Đặt phòng Studio về duy nhất “Đã duyệt” & loại bỏ “Chờ nhận máy” / “Chờ giao”
+- **Nội dung câu lệnh:**
+```markdown
+Kiểm tra và điều chỉnh toàn bộ giao diện, trạng thái liên quan đến **Đặt phòng Studio**: chỉ sử dụng trạng thái **“Đã duyệt”** đối với yêu cầu đặt phòng đã được ADMIN phê duyệt. Loại bỏ hoàn toàn các trạng thái **“Chờ nhận máy”** và **“Chờ giao”** khỏi giao diện, bộ lọc, danh sách và các nội dung hiển thị liên quan đến đặt phòng Studio. 
+
+Lưu ý: Chỉ áp dụng cho phân hệ Đặt phòng Studio, không ảnh hưởng đến quy trình mượn/trả thiết bị. Kiểm tra Backend, Frontend và Database để tránh trạng thái cũ xuất hiện trở lại; không xóa dữ liệu lịch sử hoặc thay đổi các nghiệp vụ khác đang hoạt động đúng.
+```
+- **Hành động & Kết quả thực hiện:**
+  - **Rà soát Database (`StudioBookings` & `Notifications`):**
+    * Xác nhận bảng `StudioBookings` chỉ lưu các mã trạng thái chuẩn (`PENDING`, `CONFIRMED`, `COMPLETED`, `CANCELLED`), không lưu chuỗi text cũ.
+    * Xác nhận bảng `Notifications` không có bản ghi Studio nào chứa `"Chờ nhận máy"` hay `"Chờ giao"`.
+  - **Chuẩn hóa Frontend (Tách biệt hoàn toàn Badge Studio và Badge Thiết bị):**
+    * `TN-Frontend/src/app/admin/requests/page.tsx`:
+      + Phát hiện và sửa lỗi modal **Dời lịch đặt phòng Studio** đang gọi nhầm hàm badge của thiết bị (`Đã duyệt (Chờ giao)`), chuyển sang dùng `getStudioStatusBadge(selectedStudioReschedule.status)` (hiển thị **“Đã duyệt”**).
+      + Đổi tên hàm `getStatusBadge` thành `getEquipmentStatusBadge` để cô lập tuyệt đối các trạng thái mượn/trả thiết bị (`Đã duyệt (Chờ giao)`).
+      + Bổ sung hiển thị badge trạng thái duyệt phòng **“Đã duyệt”** trong modal xem chi tiết đặt phòng Studio.
+    * `TN-Frontend/src/app/history/page.tsx`:
+      + Đổi tên `getStatusBadge` thành `getEquipmentStatusBadge` để cô lập tuyệt đối trạng thái `Đã duyệt (Chờ nhận máy)` cho riêng tab Mượn thiết bị; tab Đặt lịch Studio chỉ sử dụng `getStudioApprovalBadge` (**“Đã duyệt”**).
+    * `TN-Frontend/src/app/studio/page.tsx`:
+      + Đồng bộ nhãn trạng thái sự kiện và chú thích lịch sang chuẩn **“Đã duyệt”** (`✓ Đã duyệt`).
+  - **Chuẩn hóa Backend (Thông báo, Email & Báo cáo Excel):**
+    * `TN-Backend/src/services/studioBooking.service.js`: Cập nhật tiêu đề, nội dung và bảng chi tiết thông báo/email duyệt và dời lịch Studio sang **“Đã duyệt”**, trỏ đường dẫn liên kết về `/history`.
+    * `TN-Backend/src/routes/reports.routes.js`: Cập nhật ánh xạ trạng thái `CONFIRMED -> 'Đã duyệt'` và nhãn thống kê `'Đặt phòng đã duyệt'` trong báo cáo xuất Excel.
+    * `TN-Backend/src/routes/compat.routes.js`: Đồng bộ payload `GET /studio-bookings` trả về đầy đủ `attendanceInfo` và trường check-in tương đồng với `studioBooking.controller.js`.
+  - **Kiểm thử & Xác minh:**
+    * Quét toàn bộ mã nguồn: 0 chuỗi `"Chờ nhận máy"` hay `"Chờ giao"` xuất hiện trong phân hệ Đặt phòng Studio; quy trình mượn/trả thiết bị giữ nguyên 100%.
+    * Frontend TypeScript (`tsc --noEmit`): **0 lỗi**.
+    * Backend Unit Tests (`npm test`): **133/133 tests PASS 100%** (23 suites; cập nhật ngày cố định tương lai ở test 21.3 tránh lỗi lệch ngày hiện tại).
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #34
+- **Thời gian tiếp nhận:** 18/11/2026 - Chuẩn hóa ngày dd/mm/yyyy & bổ sung lịch Date Picker trong chức năng Chọn Khung Giờ Đặt Phòng
+- **Nội dung câu lệnh:**
+```markdown
+trong chức năng Chọn Khung Giờ Đặt Phòng, thống nhất lại ngày là dd/mm/yyyy, và cho thêm lịch date picker để chọn ngày cho tiện
+```
+- **Hành động & Kết quả thực hiện:**
+  - **Tạo mới Component lịch chọn ngày chuẩn Việt Nam (`TN-Frontend/src/components/common/DatePickerVN.tsx`):**
+    * Hiển thị và cho phép nhập trực tiếp đúng chuẩn **`dd/mm/yyyy`** (không bị ảnh hưởng bởi locale `mm/dd/yyyy` của trình duyệt/Windows).
+    * Bổ sung **Popup Lịch Date Picker tiếng Việt**:
+      - Tiêu đề Tháng / Năm kèm nút chuyển tháng trước/sau và dòng báo ngày đang chọn (`Thứ ..., dd/mm/yyyy`).
+      - Bảng lịch tuần bắt đầu từ Thứ Hai (`T2 → CN`), highlight ngày hôm nay, ngày đang chọn và đánh dấu màu đỏ nhẹ ngày Chủ nhật (nhắc người dùng thường lịch nghỉ CN).
+      - Nút chọn nhanh **Hôm nay** và **Ngày mai**, tự động đóng khi chọn ngày, click ra ngoài hoặc nhấn `Escape`.
+      - Validate ngày hợp lệ (chặn ngày không tồn tại như `31/02/2026`) và không lệch múi giờ UTC.
+  - **Tích hợp vào mục Chọn Khung Giờ Đặt Phòng (`TN-Frontend/src/app/studio/page.tsx`):**
+    * Thay thế hoàn toàn `<input type="date">` mặc định bằng `DatePickerVN` ở cả 2 tab: **Gợi ý khung giờ còn trống** và **Tự nhập khung giờ**.
+    * Hiển thị đồng nhất định dạng `dd/mm/yyyy` ở nhãn ngày chọn, toast thông báo khi chọn khung giờ gợi ý và thanh tóm tắt chế độ chọn nhiều dải giờ.
+    * Bổ sung `[color-scheme:dark]` cho ô chọn giờ và đặt `relative z-30` để popup lịch nổi hoàn toàn phía trên FullCalendar.
+  - **Kiểm thử & Triển khai:**
+    * TypeScript (`tsc --noEmit`): **0 lỗi**.
+    * Biên dịch production (`next build --webpack`): Thành công **29/29 routes**.
+    * Khởi động lại Frontend (`http://localhost:3000/studio` ➔ `200 OK`) và xác nhận Backend (`http://localhost:5000` ➔ `200 OK`).
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #35
+- **Thời gian tiếp nhận:** 18/11/2026 - Tích hợp mục “Tổng công việc tháng” vào bên trong trang “Nhiệm vụ của tôi” và gỡ khỏi menu chính
+- **Nội dung câu lệnh:**
+```markdown
+Điều chỉnh giao diện CTV theo yêu cầu:
+
+- Bỏ mục **“Tổng công việc tháng”** khỏi thanh menu/tab điều hướng chính và không hiển thị thành một trang độc lập.
+- Chuyển chức năng này thành **một mục nhỏ bên trong trang “Nhiệm vụ của tôi”**, có thể truy cập thông qua tab phụ hoặc nút chuyển đổi nội dung.
+- Khi CTV chọn mục này, hiển thị bảng thống kê công việc theo tháng như chức năng hiện tại, giữ nguyên bộ lọc tháng/năm, tổng số công việc, tổng giờ và ghi chú hệ số.
+- Giữ nguyên toàn bộ dữ liệu, API, phân quyền và logic thống kê đã triển khai.
+- Tối ưu bố cục để hai nội dung “Nhiệm vụ của tôi” và “Tổng công việc tháng” nằm trong cùng một trang, dễ chuyển đổi và đồng nhất giao diện.
+
+Chỉ điều chỉnh cấu trúc điều hướng và giao diện Frontend, không tạo thêm trang hoặc nguồn dữ liệu mới, không làm ảnh hưởng chức năng hiện có.
+```
+- **Hành động & Kết quả thực hiện:**
+  - **Gỡ khỏi thanh điều hướng chính (`TN-Frontend/src/components/Navbar.tsx`):**
+    * Xóa mục `/tasks/summary` (*“Tổng công việc tháng”*) khỏi danh sách `navLinks` trên thanh điều hướng chính.
+  - **Xóa trang độc lập `/tasks/summary`:**
+    * Tách toàn bộ nội dung bảng thống kê tháng thành component nhúng `TN-Frontend/src/components/CollaboratorMonthlySummary.tsx`, giữ nguyên 100% API `GET /api/payroll/collaborator-summary`, phân quyền RBAC, bộ lọc tháng/năm, 4 thẻ KPI, bảng chi tiết có highlight hệ số và modal xem chi tiết Read-only.
+    * Xóa bỏ hoàn toàn trang độc lập `TN-Frontend/src/app/tasks/summary/page.tsx`.
+  - **Tích hợp thành tab phụ trong trang “Nhiệm vụ của tôi” (`TN-Frontend/src/app/tasks/page.tsx`):**
+    * Gỡ nút liên kết rời khỏi thanh chuyển đổi chính (chỉ giữ lại `Nhiệm vụ & Sự vụ` và `Lịch trực Studio`).
+    * Bổ sung thanh chuyển đổi tab phụ (`taskSubTab`: **Danh sách nhiệm vụ** | **Tổng công việc tháng**) ngay bên trong mục **Nhiệm vụ & Sự vụ**, cho phép CTV chuyển đổi tức thì giữa danh sách nhiệm vụ và bảng thống kê tháng ngay trên cùng một trang với giao diện đồng nhất.
+  - **Kiểm thử & Triển khai:**
+    * Biên dịch production (`next build --webpack`): **28/28 routes** thành công, **0 lỗi TypeScript**.
+    * Xác minh live: `/tasks` ➔ `200 OK`, `/tasks/summary` ➔ `404` (không còn là trang độc lập), Backend cổng `5000` ➔ `200 OK`.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #36
+- **Thời gian tiếp nhận:** 18/11/2026 - Chuẩn hóa giao diện Date Picker trên toàn bộ hệ thống LHU Media Studio theo mẫu Chọn khung giờ đặt phòng
+- **Nội dung câu lệnh:**
+```markdown
+Chuẩn hóa giao diện **Date Picker trên toàn bộ hệ thống LHU Media Studio** theo mẫu Date Picker tại chức năng **“Chọn khung giờ đặt phòng”** trong ảnh đính kèm.
+
+Yêu cầu:
+- Tất cả Date Picker ở các phân hệ phải sử dụng cùng giao diện lịch này.
+- Đồng bộ màu sắc, nền, đường viền, kích thước, typography, hiệu ứng hover, ngày đang chọn, ngày hiện tại và trạng thái vô hiệu hóa.
+- Giữ đầy đủ các chức năng: chuyển tháng trước/sau, chọn ngày, nút “Hôm nay”, “Ngày mai” và đóng lịch.
+- Đảm bảo hiển thị tốt trên desktop và mobile, không bị cắt hoặc chồng lấn với các thành phần khác.
+- Ưu tiên xây dựng hoặc tái sử dụng một component Date Picker dùng chung để đảm bảo tính nhất quán và dễ bảo trì.
+```
+- **Hành động & Kết quả thực hiện:**
+  - **Nâng cấp Component dùng chung (`TN-Frontend/src/components/common/DatePickerVN.tsx`):**
+    * Dùng **React Portal (`createPortal(..., document.body)`)** với tọa độ `position: fixed` tự động tính toán, tự lật lên trên khi sát đáy màn hình, tự canh biên ngang trên mobile và `z-[9999]` để tuyệt đối không bị cắt bởi modal `overflow-y-auto` hay bảng/panel `overflow-hidden`.
+    * Hỗ trợ đầy đủ props: `minDate`, `maxDate` (trạng thái ngày vô hiệu hóa), `clearable` (nút xóa trống cho bộ lọc/ngày tùy chọn), `disabled`, `required`, `highlightSunday`, `inputClassName` và `renderTrigger` (cho nút chọn tuần ở Bảng lịch trực).
+    * Bảo toàn 100% thiết kế tham chiếu: nền `#161822`, viền `border-white/15`, header `Tháng MM / YYYY` + dòng `Đang chọn: Thứ ..., dd/mm/yyyy`, lịch `T2 → CN`, highlight ngày hiện tại (hổ phách), ngày đang chọn (xanh `brand-primary`), nút **Hôm nay**, **Ngày mai** và **X** đóng lịch.
+  - **Đồng bộ toàn bộ 25/25 Date Picker trên 12 file (còn 0 ô `<input type="date">` mặc định):**
+    1. `src/app/studio/page.tsx` (2): Gợi ý khung giờ & Tự nhập khung giờ.
+    2. `src/app/equipment/page.tsx` (2): Ngày mượn & Ngày trả thiết bị.
+    3. `src/app/history/page.tsx` (1): Modal dời lịch đặt Studio của người dùng.
+    4. `src/app/tasks/page.tsx` (1): Ngày thực hiện công việc ngoài hệ thống của CTV.
+    5. `src/app/admin/dashboard/page.tsx` (4): Lọc biểu đồ Từ ngày/Đến ngày & Modal xuất báo cáo Từ ngày/Đến ngày.
+    6. `src/app/admin/requests/page.tsx` (1): Modal dời lịch đặt Studio của Admin.
+    7. `src/app/admin/tasks/page.tsx` (3): Deadline giao việc, Deadline sửa việc & Ngày thực hiện nghiệm thu.
+    8. `src/app/admin/duty/page.tsx` (1): Hạn chót đăng ký đợt trực Studio.
+    9. `src/app/admin/equipment/maintenance/page.tsx` (5): Lọc Từ ngày/Đến ngày, Ngày xuất hóa đơn, Ngày bắt đầu & Ngày hoàn thành bảo trì.
+    10. `src/app/admin/audit-logs/page.tsx` (2): Lọc Lịch sử thao tác Từ ngày/Đến ngày.
+    11. `src/components/WeeklyDutyScheduleTable.tsx` (3): Nút chọn ngày/tuần nhanh, Deadline giao việc nhanh & Deadline sửa việc nhanh.
+  - **Kiểm thử & Xác minh:**
+    * Quét toàn bộ mã nguồn Frontend: **0** thẻ `type="date"` còn sót lại, **25/25** sử dụng `DatePickerVN`.
+    * TypeScript (`tsc --noEmit`): **0 lỗi**.
+    * Production Build (`next build --webpack`): **28/28 routes** thành công.
+    * Kiểm tra live 10/10 tuyến trang cập nhật trên `http://localhost:3000`: tất cả trả về **`200 OK`**.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #37
+- **Thời gian tiếp nhận:** 18/11/2026 - Hoàn thiện toàn bộ chức năng xuất file Excel (`.xlsx`) trong hệ thống LHU Media Studio
+- **Nội dung câu lệnh:**
+```markdown
+# PROMPT: HOÀN THIỆN TOÀN BỘ CHỨC NĂNG XUẤT FILE TRONG HỆ THỐNG
+
+Kiểm tra và triển khai hoàn chỉnh tất cả chức năng xuất file đang có trong hệ thống LHU Media Studio.
+- Rà soát toàn bộ các phân hệ có nút/chức năng xuất file: Quản lý thiết bị, mượn/trả thiết bị, đặt phòng Studio, quản lý công việc, lịch trực, bảng thống kê công việc, chấm công và bảng lương.
+- Đảm bảo mỗi chức năng xuất file hoạt động thực tế, tải được file `.xlsx`, giữ đúng cấu trúc bảng, tiêu đề cột, định dạng ngày tháng, số giờ, tiền tệ, công thức, ghi chú và highlight.
+- Đồng bộ dữ liệu xuất với bộ lọc đang hiển thị (tháng/năm, tìm kiếm, CTV, trạng thái, danh mục).
+- Riêng bảng thống kê công việc và bảng lương thể hiện rõ giờ làm thường, giờ ngoài giờ, giờ Chủ nhật, hệ số nhân và tiền công tương ứng.
+- Kiểm tra phân quyền RBAC: ADMIN được xuất dữ liệu quản lý; CTV chỉ được xuất dữ liệu cá nhân trong phạm vi được phép.
+- Tên file rõ ràng (có tên phân hệ & thời gian xuất), xử lý đầy đủ dữ liệu rỗng, lỗi truy xuất và dữ liệu lớn.
+- Kiểm thử tải file thực tế ở từng phân hệ, mở file đối chiếu dữ liệu với hệ thống rồi mới cập nhật KE_HOACH_TRIEN_KHAI.md.
+```
+- **Hành động & Kết quả thực hiện:**
+  - **Khắc phục 3 lỗi nghiêm trọng ở luồng xuất file cũ:**
+    1. Lỗi `401 Unauthorized` tại `/admin/payroll` do dùng `window.open(...)` không gửi `Authorization: Bearer` ➔ Thay bằng helper `api.download(endpoint, fallbackFilename)` trong `TN-Frontend/src/lib/api.ts` (đi qua Next.js `/api` proxy, trích xuất tên file từ `Content-Disposition`, xử lý lỗi JSON và 401 rõ ràng).
+    2. Lỗi chọn Tháng 1 (`month=1`) bị nhảy sang tháng hiện tại trong `TN-Backend/src/routes/reports.routes.js` (`parseInt(month) - 1 || now.getMonth()`).
+    3. Lỗi hardcode cột `A2:AO2` (lệch cột tháng 28/29/30 ngày) và thiếu công thức Excel trong `exportTimesheetExcel`.
+  - **Hoàn thiện & Bổ sung toàn bộ 10 endpoint xuất Excel `.xlsx` chuẩn hóa (`Access-Control-Expose-Headers: Content-Disposition`, xử lý dữ liệu rỗng, tên file `LHU_Media_<Phan_He>_<ThoiGian>.xlsx`):**
+    1. `GET /api/reports/export-excel` [ADMIN]: Báo cáo tổng hợp 4 sheet (fix lỗi Tháng 1, bổ sung cột xác nhận sử dụng Studio 4 cấp độ).
+    2. `GET /api/reports/export-equipment` [ADMIN]: Danh sách thiết bị đồng bộ `search`, `category`/`categoryId`, `status` + công thức `SUM`.
+    3. `GET /api/reports/export-borrows` [ADMIN]: Mượn/trả thiết bị đồng bộ `status`, `search`.
+    4. `GET /api/reports/export-studio-bookings` [ADMIN]: Đặt phòng Studio chuẩn hóa nhãn “Đã duyệt” + cột xác nhận sử dụng 4 cấp độ & mốc thời gian check-in/xác nhận.
+    5. `GET /api/reports/export-tasks` [ADMIN]: Quản lý công việc đồng bộ `status`, `taskType`, `assignedToId`, `isExternal`, `search`, tách bạch giờ thường/ngoài giờ/Chủ nhật/hệ số/giờ quy đổi.
+    6. `GET /api/duty/export-weekly` [ADMIN, COLLABORATOR]: Lịch trực tuần BPTT 2 sheet (`Lich_Truc_Tuan` công thức `COUNTA`/`COUNTIF`/`SUM` + `Chi_Tiet_Su_Vu_Tuan` highlight hệ số). CTV bị giới hạn RBAC chỉ xuất lịch cá nhân của chính mình (`LHU_Media_Lich_Truc_Ca_Nhan_*`).
+    7. `GET /api/payroll/export-timesheet` [ADMIN]: Bảng chấm công tháng (cột động 28/29/30/31 ngày, công thức `SUM`/`*4`/`ROUND(*20000,0)`, đồng bộ `ctvId` & `search`).
+    8. `GET /api/payroll/export-tasks-summary` [ADMIN]: Bảng thống kê công việc 2 sheet (giữ nguyên Sheet 1 `T{m}.{y}` 8 cột chuẩn BPTT + thêm Sheet 2 `Chi tiết giờ & hệ số` tách giờ thường ×1,0, ngoài giờ ×1,5, Chủ nhật ×2,0, công thức quy đổi & tiền công).
+    9. `GET /api/payroll/export-payroll` [ADMIN]: Bảng lương tháng CTV 14 cột chi tiết đầy đủ ca trực, giờ thường/ngoài giờ/Chủ nhật, công thức giờ quy đổi & thành tiền VNĐ, khối chữ ký.
+    10. `GET /api/payroll/export-collaborator-summary` [COLLABORATOR, ADMIN]: Tổng công việc tháng cá nhân CTV (RBAC khóa cứng `req.user.id` cho CTV, đồng bộ tháng/năm & `status`).
+  - **Tích hợp & đồng bộ nút Xuất Excel trên 7 màn hình Frontend:**
+    * `admin/dashboard/page.tsx`, `admin/equipment/page.tsx`, `admin/requests/page.tsx` (tự xuất Studio / Mượn-Trả theo tab), `admin/tasks/page.tsx`, `admin/payroll/page.tsx` (3 nút: Xuất Chấm công, Xuất Thống kê, Xuất Bảng lương), `CollaboratorMonthlySummary.tsx` (CTV), `WeeklyDutyScheduleTable.tsx` (ADMIN & CTV).
+  - **Kiểm thử thực tế & Tự động hóa:**
+    * Tải file `.xlsx` thực tế từ server đang chạy (`:5000` & proxy `:3000`), đọc lại bằng `ExcelJS` đối chiếu với SQL Server (24 thiết bị, 8 đơn mượn, 6 lịch Studio, 33 công việc, 11 nhân sự lịch tuần, lọc CTV, tháng rỗng `01/2025`, fix Tháng 1, chặn `401` & `403` RBAC): **17/17 PASS (100%)**.
+    * Unit Tests Backend (thêm Suite 24): **137/137 PASS (100%)**.
+    * Frontend TypeScript (`tsc --noEmit`): **0 lỗi**; Production Build (`next build --webpack`): **28/28 routes** thành công.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #38
+- **Thời gian tiếp nhận:** 18/11/2026 - Bổ sung chức năng giao diện Sáng / Tối (Light Mode / Dark Mode) toàn hệ thống LHU Media Studio
+- **Nội dung câu lệnh:**
+```markdown
+# PROMPT: BỔ SUNG CHỨC NĂNG GIAO DIỆN SÁNG/TỐI TOÀN HỆ THỐNG
+
+Triển khai chức năng Light Mode / Dark Mode cho toàn bộ hệ thống LHU Media Studio:
+- Nút chuyển đổi giao diện sáng/tối dễ nhận biết trên thanh điều hướng.
+- Dark Mode giữ phong cách màu tối hiện tại; Light Mode dùng nền sáng, bề mặt trắng, chữ tối, màu nhấn xanh dương theo nhận diện LHU.
+- Đồng bộ toàn hệ thống (Dashboard, Thiết bị, Đặt phòng Studio, Công việc, Lịch trực, Chấm công & Thù lao, Thành viên, Thông báo, Lịch sử thao tác, Date Picker, Dropdown, Modal, Tooltip, biểu đồ, bảng).
+- Lưu lựa chọn giao diện theo từng tài khoản & đồng bộ đa thiết bị.
+- Hiệu ứng chuyển đổi nhẹ nhàng, không nhấp nháy (FOUC), độ tương phản rõ ràng.
+```
+- **Hành động & Kết quả thực hiện:**
+  - **Database & Backend (Lưu trữ & Đồng bộ đa thiết bị theo từng tài khoản):**
+    * Thêm cột `theme_preference` (`NVARCHAR(10) NOT NULL DEFAULT 'dark'`) vào bảng `Users` MSSQL (migration idempotent trong `TN-Backend/src/models/index.js`) và khai báo trên `User.js`.
+    * Bổ sung endpoint `PATCH /api/auth/theme` (`authenticate`), cập nhật `login`, `getProfile`, `updateProfile` trong `auth.service.js`, `auth.controller.js`, `auth.routes.js`.
+  - **Frontend Theme Architecture (Tập trung, 0ms FOUC, đa tab & đa thiết bị):**
+    * `ThemeContext.tsx` + `AuthContext.tsx`: Quản lý state `dark`/`light`, ưu tiên đồng bộ `user.themePreference` từ DB, dự phòng `localStorage` theo từng `userId`, đồng bộ giữa các tab qua `storage` event.
+    * `layout.tsx`: Script inline `THEME_INIT_SCRIPT` khởi tạo `data-theme` trước khi React hydrate, ngăn nhấp nháy khi tải lại trang.
+    * `globals.css`: Hệ thống CSS tokens & Light Mode chuẩn LHU (`#F4F7FC` canvas, `#FFFFFF` surfaces, `#0F172A` text, `#284F9E` LHU Blue, `#C28B0B` LHU Gold), hỗ trợ FullCalendar (`.fc`), bảng, biểu đồ, modal, dropdown `<select>/<option>`, tooltip, giữ nguyên màu trắng cho nút CTA & Hero nền tối, hiệu ứng chuyển `.theme-transition`.
+    * `ThemeToggle.tsx`: Nút chuyển đổi Sáng/Tối gắn trên `Navbar.tsx` (Desktop & Mobile), `AdminLayout.tsx` (Sidebar & Mobile Header) và `auth/login/page.tsx`.
+    * Nâng cấp hỗ trợ Light/Dark trực tiếp cho `DatePickerVN.tsx`, `NotificationBell.tsx` và `ToastContext.tsx`.
+  - **Kiểm thử:**
+    * Unit Test Backend (thêm Suite 25): **140/140 PASS (100%)**.
+    * Kiểm thử live DB, API, Proxy & 16 tuyến trang: **5/5 PASS (100%)**.
+    * TypeScript (`tsc --noEmit`): **0 lỗi**; Production Build: **28/28 routes** thành công.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #39
+- **Thời gian tiếp nhận:** 18/11/2026 - Rà soát và tối ưu màu sắc & độ tương phản Light Mode toàn hệ thống
+- **Nội dung câu lệnh:**
+```markdown
+# PROMPT: RÀ SOÁT VÀ TỐI ƯU MÀU SẮC LIGHT MODE TOÀN HỆ THỐNG
+
+Kiểm tra toàn bộ giao diện Light Mode của LHU Media Studio; khắc phục toàn bộ khu vực chữ trắng trên nền sáng, chữ nhạt trên nền trắng, thành phần trùng màu nền, tối ưu badge trạng thái, bảng dữ liệu, dropdown, Date Picker, modal, bộ lọc, biểu đồ, nút bấm, tooltip và trạng thái hover/focus/disabled. Giữ nguyên Dark Mode và sử dụng hệ thống CSS variables/theme tokens dùng chung.
+```
+- **Nguyên nhân gốc đã phát hiện qua quét 100% lớp màu toàn Frontend (`104` lớp text, `124` lớp bg, `77` lớp border, `50` lớp gradient, `14` lớp hover):**
+  1. Biến thể độ mờ chữ trắng (`text-white/95`, `text-white/85`, `text-white/40`, `text-white/30`, `text-white/20`) và biến thể chữ pastel (`text-amber-*/80..90`, `text-rose-200..400/*`, `text-emerald-400/*`, `text-cyan-400/*`, `text-yellow-200/300`, `text-indigo-300/400`, `text-orange-400`, `text-pink-400`) chưa có quy tắc tương phản đậm trong Light Mode.
+  2. Nút chuyển nền đậm khi hover (`hover:bg-brand-primary`, `hover:bg-emerald-600`, `hover:bg-rose-600`, `hover:bg-amber-500`, `hover:bg-purple-600`...) bị đè `hover:text-white` thành màu xanh `#284F9E` khiến chữ bị chìm khi di chuột.
+  3. Các nút CTA biến thể độ mờ (`bg-brand-primary/90`, `bg-brand-primary/95`, `bg-brand-success/90`, `bg-brand-error/90`, `bg-brand-accent`, `bg-amber-500`, `bg-purple-500`) bị đổi chữ thành đen trên nền màu đậm.
+  4. Trang `/notifications` và các modal dùng `bg-[#0F111A]`, `bg-[#1C243B]`, `bg-[#1E3A8A]`, `bg-studio-dark/80` bị trùng phẳng màu trắng khiến thẻ chưa đọc/đã đọc và nền phủ modal không phân tách rõ.
+  5. Các badge trạng thái & ký hiệu lịch trực (`bg-purple-600/40`, `bg-blue-600/30`, `bg-amber-600/30`, `bg-teal-600/30`, `bg-red-600/30`) còn nền tối đục khi chuyển sang Light Mode.
+- **Hành động & Kết quả thực hiện (`TN-Frontend/src/app/globals.css`):**
+  - Thiết lập phân tầng 3 cấp bề mặt rõ ràng cho Light Mode: Canvas `#EEF3FA` ➔ Card/Modal/Table `#FFFFFF` (viền `#D5DFEE`, bóng dịu) ➔ Input/Filter/Table Header/Secondary `#F4F7FC` / `#F1F5F9` (viền `#CBD5E1`, focus ring xanh LHU `#284F9E`).
+  - Phủ 100% lớp chữ trắng/nhạt & pastel sang hệ màu tối WCAG AA (`#0F172A`, `#1E293B`, `#475569`, `#1D4ED8`, `#047857`, `#B45309`, `#BE123C`, `#6D28D9`, `#0E7490`, `#0F766E`), đồng bộ placeholder `#64748B`.
+  - Chuẩn hóa toàn bộ bề mặt badge trạng thái (Thành công, Cảnh báo, Lỗi, Đang xử lý, Chưa đọc/Đã đọc, LV/SV/ĐK/NL/DP) sang nền pastel sáng trong + chữ đậm tương phản cao; giữ nguyên màu cột Chủ nhật & tiêu đề cột màu ở Bảng chấm công.
+  - Bảo toàn chữ trắng `#FFFFFF` trên toàn bộ nút CTA đậm, badge đậm, tooltip biểu đồ `bg-black`, Hero nền tối và mọi nút có trạng thái `hover:bg-*` đậm; khôi phục lớp phủ modal tối dịu `rgba(15, 23, 42, 0.48)`.
+  - Giữ nguyên 100% Dark Mode (`html[data-theme="dark"]`).
+- **Kiểm thử:**
+  - Kiểm định tự động độ tương phản WCAG 2.1: **19/19 cặp màu PASS (4.51:1 – 17.85:1)**; độ phủ CSS: **14/14 PASS**.
+  - Kiểm thử live DB, API & 16 tuyến trang SSR: **5/5 PASS (100%)**.
+  - `next build --webpack`: **28/28 routes** thành công, **0 lỗi TypeScript**.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #40
+- **Thời gian tiếp nhận:** 18/11/2026 - Tinh chỉnh chi tiết Light Mode, chuẩn hóa nhãn giao diện người dùng & Hoàn thành Giai đoạn 5 (Task 5.1 → 5.5)
+- **Nội dung câu lệnh:**
+```markdown
+1. Tinh chỉnh Light Mode chi tiết (nền trắng khung tìm kiếm/thẻ/dòng TỔNG CỘNG, đồng bộ 3 tầng màu cột bảng lịch trực tuần, chữ đen trong khung giờ lịch FullCalendar).
+2. Rà soát toàn bộ giao diện hệ thống loại bỏ mã FR, nhãn "Phân hệ..." và thuật ngữ nội bộ cho cả ADMIN và CTV.
+3. Thực hiện Giai đoạn 5: Kiểm thử phân quyền RBAC, hồi quy toàn hệ thống, concurrency locks & toàn vẹn CSDL, cập nhật Swagger OpenAPI 3.0 + README hướng dẫn cài đặt, đóng gói và lập Biên bản bàn giao nghiệm thu.
+```
+- **Hành động & Kết quả thực hiện:**
+  - **Tinh chỉnh Light Mode & Chuẩn hóa UI Copy (11 tệp Frontend):**
+    * Đồng bộ 3 tầng màu cột bảng lịch trực tuần (`[data-duty-table="true"]`), khép kín hàng `TỔNG` cột Chủ nhật, thống nhất màu nhóm `Số lượng buổi làm` (xanh dương) và `Tình trạng` (tím), chuyển chữ khung giờ FullCalendar sang `#0F172A` trong Light Mode (giữ nguyên 100% Dark Mode).
+    * Rà soát toàn bộ giao diện ADMIN & CTV: xóa 100% nhãn `FR-*`, `Phân hệ ...`, `QUY_TAC.md`, `Mục 3.9`, `CSDL`, mã enum tiếng Anh (`MAINTENANCE`/`COMPLETED`/...) và thuật ngữ nội bộ.
+  - **Giai đoạn 5 — Task 5.1 (RBAC), 5.2 (Regression), 5.3 (Concurrency & Integrity), 5.4 (Swagger & Docs), 5.5 (Handover):**
+    * Hardening RBAC: bổ sung `authorize('ADMIN')` cho `GET /api/equipments/:equipmentId/maintenances` và `authorize('COLLABORATOR', 'ADMIN')` cho các route đọc `/api/tasks*`.
+    * Nâng cấp Concurrency Locks (`sp_getapplock` + transaction + atomic decrement) cho `borrowRequest.service.js` và `studioBooking.service.js`.
+    * Cập nhật Swagger OpenAPI `3.0.0` (POSIX glob paths + `@swagger` docs phủ toàn bộ 92 API paths FR-01 → FR-09).
+    * Ban hành `README.md` (hướng dẫn cài đặt & vận hành), `BIEN_BAN_BAN_GIAO_NGHIEM_THU.md` và cập nhật `KE_HOACH_TRIEN_KHAI.md` hoàn thành 100% 5/5 giai đoạn.
+- **Kết quả kiểm thử:**
+  - Unit Test Backend (thêm Suite 26): **144/144 PASS (26 suites)**.
+  - Kiểm thử tích hợp toàn diện Giai đoạn 5 (`npm --prefix TN-Backend run test:phase5`): **21/21 PASS (0 FAIL)** trên SQL Server & live servers (`:5000` & `:3000`).
+  - Frontend TypeScript (`tsc --noEmit`): **0 lỗi**; `next build`: **28/28 routes** thành công.
+- **Trạng thái:** `COMPLETED`
+
+
+---
+
+### PROMPT #41
+- **Thời gian tiếp nhận:** 18/11/2026 - Bổ sung hệ thống gửi thông báo qua email toàn hệ thống (FR-07), theo dõi trạng thái & hỗ trợ gửi lại
+- **Nội dung câu lệnh:**
+```markdown
+Bổ sung chức năng gửi thông báo qua email cho người dùng trên toàn hệ thống LHU Media Studio (áp dụng cho giao nhiệm vụ, cập nhật tiến độ, nộp kết quả, yêu cầu chỉnh sửa, xác nhận hoàn thành, đăng ký & phê duyệt đặt phòng, mượn/trả thiết bị, đăng ký & xác nhận lịch trực...; đầy đủ tiêu đề, người gửi, nội dung, thời gian, liên kết chi tiết; đúng phân quyền ADMIN/CTV/USER; không gửi trùng; non-blocking; tái sử dụng cấu hình SMTP .env; lưu lịch sử trạng thái và hỗ trợ gửi lại).
+```
+- **Hành động & Kết quả thực hiện:**
+  - Nâng cấp `TN-Backend/src/config/mailer.js` (tái sử dụng `transporter` & `.env`, dùng `FRONTEND_URL`, bổ sung tên người gửi, thời gian phát sinh UTC+7, phân mục chức năng, liên kết chi tiết và `getSmtpStatus()`).
+  - Mở rộng bảng `Notifications` (idempotent migration 8 cột theo dõi gửi email trong `models/index.js` & `Notification.js`) và nâng cấp `notification.service.js` (mặc định `sendEmail = true`, chống gửi trùng 3 lớp, xử lý lỗi an toàn non-blocking, tra cứu lịch sử `email-logs`, kiểm tra SMTP `email-status`, gửi lại đơn lẻ & hàng loạt `resend-email` / `resend-failed`).
+  - Đồng bộ 100% sự kiện trong `task.service.js` (thêm `TASK_IN_PROGRESS`), `studioBooking.service.js` (sửa link `/admin/bookings` → `/admin/requests`, thêm `STUDIO_BOOKING_CANCELLED` & `STUDIO_BOOKING_ABSENT`), `borrowRequest.service.js` (chuẩn hóa link `/history`) và `duty.service.js` (chuyển toàn bộ 6 điểm thông báo lịch trực qua `notificationService`).
+  - Nâng cấp `TN-Frontend/src/app/notifications/page.tsx`: giữ nguyên hộp thư cá nhân, thêm tab **Lịch sử gửi Email** cho ADMIN (kiểm tra kết nối SMTP, thống kê, lọc trạng thái và nút Gửi lại).
+  - Kiểm thử: **148/148 Unit Tests PASS** (27 suites), **11/11 Live SMTP E2E Tests PASS** (gửi thật qua Gmail SMTP cho ADMIN/CTV/USER có `messageId`, chống trùng, retry `FAILED → SENT`, 6/6 link trả 200 OK), `tsc --noEmit` 0 lỗi, `next build` 28/28 routes.
+- **Trạng thái:** `COMPLETED`

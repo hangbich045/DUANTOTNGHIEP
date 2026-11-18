@@ -5,7 +5,7 @@ import Link from 'next/link';
 import AdminLayout from '@/components/AdminLayout';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
-import { Search, Plus, Edit2, Trash2, Loader2, Upload, X, AlertTriangle, Wrench } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Loader2, Upload, X, AlertTriangle, Wrench, FileSpreadsheet } from 'lucide-react';
 
 interface Equipment {
   id: string;
@@ -53,6 +53,7 @@ export default function AdminEquipmentPage() {
   const [originalStatus, setOriginalStatus] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Quick Category creation Dialog state
   const [quickCatOpen, setQuickCatOpen] = useState(false);
@@ -92,6 +93,23 @@ export default function AdminEquipmentPage() {
       setCategoriesList(data);
     } catch (err: any) {
       console.error('Error fetching categories:', err);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (search.trim()) params.set('search', search.trim());
+      if (category) params.set('category', category);
+      if (status) params.set('status', status);
+      const q = params.toString() ? `?${params.toString()}` : '';
+      await api.download(`/reports/export-equipment${q}`, 'LHU_Media_Danh_Sach_Thiet_Bi.xlsx');
+      toast('Đã xuất file Excel Danh sách thiết bị thành công!', 'success');
+    } catch (err: any) {
+      toast(err.message || 'Lỗi khi xuất file Excel thiết bị', 'error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -259,7 +277,16 @@ export default function AdminEquipmentPage() {
             <h1 className="text-3xl font-extrabold text-white tracking-tight">Quản Lý Thiết Bị</h1>
             <p className="text-sm text-studio-muted mt-1">Danh sách thiết bị studio, cập nhật số lượng và kiểm tra bảo trì.</p>
           </div>
-          <div className="flex items-center space-x-3 self-start sm:self-auto">
+          <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+            <button
+              onClick={handleExportExcel}
+              disabled={exporting}
+              className="flex items-center space-x-2 bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-300 px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer shadow-md disabled:opacity-50"
+              title="Xuất danh sách thiết bị ra file Excel (.xlsx) theo bộ lọc hiện tại"
+            >
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+              <span>Xuất Excel</span>
+            </button>
             <Link
               href="/admin/equipment/maintenance"
               className="flex items-center space-x-2 bg-white/5 border border-white/10 hover:bg-white/10 text-white px-4 py-3 rounded-2xl text-sm font-semibold transition-all cursor-pointer shadow-md"

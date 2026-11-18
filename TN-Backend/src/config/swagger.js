@@ -8,6 +8,7 @@
  * swagger-ui-express: Render trang UI đẹp tại /api-docs từ spec JSON.
  */
 
+const path = require('path');
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
@@ -16,28 +17,29 @@ const options = {
   definition: {
     openapi: '3.0.0', // Phiên bản OpenAPI
     info: {
-      title: '📋 TN-Backend API — LHU Media Studio',
-      version: '2.0.0',
+      title: '📋 LHU Media Studio — REST API Documentation',
+      version: '3.0.0',
       description: `
-## Tài liệu API — Đồ án cuối khóa LHU Media Studio
+## Tài liệu API đầy đủ — Hệ thống LHU Media Studio (FR-01 → FR-09)
 
 ### Tech Stack
-- **Node.js + Express.js**: REST API server
-- **Sequelize ORM + SQL Server (MSSQL)**: Database
-- **JWT + bcryptjs**: Authentication & password hashing
-- **Cloudinary**: Upload & lưu ảnh/video trên cloud
-- **Nodemailer + Gmail SMTP**: Gửi email OTP xác thực
-- **ExcelJS**: Xuất báo cáo .xlsx
+- **Node.js + Express.js**: REST API server (JWT RBAC + Audit Logs + Transaction Concurrency Locks)
+- **Sequelize ORM + SQL Server (MSSQL)**: Database với khóa ứng dụng \`sp_getapplock\` chống race condition
+- **JWT + bcryptjs**: Xác thực & phân quyền 3 vai trò
+- **Cloudinary / Local Uploads**: Upload hình ảnh, video và hóa đơn chứng từ
+- **Nodemailer + Gmail SMTP**: Email OTP xác thực & thông báo giao dịch
+- **ExcelJS**: 9 endpoint xuất báo cáo \`.xlsx\` có công thức thực
 
 ### Cách xác thực:
-1. Đăng nhập qua \`POST /api/auth/login\` để lấy token.
+1. Đăng nhập qua \`POST /api/auth/login\` để lấy JWT token.
 2. Nhấn nút **Authorize** (🔓) ở trên cùng, nhập \`Bearer <token>\`.
 3. Tất cả API có 🔒 sẽ tự động gửi token.
 
-### Phân quyền (RBAC):
-- **Public** ❌: Không cần đăng nhập
-- **User** ✅: Cần JWT token
-- **Admin** 🔐: Cần JWT token + role ADMIN
+### Phân quyền (RBAC — 3 vai trò):
+- **Public** ❌: Không cần đăng nhập (\`/api/homepage\`, \`/api/auth/login\`, \`/api/auth/register\`, \`/health\`)
+- **User (Người dùng)** ✅: Mượn thiết bị, đặt phòng Studio, hồ sơ, thông báo, chế độ sáng/tối
+- **Collaborator (CTV)** 🎓: Toàn bộ quyền User + công việc được giao, khai báo việc ngoài, đăng ký ca trực, xem lịch tuần & tổng hợp công việc cá nhân
+- **Admin (Quản trị viên)** 🔐: Toàn quyền quản trị thiết bị, bảo trì, duyệt đơn, giao việc, xếp ca trực, chấm công, bảng lương, thống kê, xuất Excel và lịch sử thao tác
       `,
       contact: {
         name: 'LHU Media Studio Backend',
@@ -65,11 +67,10 @@ const options = {
     security: [{ BearerAuth: [] }],
   },
 
-  // Đường dẫn tới các file có JSDoc comment (@swagger)
-  // Swagger-jsdoc sẽ quét các file này để tạo spec
+  // Đường dẫn chuẩn POSIX (forward slashes) để glob trong swagger-jsdoc quét chính xác 100% trên cả Windows & Linux
   apis: [
-    './src/routes/*.js',       // Quét tất cả file route
-    './src/controllers/*.js',  // Quét tất cả file controller (nếu có JSDoc ở đây)
+    path.join(__dirname, '../routes/*.js').replace(/\\/g, '/'),
+    path.join(__dirname, '../controllers/*.js').replace(/\\/g, '/'),
   ],
 };
 

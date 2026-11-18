@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import AdminLayout from '@/components/AdminLayout';
-import { useAuth } from '@/context/AuthContext';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
@@ -17,15 +17,12 @@ import {
   Trash2,
   ExternalLink,
   Search,
-  Filter,
   CheckSquare,
   AlertTriangle,
   X,
-  User as UserIcon,
   Calendar,
   FileText,
   Link as LinkIcon,
-  MessageSquare,
   Pencil,
   Tag,
   MapPin,
@@ -93,7 +90,6 @@ const HOURS_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2,
 const MINUTES_OPTIONS = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
 export default function AdminTasksPage() {
-  const { user: currentUser } = useAuth();
   const { toast } = useToast();
 
   const [tasks, setTasks] = useState<TaskItem[]>([]);
@@ -101,7 +97,6 @@ export default function AdminTasksPage() {
   const [collaborators, setCollaborators] = useState<TaskAssignee[]>([]);
   const [activeCollaborators, setActiveCollaborators] = useState<TaskAssignee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [actioningId, setActioningId] = useState<string | null>(null);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -118,7 +113,6 @@ export default function AdminTasksPage() {
   const [createDeadlineDate, setCreateDeadlineDate] = useState('');
   const [createDeadlineHour, setCreateDeadlineHour] = useState('17');
   const [createDeadlineMinute, setCreateDeadlineMinute] = useState('00');
-  const createDatePickerRef = useRef<HTMLInputElement>(null);
   const [createTaskType, setCreateTaskType] = useState('Viết content');
   const [createOtherTaskType, setCreateOtherTaskType] = useState('');
   const [createCampus, setCreateCampus] = useState('');
@@ -134,7 +128,6 @@ export default function AdminTasksPage() {
   const [editDeadlineDate, setEditDeadlineDate] = useState('');
   const [editDeadlineHour, setEditDeadlineHour] = useState('17');
   const [editDeadlineMinute, setEditDeadlineMinute] = useState('00');
-  const editDatePickerRef = useRef<HTMLInputElement>(null);
   const [editTaskType, setEditTaskType] = useState('Viết content');
   const [editOtherTaskType, setEditOtherTaskType] = useState('');
   const [editCampus, setEditCampus] = useState('');
@@ -245,7 +238,7 @@ export default function AdminTasksPage() {
           handleSync();
         }
       };
-    } catch (e) {}
+    } catch {}
 
     return () => {
       window.removeEventListener('task_updated', handleSync);
@@ -335,7 +328,7 @@ export default function AdminTasksPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi giao việc', 'error');
@@ -453,7 +446,7 @@ export default function AdminTasksPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi cập nhật nhiệm vụ', 'error');
@@ -514,7 +507,7 @@ export default function AdminTasksPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi đánh giá công việc', 'error');
@@ -550,7 +543,7 @@ export default function AdminTasksPage() {
           const bc = new BroadcastChannel('lhu_media_duty_sync');
           bc.postMessage({ type: 'SCHEDULE_UPDATED' });
           bc.close();
-        } catch (e) {}
+        } catch {}
       }
     } catch (err: any) {
       toast(err.message || 'Lỗi khi xóa công việc', 'error');
@@ -627,7 +620,7 @@ export default function AdminTasksPage() {
               <span>Quản Lý Công Việc & Phân Công CTV</span>
             </h1>
             <p className="text-sm text-studio-muted mt-1">
-              Phân hệ FR-04: Giao việc theo loại công việc, theo dõi tiến độ, kiểm tra minh chứng, nghiệm thu hoàn thành và quản lý việc ngoài hệ thống.
+              Giao việc theo loại công việc, theo dõi tiến độ, kiểm tra minh chứng, nghiệm thu hoàn thành và quản lý việc ngoài hệ thống.
             </p>
           </div>
           <div className="flex items-center space-x-3">
@@ -1100,33 +1093,13 @@ export default function AdminTasksPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                     {/* Date Picker (Lịch trực quan ngày/tháng/năm) */}
-                    <div className="sm:col-span-6 relative">
-                      <input
-                        ref={createDatePickerRef}
-                        type="date"
+                    <div className="sm:col-span-6">
+                      <DatePickerVN
                         value={createDeadlineDate}
-                        onChange={(e) => setCreateDeadlineDate(e.target.value)}
-                        onClick={(e) => {
-                          try {
-                            (e.currentTarget as any).showPicker?.();
-                          } catch {}
-                        }}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer [color-scheme:dark]"
-                        title="Nhấn để mở lịch chọn ngày/tháng/năm"
+                        onChange={setCreateDeadlineDate}
+                        clearable
+                        className="w-full"
                       />
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() => {
-                          try {
-                            createDatePickerRef.current?.showPicker?.();
-                          } catch {}
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-studio-muted hover:text-white transition-colors cursor-pointer"
-                        title="Mở lịch chọn ngày"
-                      >
-                        <Calendar className="w-4 h-4 text-brand-primary" />
-                      </button>
                     </div>
 
                     {/* Hai trường riêng biệt: Giờ và Phút */}
@@ -1390,33 +1363,13 @@ export default function AdminTasksPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
                     {/* Date Picker (Lịch trực quan ngày/tháng/năm) */}
-                    <div className="sm:col-span-6 relative">
-                      <input
-                        ref={editDatePickerRef}
-                        type="date"
+                    <div className="sm:col-span-6">
+                      <DatePickerVN
                         value={editDeadlineDate}
-                        onChange={(e) => setEditDeadlineDate(e.target.value)}
-                        onClick={(e) => {
-                          try {
-                            (e.currentTarget as any).showPicker?.();
-                          } catch {}
-                        }}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl py-2.5 pl-3.5 pr-10 text-xs text-white focus:outline-none focus:border-blue-500/50 cursor-pointer [color-scheme:dark]"
-                        title="Nhấn để mở lịch chọn ngày/tháng/năm"
+                        onChange={setEditDeadlineDate}
+                        clearable
+                        className="w-full"
                       />
-                      <button
-                        type="button"
-                        tabIndex={-1}
-                        onClick={() => {
-                          try {
-                            editDatePickerRef.current?.showPicker?.();
-                          } catch {}
-                        }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-studio-muted hover:text-white transition-colors cursor-pointer"
-                        title="Mở lịch chọn ngày"
-                      >
-                        <Calendar className="w-4 h-4 text-blue-400" />
-                      </button>
                     </div>
 
                     {/* Hai trường riêng biệt: Giờ và Phút */}
@@ -1618,14 +1571,14 @@ export default function AdminTasksPage() {
                     Ghi nhận công việc vào Bảng thống kê & Chấm công tháng
                   </span>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <div>
                       <label className="block text-[10px] text-studio-muted mb-0.5 font-medium">Ngày thực hiện</label>
-                      <input
-                        type="date"
+                      <DatePickerVN
                         value={reviewExecutionDate}
-                        onChange={(e) => setReviewExecutionDate(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white"
+                        onChange={setReviewExecutionDate}
+                        className="w-full"
+                        inputClassName="min-w-0 py-1.5"
                       />
                     </div>
                     <div>

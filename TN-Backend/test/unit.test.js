@@ -2552,20 +2552,20 @@ describe('Unit Test 21: Nâng cấp Đăng ký phòng Studio - Gợi ý khung gi
   it('21.3. getAvailableSlots tự động gợi ý các khung giờ trống và tính khoảng đệm 30 phút', async () => {
     const { StudioBooking } = require('../src/models');
     const originalFindAll = StudioBooking.findAll;
-    // Mock findAll để unit test độc lập với MSSQL server
+    // Mock findAll để unit test độc lập với MSSQL server (dùng ngày tương lai cố định Thứ Tư 2028-11-22)
     StudioBooking.findAll = async () => [
       {
-        startTime: new Date('2026-11-18T09:00:00+07:00'),
-        endTime: new Date('2026-11-18T10:00:00+07:00'),
+        startTime: new Date('2028-11-22T09:00:00+07:00'),
+        endTime: new Date('2028-11-22T10:00:00+07:00'),
         status: 'CONFIRMED',
       },
     ];
 
     try {
-      // Kiểm tra ngày mai 2026-11-18 (Thứ Tư) với vai trò USER
-      const slotsUser = await studioService.getAvailableSlots('2026-11-18', 'Studio 1', 'USER');
+      // Kiểm tra ngày tương lai 2028-11-22 (Thứ Tư) với vai trò USER
+      const slotsUser = await studioService.getAvailableSlots('2028-11-22', 'Studio 1', 'USER');
       assert.equal(slotsUser.isOpen, true);
-      assert.equal(slotsUser.date, '2026-11-18');
+      assert.equal(slotsUser.date, '2028-11-22');
       assert.equal(slotsUser.shifts.length, 2); // Sáng và Chiều
       assert.equal(slotsUser.shifts[0].id, 'MORNING');
       assert.equal(slotsUser.shifts[1].id, 'AFTERNOON');
@@ -2620,22 +2620,22 @@ describe('Unit Test 21: Nâng cấp Đăng ký phòng Studio - Gợi ý khung gi
     const { StudioBooking } = require('../src/models');
     const originalFindAll = StudioBooking.findAll;
 
-    // Giả lập ngày mai 2026-11-18 có 1 đơn CONFIRMED lúc 08:00 - 10:00 và 1 đơn PENDING lúc 13:30 - 15:00
+    // Giả lập ngày tương lai 2028-11-22 (Thứ Tư) có 1 đơn CONFIRMED lúc 08:00 - 10:00 và 1 đơn PENDING lúc 13:30 - 15:00
     StudioBooking.findAll = async () => [
       {
-        startTime: new Date('2026-11-18T08:00:00+07:00'),
-        endTime: new Date('2026-11-18T10:00:00+07:00'),
+        startTime: new Date('2028-11-22T08:00:00+07:00'),
+        endTime: new Date('2028-11-22T10:00:00+07:00'),
         status: 'CONFIRMED',
       },
       {
-        startTime: new Date('2026-11-18T13:30:00+07:00'),
-        endTime: new Date('2026-11-18T15:00:00+07:00'),
+        startTime: new Date('2028-11-22T13:30:00+07:00'),
+        endTime: new Date('2028-11-22T15:00:00+07:00'),
         status: 'PENDING',
       },
     ];
 
     try {
-      const result = await studioService.getAvailableSlots('2026-11-18', 'Studio LHU', 'USER');
+      const result = await studioService.getAvailableSlots('2028-11-22', 'Studio LHU', 'USER');
       
       // Tất cả slot được gợi ý trong ngày:
       const allSuggested = result.allAvailableSlots;
@@ -2646,14 +2646,14 @@ describe('Unit Test 21: Nâng cấp Đăng ký phòng Studio - Gợi ý khung gi
         const e = new Date(slot.endIso);
 
         // Kiểm tra với ca sáng 08:00 - 10:00 (+ đệm 30p: 07:30 - 10:30)
-        const morningLockStart = new Date('2026-11-18T07:30:00+07:00');
-        const morningLockEnd = new Date('2026-11-18T10:30:00+07:00');
+        const morningLockStart = new Date('2028-11-22T07:30:00+07:00');
+        const morningLockEnd = new Date('2028-11-22T10:30:00+07:00');
         const overlapsMorning = s < morningLockEnd && e > morningLockStart;
         assert.equal(overlapsMorning, false, `Slot gợi ý ${slot.label} không được trùng với lịch ca sáng`);
 
         // Kiểm tra với ca chiều 13:30 - 15:00 (+ đệm 30p: 13:00 - 15:30)
-        const afternoonLockStart = new Date('2026-11-18T13:00:00+07:00');
-        const afternoonLockEnd = new Date('2026-11-18T15:30:00+07:00');
+        const afternoonLockStart = new Date('2028-11-22T13:00:00+07:00');
+        const afternoonLockEnd = new Date('2028-11-22T15:30:00+07:00');
         const overlapsAfternoon = s < afternoonLockEnd && e > afternoonLockStart;
         assert.equal(overlapsAfternoon, false, `Slot gợi ý ${slot.label} không được trùng với lịch PENDING ca chiều`);
       }
@@ -3183,6 +3183,589 @@ describe('Unit Test 23: Chức năng xác nhận đến sử dụng Studio và n
       assert.equal(res.attendanceInfo.label, 'Không đến sử dụng');
     } finally {
       StudioBooking.findByPk = origFindByPk;
+    }
+  });
+});
+
+// ============================================================
+// TEST SUITE 24: HOÀN THIỆN TOÀN BỘ CHỨC NĂNG XUẤT FILE EXCEL (PROMPT #37)
+// ============================================================
+describe('Unit Test 24: Chức năng xuất file Excel (.xlsx), công thức, bộ lọc & phân quyền (Prompt #37)', () => {
+  const { PassThrough } = require('stream');
+  const ExcelJS = require('exceljs');
+  const payrollService = require('../src/services/payroll.service');
+  const { User, Task, AttendanceRecord, StudioShift, MonthlyPayroll } = require('../src/models');
+
+  // Helper tạo mock HTTP response ghi vào Buffer để kiểm tra nội dung file .xlsx thực tế
+  const createMockExcelRes = () => {
+    const stream = new PassThrough();
+    const chunks = [];
+    stream.on('data', (c) => chunks.push(c));
+    const headers = {};
+    stream.setHeader = (k, v) => { headers[k.toLowerCase()] = v; };
+    stream.getHeaders = () => headers;
+    stream.toBuffer = () => Buffer.concat(chunks);
+    return stream;
+  };
+
+  it('24.1. exportTimesheetExcel xử lý động tháng 28 ngày (Tháng 2) không lệch cột và sinh công thức Excel chuẩn', async () => {
+    const origUserFindAll = User.findAll;
+    const origAttFindAll = AttendanceRecord.findAll;
+    const origTaskFindAll = Task.findAll;
+    const origShiftFindAll = StudioShift.findAll;
+
+    User.findAll = async () => [
+      { id: 'ctv-1', fullName: 'Nguyễn Văn A', email: 'a@lhu.edu.vn', employeeCode: 'CTV01', role: 'COLLABORATOR', status: 'Active' },
+    ];
+    AttendanceRecord.findAll = async () => [
+      { userId: 'ctv-1', date: '2026-02-05', session: 'S', symbol: 'LV', hours: 4 },
+    ];
+    Task.findAll = async () => [
+      {
+        id: 't-1',
+        assignedToUserId: 'ctv-1',
+        title: 'Quay phóng sự tuyển sinh',
+        taskType: 'Quay phim',
+        status: 'COMPLETED',
+        actualHours: 4,
+        overtimeHours: 2,
+        isOvertime: true,
+        isSunday: false,
+        executionDate: '2026-02-05',
+      },
+    ];
+    StudioShift.findAll = async () => [];
+
+    try {
+      const mockRes = createMockExcelRes();
+      await payrollService.exportTimesheetExcel(2, 2026, mockRes, {});
+
+      const hdr = mockRes.getHeaders();
+      assert.ok(hdr['content-disposition'].includes('LHU_Media_Bang_Cham_Cong_T02_2026_'));
+      assert.equal(hdr['access-control-expose-headers'], 'Content-Disposition');
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(mockRes.toBuffer());
+      const ws = wb.getWorksheet('Sheet1');
+      assert.ok(ws, 'Sheet1 phải tồn tại');
+      // 28 ngày => cột cuối là 3 + 28 + 7 = 38 (cột AL), không bị hardcode 41
+      assert.equal(ws.getCell(4, 38).value, 'Tiền');
+      // Dòng dữ liệu CTV đầu tiên bắt đầu ở row 6: kiểm tra công thức cột tổng giờ LV (col 35) và Tiền (col 38)
+      const tienCell = ws.getCell(6, 38).value;
+      assert.ok(tienCell && typeof tienCell === 'object' && tienCell.formula, 'Cột Tiền phải dùng công thức Excel');
+      assert.ok(tienCell.formula.includes('20000'));
+    } finally {
+      User.findAll = origUserFindAll;
+      AttendanceRecord.findAll = origAttFindAll;
+      Task.findAll = origTaskFindAll;
+      StudioShift.findAll = origShiftFindAll;
+    }
+  });
+
+  it('24.2. exportTasksSummaryExcel xuất đủ 2 sheet (T{m}.{y} chuẩn 8 cột BPTT + Sheet Chi tiết giờ & hệ số)', async () => {
+    const origUserFindAll = User.findAll;
+    const origTaskFindAll = Task.findAll;
+
+    User.findAll = async () => [
+      { id: 'ctv-1', fullName: 'Trần Thị B', email: 'b@lhu.edu.vn', employeeCode: 'CTV02', role: 'COLLABORATOR' },
+    ];
+    Task.findAll = async () => [
+      {
+        id: 't-sun',
+        assignedToUserId: 'ctv-1',
+        title: 'Chụp ảnh sự kiện Chủ nhật',
+        taskType: 'Chụp ảnh',
+        status: 'COMPLETED',
+        actualHours: 4,
+        isSunday: true,
+        isOvertime: false,
+        executionDate: '2026-11-15',
+      },
+    ];
+
+    try {
+      const mockRes = createMockExcelRes();
+      await payrollService.exportTasksSummaryExcel(11, 2026, mockRes, {});
+
+      const hdr = mockRes.getHeaders();
+      assert.ok(hdr['content-disposition'].includes('LHU_Media_Thong_Ke_Cong_Viec_T11_2026_'));
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(mockRes.toBuffer());
+      const sheet1 = wb.getWorksheet('T11.2026');
+      const sheet2 = wb.getWorksheet('Chi tiết giờ & hệ số');
+      assert.ok(sheet1, 'Phải giữ nguyên Sheet 1 chuẩn T11.2026');
+      assert.ok(sheet2, 'Phải có Sheet 2 Chi tiết giờ & hệ số');
+      // Kiểm tra Sheet 2: dòng 4 tách rõ giờ Chủ nhật = 4 (cột 8) và công thức tiền công (cột 12 = 160.000)
+      assert.equal(sheet2.getCell(4, 8).value, 4);
+      const amountCell = sheet2.getCell(4, 12).value;
+      assert.ok(amountCell && amountCell.formula && amountCell.result === 160000);
+      // Dòng 5 là TỔNG CỘNG bằng công thức SUM
+      const totalAmtCell = sheet2.getCell(5, 12).value;
+      assert.ok(totalAmtCell && totalAmtCell.formula === 'SUM(L4:L4)' && totalAmtCell.result === 160000);
+    } finally {
+      User.findAll = origUserFindAll;
+      Task.findAll = origTaskFindAll;
+    }
+  });
+
+  it('24.3. exportMonthlyPayrollExcel xử lý đúng khi dữ liệu rỗng (không văng lỗi, xuất file hợp lệ)', async () => {
+    const origUserFindAll = User.findAll;
+    const origAttFindAll = AttendanceRecord.findAll;
+    const origTaskFindAll = Task.findAll;
+    const origShiftFindAll = StudioShift.findAll;
+    const origPayrollFindAll = MonthlyPayroll.findAll;
+
+    User.findAll = async () => [];
+    AttendanceRecord.findAll = async () => [];
+    Task.findAll = async () => [];
+    StudioShift.findAll = async () => [];
+    MonthlyPayroll.findAll = async () => [];
+
+    try {
+      const mockRes = createMockExcelRes();
+      await payrollService.exportMonthlyPayrollExcel(1, 2025, mockRes, {});
+
+      const hdr = mockRes.getHeaders();
+      assert.ok(hdr['content-disposition'].includes('LHU_Media_Bang_Luong_CTV_T01_2025_'));
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(mockRes.toBuffer());
+      const ws = wb.getWorksheet('Bang_Luong_T01.2025');
+      assert.ok(ws, 'Sheet bảng lương phải tồn tại ngay cả khi rỗng');
+      assert.ok(String(ws.getCell('A6').value || '').includes('Không có dữ liệu'));
+    } finally {
+      User.findAll = origUserFindAll;
+      AttendanceRecord.findAll = origAttFindAll;
+      Task.findAll = origTaskFindAll;
+      StudioShift.findAll = origShiftFindAll;
+      MonthlyPayroll.findAll = origPayrollFindAll;
+    }
+  });
+
+  it('24.4. exportCollaboratorSummaryExcel xuất đúng dữ liệu cá nhân CTV và áp dụng bộ lọc trạng thái', async () => {
+    const origUserFindOne = User.findOne;
+    const origTaskFindAll = Task.findAll;
+
+    User.findOne = async () => ({
+      id: 'ctv-self',
+      fullName: 'Lê Hoàng C',
+      email: 'c@lhu.edu.vn',
+      employeeCode: 'CTV09',
+      role: 'COLLABORATOR',
+    });
+    Task.findAll = async () => [
+      {
+        id: 't-done',
+        assignedToUserId: 'ctv-self',
+        title: 'Dựng clip sự kiện',
+        taskType: 'Dựng video',
+        status: 'COMPLETED',
+        actualHours: 3,
+        executionDate: '2026-11-10',
+      },
+      {
+        id: 't-pend',
+        assignedToUserId: 'ctv-self',
+        title: 'Thiết kế banner',
+        taskType: 'Thiết kế',
+        status: 'PENDING_APPROVAL',
+        actualHours: 2,
+        executionDate: '2026-11-12',
+      },
+    ];
+
+    try {
+      const mockRes = createMockExcelRes();
+      await payrollService.exportCollaboratorSummaryExcel(11, 2026, 'ctv-self', mockRes, { status: 'COMPLETED' });
+
+      const hdr = mockRes.getHeaders();
+      assert.ok(hdr['content-disposition'].includes('LHU_Media_Tong_Cong_Viec_Ca_Nhan_T11_2026_'));
+
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(mockRes.toBuffer());
+      const ws = wb.getWorksheet('Cong_Viec_T11.2026');
+      assert.ok(ws, 'Sheet Cong_Viec_T11.2026 phải tồn tại');
+      // Lọc status=COMPLETED nên chỉ xuất 1 dòng công việc ở row 5 (Dựng clip sự kiện), row 6 là TỔNG CỘNG
+      assert.ok(String(ws.getCell(5, 3).value).includes('Dựng clip sự kiện'));
+      assert.ok(String(ws.getCell(6, 1).value).includes('TỔNG CỘNG'));
+    } finally {
+      User.findOne = origUserFindOne;
+      Task.findAll = origTaskFindAll;
+    }
+  });
+});
+
+// ============================================================
+// TEST SUITE 25: GIAO DIỆN SÁNG/TỐI & LƯU TÙY CHỌN THEO TÀI KHOẢN (PROMPT #38)
+// ============================================================
+describe('Unit Test 25: Lưu & đồng bộ tùy chọn giao diện Light/Dark Mode theo từng tài khoản (Prompt #38)', () => {
+  const authService = require('../src/services/auth.service');
+  const { User } = require('../src/models');
+
+  it('25.1. updateThemePreference lưu thành công chế độ light và dark cho tài khoản', async () => {
+    const origFindByPk = User.findByPk;
+    const savedValues = [];
+    const mockUser = {
+      id: 'user-theme-1',
+      themePreference: 'dark',
+      async update(payload) {
+        savedValues.push(payload.themePreference);
+        this.themePreference = payload.themePreference;
+        return this;
+      },
+    };
+    User.findByPk = async () => mockUser;
+
+    try {
+      const r1 = await authService.updateThemePreference('user-theme-1', 'light');
+      assert.equal(r1.themePreference, 'light');
+      const r2 = await authService.updateThemePreference('user-theme-1', 'dark');
+      assert.equal(r2.themePreference, 'dark');
+      assert.deepEqual(savedValues, ['light', 'dark']);
+    } finally {
+      User.findByPk = origFindByPk;
+    }
+  });
+
+  it('25.2. Từ chối 400 nếu giá trị theme không hợp lệ (chỉ chấp nhận dark hoặc light)', async () => {
+    await assert.rejects(
+      async () => {
+        await authService.updateThemePreference('user-theme-1', 'neon-pink');
+      },
+      /không hợp lệ/
+    );
+  });
+
+  it('25.3. Báo lỗi 404 khi không tìm thấy người dùng', async () => {
+    const origFindByPk = User.findByPk;
+    User.findByPk = async () => null;
+    try {
+      await assert.rejects(
+        async () => {
+          await authService.updateThemePreference('non-existent-user', 'light');
+        },
+        /Người dùng không tồn tại/
+      );
+    } finally {
+      User.findByPk = origFindByPk;
+    }
+  });
+});
+
+// ============================================================
+// TEST SUITE 26: GIAI ĐOẠN 5 — HARDENING RBAC, CONCURRENCY & SWAGGER OPENAPI 3.0
+// ============================================================
+describe('Unit Test 26: Kiểm thử Giai đoạn 5 — Hardening RBAC, Concurrency Lock & Swagger Docs', () => {
+  it('26.1. equipment.routes.js bảo vệ GET /:equipmentId/maintenances bằng authorize(ADMIN)', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const content = fs.readFileSync(path.join(__dirname, '../src/routes/equipment.routes.js'), 'utf8');
+    assert.ok(
+      content.includes("router.get('/:equipmentId/maintenances', authenticate, authorize('ADMIN')"),
+      'GET /:equipmentId/maintenances phải yêu cầu quyền ADMIN'
+    );
+  });
+
+  it('26.2. task.routes.js chặn USER ở tầng route cho GET /stats, GET / và GET /:id', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const content = fs.readFileSync(path.join(__dirname, '../src/routes/task.routes.js'), 'utf8');
+    assert.ok(content.includes("router.get('/stats', authenticate, authorize('COLLABORATOR', 'ADMIN')"));
+    assert.ok(content.includes("router.get('/', authenticate, authorize('COLLABORATOR', 'ADMIN')"));
+    assert.ok(content.includes("router.get('/:id', authenticate, authorize('COLLABORATOR', 'ADMIN')"));
+  });
+
+  it('26.3. borrowRequest.service & studioBooking.service sử dụng transaction + acquireAppLock (sp_getapplock) chống race condition', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const borrowSrc = fs.readFileSync(path.join(__dirname, '../src/services/borrowRequest.service.js'), 'utf8');
+    const studioSrc = fs.readFileSync(path.join(__dirname, '../src/services/studioBooking.service.js'), 'utf8');
+    const lockUtilSrc = fs.readFileSync(path.join(__dirname, '../src/utils/dbLock.util.js'), 'utf8');
+    assert.ok(lockUtilSrc.includes('sp_getapplock'), 'dbLock.util phải sử dụng sp_getapplock');
+    assert.ok(borrowSrc.includes('acquireAppLock'), 'borrowRequest.service phải dùng acquireAppLock');
+    assert.ok(borrowSrc.includes('available_quantity -'), 'borrowRequest.service phải cập nhật tồn kho nguyên tử');
+    assert.ok(studioSrc.includes('acquireAppLock'), 'studioBooking.service phải dùng acquireAppLock');
+    assert.ok(studioSrc.includes('sequelize.transaction'), 'studioBooking.service.processBooking phải chạy trong transaction');
+  });
+
+  it('26.4. Swagger OpenAPI 3.0.0 sinh đầy đủ paths cho tất cả module FR-01 -> FR-09', () => {
+    const { setupSwagger } = require('../src/config/swagger');
+    let capturedSpec = null;
+    const mockApp = {
+      use: () => {},
+      get: (routePath, handler) => {
+        if (routePath === '/api-docs.json') {
+          handler({}, { setHeader: () => {}, send: (spec) => { capturedSpec = spec; } });
+        }
+      },
+    };
+    setupSwagger(mockApp);
+    assert.ok(capturedSpec && capturedSpec.paths, 'Swagger spec phải có danh sách paths');
+    const pathKeys = Object.keys(capturedSpec.paths);
+    assert.ok(pathKeys.length >= 60, `Swagger spec phải có >= 60 paths (hiện tại: ${pathKeys.length})`);
+    assert.ok(capturedSpec.paths['/api/tasks'], 'Thiếu docs /api/tasks');
+    assert.ok(capturedSpec.paths['/api/duty/periods'], 'Thiếu docs /api/duty/periods');
+    assert.ok(capturedSpec.paths['/api/payroll/monthly'], 'Thiếu docs /api/payroll/monthly');
+    assert.ok(capturedSpec.paths['/api/notifications'], 'Thiếu docs /api/notifications');
+    assert.ok(capturedSpec.paths['/api/maintenances'], 'Thiếu docs /api/maintenances');
+    assert.ok(capturedSpec.paths['/api/auth/theme'], 'Thiếu docs /api/auth/theme');
+  });
+});
+
+// ============================================================
+// TEST SUITE 27: GỬI EMAIL THÔNG BÁO TOÀN HỆ THỐNG, CHỐNG TRÙNG & RETRY (FR-07)
+// ============================================================
+describe('Unit Test 27: Gửi thông báo qua email toàn hệ thống, chống gửi trùng, xử lý lỗi & gửi lại (FR-07)', () => {
+  const mailer = require('../src/config/mailer');
+  const notificationService = require('../src/services/notification.service');
+  const { Notification, User } = require('../src/models');
+
+  it('27.1. sendNotificationEmail sinh nội dung HTML đủ tiêu đề, người gửi, thời gian, chi tiết & link FRONTEND_URL', async () => {
+    const origSendMail = mailer.transporter.sendMail;
+    const origUser = process.env.SMTP_USER;
+    const origPass = process.env.SMTP_PASS;
+    const origFeUrl = process.env.FRONTEND_URL;
+
+    process.env.SMTP_USER = 'studio_test@gmail.com';
+    process.env.SMTP_PASS = 'secret-app-password';
+    process.env.FRONTEND_URL = 'https://studio.lhu.edu.vn';
+
+    let capturedMail = null;
+    mailer.transporter.sendMail = async (opts) => {
+      capturedMail = opts;
+      return { messageId: '<msg-unit-27-1@lhu>' };
+    };
+
+    try {
+      const res = await mailer.sendNotificationEmail('ctv@lhu.edu.vn', {
+        title: 'Bạn được giao nhiệm vụ mới',
+        message: 'Vui lòng quay highlight lễ khai giảng.',
+        link: '/tasks',
+        type: 'TASK_ASSIGNED',
+        senderName: 'Đinh Thị Bích Hằng',
+        recipientName: 'Châu Ngọc Thanh Thảo',
+        detailRows: [{ label: 'Địa điểm', value: 'Cơ sở 1 - Hội trường A301' }],
+      });
+
+      assert.equal(res.success, true);
+      assert.equal(res.messageId, '<msg-unit-27-1@lhu>');
+      assert.equal(capturedMail.to, 'ctv@lhu.edu.vn');
+      assert.ok(capturedMail.subject.includes('Bạn được giao nhiệm vụ mới'));
+      assert.ok(capturedMail.html.includes('Đinh Thị Bích Hằng'));
+      assert.ok(capturedMail.html.includes('Châu Ngọc Thanh Thảo'));
+      assert.ok(capturedMail.html.includes('https://studio.lhu.edu.vn/tasks'));
+      assert.ok(capturedMail.html.includes('Quản lý Công việc'));
+      assert.ok(capturedMail.html.includes('Cơ sở 1 - Hội trường A301'));
+    } finally {
+      mailer.transporter.sendMail = origSendMail;
+      if (origUser === undefined) delete process.env.SMTP_USER; else process.env.SMTP_USER = origUser;
+      if (origPass === undefined) delete process.env.SMTP_PASS; else process.env.SMTP_PASS = origPass;
+      if (origFeUrl === undefined) delete process.env.FRONTEND_URL; else process.env.FRONTEND_URL = origFeUrl;
+    }
+  });
+
+  it('27.2. createNotification tự động gửi email, ghi nhận trạng thái SENT và chặn gửi trùng trong 10 giây', async () => {
+    notificationService._clearDedupCacheForTest();
+    const origSendMail = mailer.transporter.sendMail;
+    const origNotifCreate = Notification.create;
+    const origUserFindByPk = User.findByPk;
+    const origUser = process.env.SMTP_USER;
+    const origPass = process.env.SMTP_PASS;
+
+    process.env.SMTP_USER = 'studio_test@gmail.com';
+    process.env.SMTP_PASS = 'secret-app-password';
+
+    let mailCount = 0;
+    mailer.transporter.sendMail = async () => {
+      mailCount++;
+      return { messageId: `<dedup-${mailCount}@lhu>` };
+    };
+
+    const updatedFields = [];
+    Notification.create = async (payload) => ({
+      id: 'notif-27-2',
+      ...payload,
+      createdAt: new Date(),
+      async update(fields) {
+        Object.assign(this, fields);
+        updatedFields.push(fields);
+        return this;
+      },
+    });
+    User.findByPk = async () => ({
+      id: 'user-27-2',
+      fullName: 'CTV Kiểm Thử',
+      email: 'ctv27@lhu.edu.vn',
+      status: 'Active',
+      isActive: true,
+    });
+
+    try {
+      const first = await notificationService.createNotification({
+        userId: 'user-27-2',
+        title: 'Kiểm thử chống trùng',
+        message: 'Nội dung thông báo giống nhau',
+        type: 'TASK_ASSIGNED',
+        link: '/tasks',
+        senderName: 'Admin LHU',
+        awaitEmail: true,
+      });
+
+      const dup = await notificationService.createNotification({
+        userId: 'user-27-2',
+        title: 'Kiểm thử chống trùng',
+        message: 'Nội dung thông báo giống nhau',
+        type: 'TASK_ASSIGNED',
+        link: '/tasks',
+        senderName: 'Admin LHU',
+        awaitEmail: true,
+      });
+
+      assert.ok(first, 'Lần gửi đầu tiên phải tạo thông báo');
+      assert.equal(dup, null, 'Lần gửi trùng trong 10 giây phải bị chặn');
+      assert.equal(mailCount, 1, 'Chỉ được gửi đúng 1 email, không gửi trùng');
+      assert.equal(first.emailStatus, 'SENT');
+      assert.equal(first.emailRetryCount, 1);
+      assert.ok(updatedFields.some((f) => f.emailStatus === 'SENT' && f.emailMessageId === '<dedup-1@lhu>'));
+    } finally {
+      mailer.transporter.sendMail = origSendMail;
+      Notification.create = origNotifCreate;
+      User.findByPk = origUserFindByPk;
+      if (origUser === undefined) delete process.env.SMTP_USER; else process.env.SMTP_USER = origUser;
+      if (origPass === undefined) delete process.env.SMTP_PASS; else process.env.SMTP_PASS = origPass;
+    }
+  });
+
+  it('27.3. Khi SMTP lỗi không làm gián đoạn nghiệp vụ, ghi nhận FAILED và cho phép resend thành công', async () => {
+    notificationService._clearDedupCacheForTest();
+    const origSendMail = mailer.transporter.sendMail;
+    const origNotifCreate = Notification.create;
+    const origNotifFindByPk = Notification.findByPk;
+    const origUserFindByPk = User.findByPk;
+    const origUser = process.env.SMTP_USER;
+    const origPass = process.env.SMTP_PASS;
+
+    process.env.SMTP_USER = 'studio_test@gmail.com';
+    process.env.SMTP_PASS = 'secret-app-password';
+
+    let shouldFail = true;
+    mailer.transporter.sendMail = async () => {
+      if (shouldFail) throw new Error('SMTP connection timeout');
+      return { messageId: '<retry-ok@lhu>' };
+    };
+
+    let storedNotif = null;
+    Notification.create = async (payload) => {
+      storedNotif = {
+        id: 'notif-27-3',
+        ...payload,
+        createdAt: new Date(),
+        user: { id: 'user-27-3', fullName: 'User Retry', email: 'retry27@lhu.edu.vn', status: 'Active', isActive: true },
+        async update(fields) {
+          Object.assign(this, fields);
+          return this;
+        },
+        async reload() {
+          return this;
+        },
+      };
+      return storedNotif;
+    };
+    Notification.findByPk = async () => storedNotif;
+    User.findByPk = async () => ({
+      id: 'user-27-3',
+      fullName: 'User Retry',
+      email: 'retry27@lhu.edu.vn',
+      status: 'Active',
+      isActive: true,
+    });
+
+    try {
+      const notif = await notificationService.createNotification({
+        userId: 'user-27-3',
+        title: 'Duyệt đặt phòng Studio',
+        message: 'Phòng Studio đã được duyệt',
+        type: 'STUDIO_BOOKING_APPROVED',
+        link: '/history',
+        senderName: 'Quản trị viên',
+        awaitEmail: true,
+      });
+
+      assert.ok(notif, 'Thông báo in-app vẫn phải được tạo thành công dù SMTP lỗi');
+      assert.equal(notif.emailStatus, 'FAILED');
+      assert.ok(String(notif.emailError).includes('SMTP connection timeout'));
+      assert.equal(notif.emailRetryCount, 1);
+
+      // SMTP hồi phục -> gửi lại thành công
+      shouldFail = false;
+      const resendRes = await notificationService.resendNotificationEmail('notif-27-3');
+      assert.equal(resendRes.delivery.status, 'SENT');
+      assert.equal(storedNotif.emailStatus, 'SENT');
+      assert.equal(storedNotif.emailError, null);
+      assert.equal(storedNotif.emailRetryCount, 2);
+      assert.equal(storedNotif.emailMessageId, '<retry-ok@lhu>');
+    } finally {
+      mailer.transporter.sendMail = origSendMail;
+      Notification.create = origNotifCreate;
+      Notification.findByPk = origNotifFindByPk;
+      User.findByPk = origUserFindByPk;
+      if (origUser === undefined) delete process.env.SMTP_USER; else process.env.SMTP_USER = origUser;
+      if (origPass === undefined) delete process.env.SMTP_PASS; else process.env.SMTP_PASS = origPass;
+    }
+  });
+
+  it('27.4. notifyUserList lọc trùng userId và địa chỉ email trong cùng đợt phát thông báo', async () => {
+    notificationService._clearDedupCacheForTest();
+    const origSendMail = mailer.transporter.sendMail;
+    const origNotifCreate = Notification.create;
+    const origUser = process.env.SMTP_USER;
+    const origPass = process.env.SMTP_PASS;
+
+    process.env.SMTP_USER = 'studio_test@gmail.com';
+    process.env.SMTP_PASS = 'secret-app-password';
+
+    const sentTo = [];
+    mailer.transporter.sendMail = async (opts) => {
+      sentTo.push(opts.to);
+      return { messageId: `<batch-${sentTo.length}@lhu>` };
+    };
+
+    let idx = 0;
+    Notification.create = async (payload) => ({
+      id: `notif-batch-${++idx}`,
+      ...payload,
+      createdAt: new Date(),
+      async update(fields) {
+        Object.assign(this, fields);
+        return this;
+      },
+    });
+
+    try {
+      const count = await notificationService.notifyUserList(
+        [
+          { id: 'u1', fullName: 'Admin 1', email: 'same@lhu.edu.vn' },
+          { id: 'u1', fullName: 'Admin 1 Dup', email: 'same@lhu.edu.vn' },
+          { id: 'u2', fullName: 'Admin 2', email: 'SAME@lhu.edu.vn' },
+          { id: 'u3', fullName: 'Admin 3', email: 'other@lhu.edu.vn' },
+        ],
+        {
+          title: 'Thông báo kiểm thử lọc trùng',
+          message: 'Mỗi địa chỉ email chỉ nhận 1 thư',
+          type: 'BORROW_REQUEST_CREATED',
+          link: '/admin/requests',
+          awaitEmail: true,
+        }
+      );
+
+      assert.equal(count, 3, 'Tạo thông báo in-app cho 3 userId duy nhất');
+      assert.deepEqual(sentTo, ['same@lhu.edu.vn', 'other@lhu.edu.vn'], 'Chỉ gửi 2 email duy nhất, không gửi trùng email');
+    } finally {
+      mailer.transporter.sendMail = origSendMail;
+      Notification.create = origNotifCreate;
+      if (origUser === undefined) delete process.env.SMTP_USER; else process.env.SMTP_USER = origUser;
+      if (origPass === undefined) delete process.env.SMTP_PASS; else process.env.SMTP_PASS = origPass;
     }
   });
 });

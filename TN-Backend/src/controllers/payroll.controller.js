@@ -132,12 +132,12 @@ const updateAttendanceCell = async (req, res) => {
 
 const exportTimesheet = async (req, res) => {
   try {
-    const { month, year } = req.query;
+    const { month, year, ctvId, search } = req.query;
     const now = new Date();
     const m = parseInt(month, 10) || now.getMonth() + 1;
     const y = parseInt(year, 10) || now.getFullYear();
 
-    await payrollService.exportTimesheetExcel(m, y, res);
+    await payrollService.exportTimesheetExcel(m, y, res, { ctvId, search });
   } catch (error) {
     if (!res.headersSent) {
       return res.status(500).json({
@@ -150,17 +150,56 @@ const exportTimesheet = async (req, res) => {
 
 const exportTasksSummary = async (req, res) => {
   try {
-    const { month, year } = req.query;
+    const { month, year, ctvId, search } = req.query;
     const now = new Date();
     const m = parseInt(month, 10) || now.getMonth() + 1;
     const y = parseInt(year, 10) || now.getFullYear();
 
-    await payrollService.exportTasksSummaryExcel(m, y, res);
+    await payrollService.exportTasksSummaryExcel(m, y, res, { ctvId, search });
   } catch (error) {
     if (!res.headersSent) {
       return res.status(500).json({
         success: false,
         message: error.message || 'Lỗi khi xuất Excel Bảng thống kê công việc',
+      });
+    }
+  }
+};
+
+const exportPayroll = async (req, res) => {
+  try {
+    const { month, year, ctvId, search } = req.query;
+    const now = new Date();
+    const m = parseInt(month, 10) || now.getMonth() + 1;
+    const y = parseInt(year, 10) || now.getFullYear();
+
+    await payrollService.exportMonthlyPayrollExcel(m, y, res, { ctvId, search });
+  } catch (error) {
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        message: error.message || 'Lỗi khi xuất Excel Bảng lương tháng',
+      });
+    }
+  }
+};
+
+const exportCollaboratorSummary = async (req, res) => {
+  try {
+    const { month, year, userId, status } = req.query;
+    const now = new Date();
+    const m = parseInt(month, 10) || now.getMonth() + 1;
+    const y = parseInt(year, 10) || now.getFullYear();
+
+    // RBAC nghiêm ngặt: CTV chỉ được xuất dữ liệu cá nhân của chính mình
+    const targetUserId = req.user.role === 'COLLABORATOR' ? req.user.id : (userId || req.user.id);
+
+    await payrollService.exportCollaboratorSummaryExcel(m, y, targetUserId, res, { status });
+  } catch (error) {
+    if (!res.headersSent) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi khi xuất Excel Tổng công việc tháng cá nhân',
       });
     }
   }
@@ -175,5 +214,7 @@ module.exports = {
   updateAttendanceCell,
   exportTimesheet,
   exportTasksSummary,
+  exportPayroll,
+  exportCollaboratorSummary,
 };
 

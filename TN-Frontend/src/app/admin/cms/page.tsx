@@ -78,7 +78,7 @@ export default function AdminCmsPage() {
           setEmail(contact.email || '');
           setPhone(contact.phone || '');
           setFanpage(contact.fanpage || '');
-        } catch (e) {
+        } catch {
           // Fallback if not JSON
           setAddress(data.contactInfo);
         }
@@ -255,13 +255,13 @@ export default function AdminCmsPage() {
           <div className="glass-panel p-8 rounded-3xl border border-white/5 bg-black/25 space-y-6">
             <h3 className="text-lg font-bold text-white border-b border-white/5 pb-3 flex items-center space-x-2">
               <Compass className="w-5 h-5 text-brand-primary" />
-              <span>Phần biểu ngữ chính (Hero Banner)</span>
+              <span>Biểu ngữ chính</span>
             </h3>
 
             <div className="space-y-4">
               {/* Title */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-studio-muted uppercase">Tiêu đề chính (Title)</label>
+                <label className="text-[11px] font-bold text-studio-muted uppercase">Tiêu đề chính</label>
                 <input
                   type="text"
                   value={heroTitle}
@@ -274,7 +274,7 @@ export default function AdminCmsPage() {
 
               {/* Description */}
               <div className="space-y-1">
-                <label className="text-[11px] font-bold text-studio-muted uppercase">Mô tả ngắn (Description)</label>
+                <label className="text-[11px] font-bold text-studio-muted uppercase">Mô tả ngắn</label>
                 <textarea
                   value={heroDescription}
                   onChange={(e) => setHeroDescription(e.target.value)}
@@ -288,12 +288,12 @@ export default function AdminCmsPage() {
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-studio-muted uppercase flex items-center space-x-1">
                   <Video className="w-3.5 h-3.5 text-brand-primary" />
-                  <span>Video nền Hero (MP4/WebM, tối đa 50MB, &lt;60s)</span>
+                  <span>Video nền trang chủ (MP4/WebM, tối đa 50MB, &lt;60s)</span>
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="url"
-                    placeholder="Nhập URL video trực tiếp (https://...)"
+                    placeholder="Nhập đường dẫn video trực tiếp (https://...)"
                     value={heroVideoUrl}
                     onChange={(e) => setHeroVideoUrl(e.target.value)}
                     className="flex-1 bg-black/35 border border-white/5 rounded-xl py-3 px-4 text-sm text-white focus:outline-none focus:border-brand-primary/50"
@@ -322,12 +322,12 @@ export default function AdminCmsPage() {
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-studio-muted uppercase flex items-center space-x-1">
                   <Image className="w-3.5 h-3.5 text-brand-primary" />
-                  <span>Ảnh chờ Hero / Poster Mobile (JPG/PNG/WEBP, tối đa 10MB)</span>
+                  <span>Ảnh đại diện trên điện thoại (JPG/PNG/WEBP, tối đa 10MB)</span>
                 </label>
                 <div className="flex gap-2">
                   <input
                     type="url"
-                    placeholder="Nhập URL hình ảnh trực tiếp (https://...)"
+                    placeholder="Nhập đường dẫn hình ảnh trực tiếp (https://...)"
                     value={heroPosterUrl}
                     onChange={(e) => setHeroPosterUrl(e.target.value)}
                     className="flex-1 bg-black/35 border border-white/5 rounded-xl py-3 px-4 text-sm text-white focus:outline-none focus:border-brand-primary/50"
@@ -354,7 +354,7 @@ export default function AdminCmsPage() {
               {/* Preview Box */}
               {(heroVideoUrl || heroPosterUrl) && (
                 <div className="mt-6 p-4 bg-black/45 border border-white/5 rounded-2xl space-y-3">
-                  <span className="text-xs font-bold text-brand-primary uppercase tracking-wider block">Xem trước (Preview)</span>
+                  <span className="text-xs font-bold text-brand-primary uppercase tracking-wider block">Xem trước</span>
                   <div className="relative aspect-video rounded-xl overflow-hidden bg-studio-dark/50 border border-white/5 flex items-center justify-center max-w-md mx-auto">
                     {heroVideoUrl ? (
                       <video
@@ -370,19 +370,19 @@ export default function AdminCmsPage() {
                     ) : heroPosterUrl ? (
                       <img
                         src={heroPosterUrl}
-                        alt="Poster Preview"
+                        alt="Ảnh xem trước"
                         className="w-full h-full object-cover"
                       />
                     ) : (
-                      <span className="text-xs text-studio-muted">Chưa có video hoặc ảnh preview</span>
+                      <span className="text-xs text-studio-muted">Chưa có video hoặc ảnh xem trước</span>
                     )}
 
                     <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] text-white font-semibold">
-                      {heroVideoUrl ? 'Desktop Video & Poster' : 'Mobile Poster Only'}
+                      {heroVideoUrl ? 'Video máy tính & Ảnh di động' : 'Chỉ ảnh di động'}
                     </div>
                   </div>
                   <span className="text-[10px] text-studio-muted text-center block font-medium">
-                    Lưu ý: Trên giao diện trang chủ thực tế, video sẽ chạy tự động (autoplay), lặp lại (loop), tắt tiếng (muted) và ẩn trên điện thoại di động (thay bằng ảnh poster).
+                    Lưu ý: Trên trang chủ, video sẽ tự động phát lặp lại ở chế độ tắt tiếng trên máy tính và hiển thị ảnh đại diện trên điện thoại.
                   </span>
                 </div>
               )}
@@ -393,7 +393,7 @@ export default function AdminCmsPage() {
           <div className="glass-panel p-8 rounded-3xl border border-white/5 bg-black/25 space-y-6">
             <h3 className="text-lg font-bold text-white border-b border-white/5 pb-3 flex items-center space-x-2">
               <FileText className="w-5 h-5 text-brand-primary" />
-              <span>Phần Giới Thiệu (About Us)</span>
+              <span>Phần Giới Thiệu</span>
             </h3>
 
             <div className="space-y-1">
@@ -412,7 +412,7 @@ export default function AdminCmsPage() {
           <div className="glass-panel p-8 rounded-3xl border border-white/5 bg-black/25 space-y-6">
             <h3 className="text-lg font-bold text-white border-b border-white/5 pb-3 flex items-center space-x-2">
               <PhoneCall className="w-5 h-5 text-brand-primary" />
-              <span>Thông Tin Liên Hệ (Footer)</span>
+              <span>Thông Tin Liên Hệ</span>
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -479,11 +479,11 @@ export default function AdminCmsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
-                { key: 'showHero' as const, label: 'Phần Hero (Banner chính)' },
+                { key: 'showHero' as const, label: 'Phần Biểu ngữ chính' },
                 { key: 'showAbout' as const, label: 'Phần Giới thiệu' },
                 { key: 'showServices' as const, label: 'Phần Dịch vụ' },
                 { key: 'showGallery' as const, label: 'Phần Thư viện ảnh' },
-                { key: 'showContact' as const, label: 'Phần Liên hệ (Footer)' },
+                { key: 'showContact' as const, label: 'Phần Liên hệ cuối trang' },
               ].map((item) => (
                 <label
                   key={item.key}

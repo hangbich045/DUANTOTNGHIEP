@@ -3,11 +3,12 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
+import DatePickerVN from '@/components/common/DatePickerVN';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
-import { Loader2, Calendar, Camera, Clock, CheckCircle2, XCircle, RefreshCcw, AlertTriangle, PackageCheck, Undo, CalendarClock, X, MapPin, Check } from 'lucide-react';
+import { Loader2, Calendar, Camera, Clock, CheckCircle2, XCircle, RefreshCcw, AlertTriangle, PackageCheck, Undo, CalendarClock, X, MapPin } from 'lucide-react';
 
 interface EquipmentItem {
   equipmentId: string;
@@ -332,7 +333,8 @@ export default function UserHistoryPage() {
     return <span className="text-xs text-studio-muted">—</span>;
   };
 
-  const getStatusBadge = (status: string) => {
+  // Chỉ dành riêng cho phân hệ Mượn / Trả Thiết bị (không dùng cho Đặt phòng Studio)
+  const getEquipmentStatusBadge = (status: string) => {
     switch (status) {
       case 'PENDING':
         return (
@@ -653,7 +655,7 @@ export default function UserHistoryPage() {
 
                   {/* Right: status badge */}
                   <div className="flex items-center md:justify-end shrink-0">
-                    {getStatusBadge(borrow.status)}
+                    {getEquipmentStatusBadge(borrow.status)}
                   </div>
                 </div>
               ))}
@@ -703,12 +705,12 @@ export default function UserHistoryPage() {
                   <label className="text-[11px] font-bold text-studio-muted uppercase block">
                     Ngày dời sang (Thứ 2 – Thứ 7)
                   </label>
-                  <input
-                    type="date"
+                  <DatePickerVN
                     value={rescheduleDate}
-                    onChange={(e) => setRescheduleDate(e.target.value)}
-                    className="w-full bg-black/35 border border-white/5 rounded-xl py-2.5 px-3.5 text-xs text-white focus:outline-none focus:border-brand-primary/50 cursor-pointer"
+                    onChange={setRescheduleDate}
+                    highlightSunday={user?.role !== 'ADMIN'}
                     required
+                    className="w-full"
                   />
                 </div>
 

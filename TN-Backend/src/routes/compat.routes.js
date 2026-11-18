@@ -359,19 +359,24 @@ router.get('/studio-bookings', authenticate, async (req, res) => {
 
     const transformed = result.items.map(item => {
       const raw = item.toJSON ? item.toJSON() : item;
+      const attendanceInfo = studioBookingService.computeAttendanceInfo(raw);
       return {
         ...raw,
         // Rename booker -> user
         user: raw.booker || raw.user,
         booker: undefined,
         // FE hiển thị booking.fullName (của user trong booking)
-        fullName: raw.booker?.fullName || '',
+        fullName: raw.booker?.fullName || raw.fullName || '',
         // Map attendees -> participants (FE dùng tên cũ)
         participants: raw.attendees || 0,
         // FE có thêm trường technicalSupport (không có trong model mới, mặc định false)
         technicalSupport: raw.technicalSupport || false,
-        // Map status: FE expect APPROVED (không phải CONFIRMED)
+        // Map status: FE expect APPROVED (hiển thị "Đã duyệt" cho Studio)
         status: raw.status === 'CONFIRMED' ? 'APPROVED' : raw.status,
+        userCheckInAt: raw.userCheckInAt || raw.user_check_in_at || null,
+        adminConfirmedAt: raw.adminConfirmedAt || raw.admin_confirmed_at || null,
+        attendanceStatus: raw.attendanceStatus || raw.attendance_status || 'NOT_ARRIVED',
+        attendanceInfo,
       };
     });
 

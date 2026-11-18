@@ -143,6 +143,7 @@ const login = async (data) => {
       role: user.role,
       employeeCode: user.employeeCode,
       avatarUrl: user.avatarUrl,
+      themePreference: user.themePreference || 'dark',
     },
   };
 };
@@ -189,10 +190,37 @@ const updateProfile = async (userId, data) => {
     }
   }
 
+  if (data.themePreference !== undefined && !['dark', 'light'].includes(data.themePreference)) {
+    const error = new Error('Chế độ giao diện không hợp lệ (chỉ chấp nhận dark hoặc light).');
+    error.statusCode = 400;
+    throw error;
+  }
+
   await user.update(data);
 
   const { password: _, ...result } = user.toJSON();
   return result;
+};
+
+/**
+ * Cập nhật tùy chọn giao diện (Light / Dark Mode) cho tài khoản hiện tại
+ * @param {string} userId
+ * @param {'dark' | 'light'} theme
+ */
+const updateThemePreference = async (userId, theme) => {
+  if (!['dark', 'light'].includes(theme)) {
+    const error = new Error('Chế độ giao diện không hợp lệ (chỉ chấp nhận dark hoặc light).');
+    error.statusCode = 400;
+    throw error;
+  }
+  const user = await User.findByPk(userId);
+  if (!user) {
+    const error = new Error('Người dùng không tồn tại.');
+    error.statusCode = 404;
+    throw error;
+  }
+  await user.update({ themePreference: theme });
+  return { id: user.id, themePreference: user.themePreference };
 };
 
 /**
@@ -243,4 +271,4 @@ const getAllUsers = async (query) => {
   };
 };
 
-module.exports = { register, login, getProfile, updateProfile, getAllUsers };
+module.exports = { register, login, getProfile, updateProfile, updateThemePreference, getAllUsers };

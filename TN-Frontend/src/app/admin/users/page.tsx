@@ -6,7 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 import api from '@/lib/api';
 import { format } from 'date-fns';
-import { Loader2, ArrowUp, ArrowDown, Trash2, ShieldAlert, RefreshCcw, AlertTriangle, Plus, X, Lock, Unlock } from 'lucide-react';
+import { Loader2, ArrowUp, ArrowDown, Trash2, ShieldAlert, RefreshCcw, Plus, X, Lock, Unlock } from 'lucide-react';
 
 interface User {
   id: string;

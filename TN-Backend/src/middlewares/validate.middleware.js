@@ -11,7 +11,7 @@
  * 4. Nếu không lỗi -> gọi next() để đi vào controller
  */
 
-const { validationResult, body, param, query } = require('express-validator');
+const { validationResult, body } = require('express-validator');
 
 /**
  * Middleware kiểm tra kết quả validation
